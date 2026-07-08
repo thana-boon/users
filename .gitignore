@@ -3,6 +3,7 @@
 /out
 /build
 next-env.d.ts
+/.claude
 
 # env / secrets
 .env
