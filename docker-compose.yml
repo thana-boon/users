@@ -19,6 +19,21 @@ services:
       timeout: 5s
       retries: 20
 
+  # One-shot: creates/updates tables from the Drizzle schema, then exits.
+  # Runs after postgres is healthy and before the app starts, so a fresh
+  # `docker compose up` yields a ready-to-use database (no manual db:push).
+  migrate:
+    build:
+      context: .
+      target: migrator
+    container_name: schoolos-users-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER:-schoolos}:${POSTGRES_PASSWORD:-schoolos}@postgres:5432/${POSTGRES_DB:-users}"
+    restart: "no"
+
   app:
     build: .
     container_name: schoolos-users-app
@@ -26,6 +41,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       # Inside compose the DB host is the service name "postgres".
       DATABASE_URL: "postgres://${POSTGRES_USER:-schoolos}:${POSTGRES_PASSWORD:-schoolos}@postgres:5432/${POSTGRES_DB:-users}"

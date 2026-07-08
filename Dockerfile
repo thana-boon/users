@@ -1,4 +1,4 @@
-# ─── SchoolOS Users â€” Next.js production image (standalone) ───
+# ─── SchoolOS Users — Next.js production image (standalone) ───
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
@@ -8,9 +8,17 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Dummy values so `next build` can run without secrets baked in.
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
+
+# ─── Migrator: full deps (incl. drizzle-kit) + source, runs schema push ───
+# Used by the one-shot `migrate` compose service to create/update tables
+# before the app starts. DATABASE_URL is supplied by compose at run time.
+FROM node:22-alpine AS migrator
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+CMD ["npx", "drizzle-kit", "push"]
 
 FROM node:22-alpine AS runner
 WORKDIR /app
