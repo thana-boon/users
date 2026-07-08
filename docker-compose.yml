@@ -1,0 +1,42 @@
+# Local-only testing stack: Next.js app + PostgreSQL, isolated to this machine.
+# Not for shared/remote use. Bring up with:  docker compose up --build
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: schoolos-users-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-users}
+      POSTGRES_USER: ${POSTGRES_USER:-schoolos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-schoolos}
+    ports:
+      - "5432:5432"
+    volumes:
+      - schoolos_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-schoolos} -d ${POSTGRES_DB:-users}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    container_name: schoolos-users-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Inside compose the DB host is the service name "postgres".
+      DATABASE_URL: "postgres://${POSTGRES_USER:-schoolos}:${POSTGRES_PASSWORD:-schoolos}@postgres:5432/${POSTGRES_DB:-users}"
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-schoolos}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      ENABLE_DEV_TOKEN: ${ENABLE_DEV_TOKEN:-true}
+      STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-sukhon.ac.th}
+    ports:
+      - "3002:3002"
+
+volumes:
+  schoolos_pg_data:

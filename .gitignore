@@ -1,0 +1,18 @@
+/node_modules
+/.next
+/out
+/build
+next-env.d.ts
+
+# env / secrets
+.env
+.env.local
+.env.*.local
+
+# never commit source data dumps with PII
+/.example/*.xlsx
+/.example/*.csv
+
+*.tsbuildinfo
+npm-debug.log*
+.DS_Store
