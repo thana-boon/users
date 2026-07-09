@@ -6,7 +6,8 @@
  *
  * - Username column is ignored (== teacher_code).
  * - Password is plain text in the file -> encrypted on insert.
- * - Everyone lands as role=teacher (promotion to teacher-admin is manual).
+ * - Everyone lands as role=teacher EXCEPT the codes in ADMIN_CODES, which are
+ *   seeded (and re-asserted on update) as role=teacher-admin.
  */
 import 'dotenv/config';
 import { readFile } from 'node:fs/promises';
@@ -17,6 +18,9 @@ import { teachers } from '../src/db/schema';
 import { encrypt } from '../src/lib/crypto';
 import { parseTeacherRow } from '../src/lib/excel-map';
 import { readSheetRows } from '../src/lib/excel-io';
+
+/** Teacher codes seeded as `teacher-admin` (everyone else is `teacher`). */
+const ADMIN_CODES = new Set(['T00116', 'T00241']);
 
 async function main() {
   const file = process.argv[2] ?? path.resolve(process.cwd(), '.example/teachers.xlsx');
@@ -35,6 +39,9 @@ async function main() {
       where: eq(teachers.teacherCode, t.teacherCode),
       columns: { id: true },
     });
+    const role: 'teacher' | 'teacher-admin' = ADMIN_CODES.has(t.teacherCode)
+      ? 'teacher-admin'
+      : 'teacher';
     const base = {
       prefix: t.prefix,
       firstName: t.firstName,
@@ -42,6 +49,7 @@ async function main() {
       email: t.email,
       subjectGroup: t.subjectGroup,
       gradeTaught: t.gradeTaught,
+      role,
       citizenIdEncrypted: encrypt(t.citizenId),
       passwordEncrypted: encrypt(t.plainPassword),
     };
@@ -49,7 +57,7 @@ async function main() {
       await db.update(teachers).set(base).where(eq(teachers.id, existing.id));
       updated++;
     } else {
-      await db.insert(teachers).values({ teacherCode: t.teacherCode, role: 'teacher', ...base });
+      await db.insert(teachers).values({ teacherCode: t.teacherCode, ...base });
       created++;
     }
   }

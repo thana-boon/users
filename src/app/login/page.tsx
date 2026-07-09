@@ -2,24 +2,15 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { IconShield } from '@/components/Icons';
 
 /**
- * Login screen for this module.
+ * Login screen for this module — local login only (no external SSO).
  *
- * PRIMARY path (works on any server, incl. production): a real credential form —
- * รหัสครู (teacher_code) + password -> /api/auth/teacher-login, which checks the
- * DB and mints the SSO token. Only a `teacher-admin` carries `users:write`, so a
- * plain teacher logs in but is then bounced by RBAC (message shown).
- *
- * DEV path (only when NEXT_PUBLIC_ENABLE_DEV_TOKEN=true): a quick mock-role
- * login via /api/auth/dev-token, for standalone testing without any DB account.
- *
- * In real production the SSO portal owns login; this page is the standalone /
- * fallback entry.
+ * A real credential form: รหัสครู (teacher_code) + password ->
+ * /api/auth/teacher-login, which checks the DB and issues this app's own session
+ * token. Only a `teacher-admin` carries `users:write`, so a plain teacher logs
+ * in but is then bounced by RBAC (message shown).
  */
-
-const DEV_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DEV_TOKEN === 'true';
 
 function LoginInner() {
   const router = useRouter();
@@ -107,51 +98,6 @@ function LoginInner() {
             {loading ? 'กำลังเข้า…' : 'เข้าสู่ระบบ'}
           </button>
         </form>
-
-        {DEV_ENABLED && <DevQuickLogin next={next} onError={setError} />}
-      </div>
-    </div>
-  );
-}
-
-/** Dev-only mock login: pick a role, mint a token, no DB account needed. */
-function DevQuickLogin({ next, onError }: { next: string; onError: (m: string | null) => void }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-
-  async function dev(role: 'teacher' | 'student', permissions: string[]) {
-    setBusy(true);
-    onError(null);
-    try {
-      const res = await fetch('/api/auth/dev-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, permissions, sub: 'DEV', name: 'ผู้ดูแลระบบ (Dev)' }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'dev-token ไม่สำเร็จ');
-      if (permissions.includes('users:write')) router.push(next);
-      else onError('ได้ token แล้ว — แต่โมดูลนี้เปิดให้เฉพาะผู้มีสิทธิ์ users:write เท่านั้น');
-    } catch (e) {
-      onError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px dashed var(--skdw-border, #ddd)' }}>
-      <div className="alert alert-info" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 12 }}>
-        <IconShield width={18} height={18} />
-        <span style={{ fontSize: 13 }}>โหมดพัฒนา: เข้าใช้งานด้วย mock JWT โดยไม่ต้องมีบัญชีใน DB</span>
-      </div>
-      <div className="row" style={{ gap: 8 }}>
-        <button className="btn" style={{ flex: 1 }} disabled={busy} onClick={() => dev('teacher', ['users:read', 'users:write'])}>
-          Dev admin (เข้าได้)
-        </button>
-        <button className="btn" style={{ flex: 1 }} disabled={busy} onClick={() => dev('teacher', [])}>
-          Dev ครู (ถูกปฏิเสธ)
-        </button>
       </div>
     </div>
   );

@@ -14,9 +14,9 @@ export const runtime = 'nodejs';
 
 /**
  * Public-facing teacher login. Single identifier: teacher_code (e.g. T00005) -
- * no email fallback (teachers remember their code). The issued token carries
- * the teacher's real role (`teacher` or `teacher-admin`). A plain `teacher`
- * token is valid platform-wide but is rejected by this module's RBAC.
+ * no email fallback (teachers remember their code). A DB `teacher-admin` is
+ * issued a session carrying `users:read`/`users:write`; a plain `teacher` gets a
+ * valid session but is rejected by this module's RBAC.
  */
 
 const bodySchema = z.object({
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
     }
 
     clearFailures(`teacher:${code.toLowerCase()}`);
-    // Portal issues role teacher|student + permissions; a DB `teacher-admin`
-    // maps to role `teacher` carrying the `users:*` permissions this module needs.
+    // Session role is always `teacher`; a DB `teacher-admin` additionally carries
+    // the `users:*` permissions this module's RBAC requires.
     const isAdmin = row.role === 'teacher-admin';
     const token = await signSession({
       sub: row.teacherCode,

@@ -8,7 +8,7 @@ export default defineConfig({
   dbCredentials: {
     url:
       process.env.DATABASE_URL ??
-      'postgres://schoolos:schoolos@localhost:5432/users',
+      'postgres://schoolos:schoolos@localhost:5002/users',
   },
   verbose: true,
   strict: true,

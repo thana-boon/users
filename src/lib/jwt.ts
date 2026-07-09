@@ -1,17 +1,13 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 
 /**
- * SchoolOS SSO token contract (shared with schoolos-portal).
+ * SchoolOS session token (local login only — no external SSO).
  *
- * The portal signs a JWT after login and drops it in the `schoolos_token`
- * cookie; every app-service (this module included) only *verifies* it — it
- * never re-issues. HS256 with a `JWT_SECRET` that is identical byte-for-byte
- * across all services. `jose` is used so the same verify runs in edge
- * middleware and node routes.
- *
- * This module keeps a small local login (dev-token / teacher-login) that mints
- * a token with the SAME contract, so it can be tested standalone without the
- * portal. Business logic only ever reads the claims below.
+ * On login (teacher-login / student-login) this app signs a JWT and drops it in
+ * the `schoolos_token` cookie; middleware and routes only *verify* it. HS256
+ * with the app's own `JWT_SECRET`. `jose` is used so the same verify runs in
+ * edge middleware and node routes. Business logic only ever reads the claims
+ * below.
  */
 
 export type AppRole = 'teacher' | 'student';
@@ -25,7 +21,7 @@ export interface SessionClaims extends JWTPayload {
   code?: string; // optional label kept for local login (usually == sub)
 }
 
-/** Cookie the portal (and our local login) sets. */
+/** Cookie this app's local login sets. */
 export const SESSION_COOKIE = 'schoolos_token';
 
 /** Hard cap from the original login, independent of the sliding `exp`. */
@@ -54,8 +50,8 @@ export function hasPermission(
 }
 
 /**
- * Mint a token with the SSO contract. Used only by this module's local login
- * (dev-token / teacher-login) — the portal signs its own with the same shape.
+ * Mint a session token. Used by this app's local login (teacher-login /
+ * student-login).
  */
 export async function signSession(claims: {
   sub: string;

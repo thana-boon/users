@@ -24,7 +24,7 @@ npm run db:push
 npm run dev             # http://localhost:3002
 ```
 
-เปิด `http://localhost:3002` → ถูก redirect ไป `/login` → เลือก **teacher-admin** → เข้าสู่ระบบ.
+เปิด `http://localhost:3002` → ถูก redirect ไป `/login` → กรอก **รหัสครู + รหัสผ่าน** ของบัญชี **teacher-admin** → เข้าสู่ระบบ.
 
 > ระบบเริ่มต้นด้วยฐานข้อมูล **ว่าง** (ไม่มีการ seed ข้อมูลตัวอย่าง) — นำเข้าข้อมูลเองผ่านหน้า
 > "นักเรียน" / "ครู" ปุ่ม **นำเข้า** (ไฟล์ `.xlsx` ตามเทมเพลตในระบบ)
@@ -32,15 +32,25 @@ npm run dev             # http://localhost:3002
 ### รันทั้งสแตกด้วย Docker (app + db)
 
 ```bash
-docker compose up --build   # app ที่ :3002, postgres ที่ :5432
-# แล้วรัน db:push ชี้ DATABASE_URL ไปที่ localhost:5432 หนึ่งครั้ง
+docker compose up --build   # app ที่ :3002, postgres ที่ :5002
+# แล้วรัน db:push ชี้ DATABASE_URL ไปที่ localhost:5002 หนึ่งครั้ง
 ```
 
-### (ทางเลือก) นำเข้าข้อมูลตัวอย่างจากสคริปต์
-ถ้าต้องการโหลดไฟล์ตัวอย่างใน `.example/` แบบ bulk แทนการ import ทีละไฟล์:
+### (ทางเลือก) นำเข้าข้อมูลตัวอย่างจากสคริปต์ (seed)
+> ⚠️ ไฟล์ `.example/*.xlsx` เป็น **PII** จึง **ไม่อยู่ใน git และไม่อยู่ใน docker image** —
+> ต้องนำไฟล์มาวางที่ `./.example/` บนเครื่องเป้าหมายเอง (ส่งแยกจาก git)
+
+**บน host (dev):**
 ```bash
 npm run seed            # = seed:teachers แล้ว seed:students
 ```
+
+**ใน Docker (ปลายทาง):** service `seed` จะ bind-mount `./.example` เข้า container ตอนรัน
+(ไฟล์ไม่เข้า image) — วาง `teachers.xlsx` + `students.xlsx` ไว้ที่ `./.example/` แล้ว:
+```bash
+docker compose run --rm seed
+```
+seed จะตั้ง `T00116` + `T00241` เป็น `teacher-admin` ให้อัตโนมัติ
 
 ---
 
@@ -48,11 +58,10 @@ npm run seed            # = seed:teachers แล้ว seed:students
 
 | ตัวแปร | หน้าที่ |
 |---|---|
-| `DATABASE_URL` | Postgres DSN (`postgres://user:pass@host:5432/users`) |
+| `DATABASE_URL` | Postgres DSN (`postgres://user:pass@host:5002/users`) |
 | `FIELD_ENCRYPTION_KEY` | คีย์ AES-256-GCM (base64 32 ไบต์) — **อยู่นอก DB**. gen: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
-| `JWT_SECRET` | shared secret ของ mock JWT (HMAC) |
-| `JWT_ISSUER` / `JWT_EXPIRES_IN` | ค่า iss / อายุ token (ดีฟอลต์ `schoolos` / `8h`) |
-| `ENABLE_DEV_TOKEN` | `true` = เปิด `/api/auth/dev-token` (mock login). **ตั้ง `false` เมื่อต่อ SSO จริง** |
+| `JWT_SECRET` | secret สำหรับเซ็น session token ของแอป (HS256) |
+| `JWT_EXPIRES_IN` | อายุ token (ดีฟอลต์ `8h`) |
 | `STUDENT_EMAIL_DOMAIN` | โดเมนอีเมลนักเรียน (ดีฟอลต์ `sukhon.ac.th`) |
 
 ---
@@ -74,7 +83,7 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 - List/detail API ไม่เคยส่ง ciphertext ออก — เลขบัตรถูก mask, รหัสผ่านไม่ส่ง, รายได้เป็น flag.
 
 ### Auth & RBAC
-- Mock JWT (jose/HS256) สำหรับ dev — สลับเป็น SSO จริงตอน deploy โดย auth layer แยกจาก business logic.
+- **Local login เท่านั้น** (ไม่มี SSO ภายนอก) — แอปเซ็น session JWT ของตัวเอง (jose/HS256) ตอนล็อกอิน.
 - Middleware (edge) verify token แบบ **fail-closed** และรับเฉพาะ `teacher-admin` บน `/users/**` และ `/api/users/**`.
 - Login API สาธารณะสำหรับนักเรียน/ครู (`/api/auth/{student,teacher}-login`) — decrypt แล้วเทียบรหัสผ่าน,
   มี rate-limit + lockout, ออก JWT ตาม role จริง. token `teacher`/`student` ผ่าน login ได้แต่ถูกโมดูลนี้ปฏิเสธ.
@@ -84,7 +93,7 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 ## โครงสร้างเส้นทาง
 
 ```
-/login                         หน้า dev login (mock JWT)
+/login                         หน้าเข้าสู่ระบบ (รหัสครู + รหัสผ่าน)
 /users                         dashboard ภาพรวมปีปัจจุบัน
 /users/students                รายการ/ค้นหา/กรอง + เพิ่ม/นำเข้า/ส่งออก
 /users/students/[id]           รายละเอียด/แก้ไข/reveal ข้อมูลอ่อนไหว
@@ -93,7 +102,7 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 /users/academic-years          ตั้งปีปัจจุบัน / เก็บถาวร (soft-delete)
 /users/audit                   บันทึกการใช้งาน (audit log)
 
-/api/auth/{dev-token,student-login,teacher-login,logout,session}
+/api/auth/{student-login,teacher-login,logout,session}
 /api/users/{students,teachers,academic-years,dashboard,meta,audit}
 /api/users/students/{export,template,import,[id],[id]/reveal}
 /api/users/teachers/{export,template,import,[id],[id]/reveal}
@@ -107,7 +116,8 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 - **Import** ตรวจสอบทุกแถวก่อน (เลขบัตร 13 หลัก+checksum, รหัสซ้ำ, ฟิลด์บังคับ) แล้ว
   **รายงานแถวที่ผิดพลาดก่อน commit** — โหมด `dryRun=true` ตรวจอย่างเดียว.
 - ครู: `Password` ใน CSV เป็น plain text → **encrypt ตอน import**; นำเข้าใหม่เป็น `role=teacher` เสมอ
-  (การเลื่อนเป็น teacher-admin ทำผ่าน UI ไม่ hardcode).
+  (การเลื่อนเป็น teacher-admin ทำผ่าน UI). หมายเหตุ: สคริปต์ `npm run seed:teachers` ตั้ง
+  `T00116` และ `T00241` เป็น `teacher-admin` ให้อัตโนมัติ (ที่เหลือเป็น `teacher`).
 
 ---
 
@@ -126,5 +136,4 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 
 ## หมายเหตุการ deploy
 1. สร้าง `FIELD_ENCRYPTION_KEY` และ `JWT_SECRET` ใหม่ (ห้ามใช้ค่าใน repo).
-2. ตั้ง `ENABLE_DEV_TOKEN=false` และต่อ SSO จริงเข้ากับ auth layer (`src/lib/jwt.ts` / `middleware.ts`).
-3. คีย์เข้ารหัสเก็บใน secret manager แยกจากฐานข้อมูลเสมอ.
+2. คีย์เข้ารหัสเก็บใน secret manager แยกจากฐานข้อมูลเสมอ.

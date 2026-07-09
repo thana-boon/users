@@ -10,7 +10,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-schoolos}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-schoolos}
     ports:
-      - "5432:5432"
+      # host:container — Postgres is reachable from the host (npm run dev) at :5002.
+      - "5002:5432"
     volumes:
       - schoolos_pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -48,12 +49,36 @@ services:
       DATABASE_URL: "postgres://${POSTGRES_USER:-schoolos}:${POSTGRES_PASSWORD:-schoolos}@postgres:5432/${POSTGRES_DB:-users}"
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
       JWT_SECRET: ${JWT_SECRET}
-      JWT_ISSUER: ${JWT_ISSUER:-schoolos}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
-      ENABLE_DEV_TOKEN: ${ENABLE_DEV_TOKEN:-true}
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-sukhon.ac.th}
     ports:
       - "3002:3002"
+
+  # One-shot bulk seed: loads .example/*.xlsx into the DB (teachers + students).
+  # The Excel files are PII and live NEITHER in git NOR the image — they are
+  # bind-mounted read-only from the host at run time. Put the two .xlsx files in
+  # ./.example/ on the host, then run:
+  #   docker compose run --rm seed
+  # Guarded by a profile so a plain `docker compose up` never triggers it.
+  seed:
+    build:
+      context: .
+      target: migrator          # migrator image has full deps (tsx) + scripts/
+    profiles: ["seed"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER:-schoolos}:${POSTGRES_PASSWORD:-schoolos}@postgres:5432/${POSTGRES_DB:-users}"
+      # Must match the app's key — seed encrypts password/citizen_id on insert.
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-sukhon.ac.th}
+    volumes:
+      - ./.example:/app/.example:ro   # host xlsx -> container, read-only
+    command: ["npm", "run", "seed"]
+    restart: "no"
 
 volumes:
   schoolos_pg_data:

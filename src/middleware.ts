@@ -10,8 +10,8 @@ import { verifySession, hasPermission, USERS_WRITE, SESSION_COOKIE } from '@/lib
  *   /api/users/**        - REST API
  *
  * Public:
- *   /api/auth/**         - login + dev-token endpoints
- *   /login               - local login page (dev / standalone testing)
+ *   /api/auth/**         - login endpoints
+ *   /login               - local login page
  *   static/next assets
  *
  * A request with no token, an invalid token, or one lacking `users:write` is
