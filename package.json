@@ -14,7 +14,8 @@
     "db:migrate": "drizzle-kit migrate",
     "seed:students": "tsx scripts/migrate-students.ts",
     "seed:teachers": "tsx scripts/migrate-teachers.ts",
-    "seed": "npm run seed:teachers && npm run seed:students"
+    "seed": "npm run seed:teachers && npm run seed:students",
+    "admin:create": "tsx scripts/create-admin.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
