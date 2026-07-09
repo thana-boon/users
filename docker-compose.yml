@@ -50,6 +50,8 @@ services:
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      # Keep false for plain-HTTP LAN access (http://<ip>:3002); set true behind HTTPS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-sukhon.ac.th}
     ports:
       - "3002:3002"

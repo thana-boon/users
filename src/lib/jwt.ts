@@ -41,6 +41,28 @@ function parseExpiry(): string {
   return process.env.JWT_EXPIRES_IN ?? '8h';
 }
 
+/**
+ * Whether to set the `Secure` flag on the session cookie. Defaults to FALSE so
+ * a plain-HTTP LAN/self-hosted deployment (e.g. http://192.168.x.x) works — a
+ * Secure cookie is silently dropped by the browser over HTTP, which looks like
+ * "login succeeds but never redirects". Set COOKIE_SECURE=true when serving
+ * over HTTPS.
+ */
+export function cookieSecure(): boolean {
+  return (process.env.COOKIE_SECURE ?? 'false').toLowerCase() === 'true';
+}
+
+/** Shared cookie options for the session cookie (set on login, cleared on logout). */
+export function sessionCookieOptions(maxAgeSec: number) {
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: cookieSecure(),
+    path: '/',
+    maxAge: maxAgeSec,
+  };
+}
+
 /** True if the session carries `perm`. Null-safe / fail-closed. */
 export function hasPermission(
   session: SessionClaims | null,

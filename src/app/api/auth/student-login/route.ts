@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { eq, or } from 'drizzle-orm';
 import { db } from '@/db';
 import { students } from '@/db/schema';
-import { signSession, SESSION_COOKIE } from '@/lib/jwt';
+import { signSession, SESSION_COOKIE, sessionCookieOptions } from '@/lib/jwt';
 import { decrypt } from '@/lib/crypto';
 import { badRequest, handleError } from '@/lib/http';
 import { checkLockout, registerFailure, clearFailures } from '@/lib/rate-limit';
@@ -84,13 +84,7 @@ export async function POST(req: NextRequest) {
       token,
       user: { id: row.id, role: 'student', studentCode: row.studentCode },
     });
-    res.cookies.set(SESSION_COOKIE, token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: 60 * 60 * 8,
-    });
+    res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(60 * 60 * 8));
     return res;
   } catch (err) {
     return handleError(err);
