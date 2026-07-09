@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { hasPermission, USERS_WRITE } from '@/lib/jwt';
 import { AppShell } from '@/components/AppShell';
 import { ToastProvider } from '@/components/Toast';
 
@@ -12,7 +13,7 @@ export default async function UsersLayout({
 }) {
   // Middleware already gates this, but re-check for defence in depth.
   const session = await getSession();
-  if (!session || session.role !== 'teacher-admin') {
+  if (!session || !hasPermission(session, USERS_WRITE)) {
     redirect('/login?next=/users');
   }
 

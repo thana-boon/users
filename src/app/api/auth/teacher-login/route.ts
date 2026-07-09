@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { teachers } from '@/db/schema';
-import { signSession, SESSION_COOKIE } from '@/lib/jwt';
+import { signSession, SESSION_COOKIE, USERS_READ, USERS_WRITE } from '@/lib/jwt';
 import { decrypt } from '@/lib/crypto';
 import { badRequest, handleError } from '@/lib/http';
 import { checkLockout, registerFailure, clearFailures } from '@/lib/rate-limit';
@@ -58,11 +58,15 @@ export async function POST(req: NextRequest) {
     }
 
     clearFailures(`teacher:${code.toLowerCase()}`);
+    // Portal issues role teacher|student + permissions; a DB `teacher-admin`
+    // maps to role `teacher` carrying the `users:*` permissions this module needs.
+    const isAdmin = row.role === 'teacher-admin';
     const token = await signSession({
-      sub: String(row.id),
-      role: row.role, // teacher | teacher-admin, straight from the record
+      sub: row.teacherCode,
+      role: 'teacher',
       name: `${row.firstName} ${row.lastName}`.trim(),
       code: row.teacherCode,
+      permissions: isAdmin ? [USERS_READ, USERS_WRITE] : [],
     });
 
     await recordAudit({

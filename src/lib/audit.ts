@@ -41,10 +41,14 @@ function clientIp(req?: NextRequest): string | null {
 
 export async function recordAudit(input: AuditInput): Promise<void> {
   try {
+    // `sub` is a username (e.g. "T00116"), not the teacher.id — only store it
+    // as the numeric FK when it actually is numeric; otherwise rely on the label.
+    const sub = input.session?.sub;
+    const numericActor = sub && /^\d+$/.test(sub) ? Number(sub) : null;
     await db.insert(auditLogs).values({
-      actorId: input.session?.sub ? Number(input.session.sub) : null,
+      actorId: numericActor,
       actorRole: input.session?.role ?? null,
-      actorLabel: input.session?.name ?? input.session?.code ?? null,
+      actorLabel: input.session?.name ?? input.session?.code ?? sub ?? null,
       action: input.action,
       targetType: input.targetType,
       targetId: input.targetId ?? null,

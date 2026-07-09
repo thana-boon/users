@@ -61,11 +61,14 @@ export async function POST(req: NextRequest) {
     }
 
     clearFailures(`student:${id.toLowerCase()}`);
+    // Students get a valid platform token but no `users:*` permission, so this
+    // admin-only module rejects them (parity with the portal contract).
     const token = await signSession({
-      sub: String(row.id),
+      sub: row.studentCode,
       role: 'student',
       name: `${row.firstName} ${row.lastName}`.trim(),
       code: row.studentCode,
+      permissions: [],
     });
 
     await recordAudit({

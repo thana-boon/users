@@ -83,10 +83,10 @@ export function AppShell({
         <div className="row" style={{ gap: 12 }}>
           <span
             className="badge badge-gold"
-            title="สิทธิ์เข้าถึง teacher-admin เท่านั้น"
+            title="สิทธิ์เข้าถึงเฉพาะผู้มีสิทธิ์ users:write"
             style={{ display: 'inline-flex', alignItems: 'center' }}
           >
-            <IconShield width={13} height={13} /> {session.role}
+            <IconShield width={13} height={13} /> ผู้ดูแล
           </span>
           <span style={{ fontSize: 13, opacity: 0.9 }} className="hide-mobile">
             {session.name ?? 'ผู้ดูแลระบบ'}

@@ -1,18 +1,12 @@
 import type { Metadata } from 'next';
-import { Noto_Sans_Thai, Inter } from 'next/font/google';
+import { IBM_Plex_Sans_Thai } from 'next/font/google';
 import './globals.css';
 
-const notoSansThai = Noto_Sans_Thai({
+// SKDW CI: IBM Plex Sans Thai is the single typeface (thai + latin).
+const plexThai = IBM_Plex_Sans_Thai({
   subsets: ['thai', 'latin'],
-  weight: ['300', '400', '500', '700'],
-  variable: '--font-noto-sans-thai',
-  display: 'swap',
-});
-
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600'],
-  variable: '--font-inter',
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-plex-thai',
   display: 'swap',
 });
 
@@ -29,7 +23,7 @@ export const viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="th" className={`${notoSansThai.variable} ${inter.variable}`}>
+    <html lang="th" className={plexThai.variable}>
       <body>{children}</body>
     </html>
   );

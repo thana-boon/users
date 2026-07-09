@@ -1,27 +1,64 @@
 /* ───────────────────────────────────────────────────────────
-   SKDW Corporate Identity — design tokens & components (SKDW-CI.md v1.1)
+   SKDW Corporate Identity — design tokens & components
+   Aligned to SchoolOS Design System (DESIGN-ci) — light theme,
+   premium-institutional purple/gold. Token names kept stable so
+   existing components (var(--skdw-*)) render the new palette.
    ─────────────────────────────────────────────────────────── */
 
 :root {
-  --skdw-purple: #5b2d8e;
-  --skdw-purple-light: #7b4db0;
-  --skdw-purple-pale: #f0ebf8;
-  --skdw-gold: #f5c518;
-  --skdw-gold-dark: #e8b800;
-  --skdw-dark: #1a1a2e;
-  --skdw-white: #ffffff;
-  --skdw-bg: #f8f7f5;
-  --skdw-muted: #888888;
-  --skdw-border: #e8e4f0;
+  /* Brand */
+  --skdw-purple: #5b2d8e;        /* --primary */
+  --skdw-purple-light: #7a3fc0;  /* soft purple (hover / gradient) */
+  --skdw-purple-pale: #f1edf7;   /* --secondary / --muted */
+  --skdw-gold: #f5c518;          /* --accent */
+  --skdw-gold-dark: #c79b00;     /* gold hover / active */
+  --skdw-gold-text: #8a6a00;     /* accessible gold text on light (≥4.5:1) */
+  --skdw-dark: #1a1625;          /* --foreground */
+  --skdw-white: #ffffff;         /* --card */
+  --skdw-bg: #faf9fc;            /* --background */
+  --skdw-muted: #6b6478;         /* --muted-foreground */
+  --skdw-border: #e6e0f0;        /* --border */
+  --skdw-navy: #1e2a5e;          /* --navy (info / headings) */
 
-  --color-success: #2e7d32;
-  --color-success-bg: #e8f5e9;
-  --color-warning: #e65100;
-  --color-warning-bg: #fff3e0;
-  --color-error: #c62828;
-  --color-error-bg: #ffebee;
-  --color-info: #1565c0;
-  --color-info-bg: #e3f2fd;
+  /* shadcn-style aliases — for CI parity / future components */
+  --background: var(--skdw-bg);
+  --foreground: var(--skdw-dark);
+  --card: var(--skdw-white);
+  --card-foreground: var(--skdw-dark);
+  --primary: var(--skdw-purple);
+  --primary-foreground: #ffffff;
+  --secondary: var(--skdw-purple-pale);
+  --secondary-foreground: var(--skdw-purple);
+  --muted: var(--skdw-purple-pale);
+  --muted-foreground: var(--skdw-muted);
+  --accent: var(--skdw-gold);
+  --accent-foreground: #241b04;
+  --navy: var(--skdw-navy);
+  --ring: var(--skdw-purple);
+  --radius: 0.85rem;
+
+  /* Sidebar palette (prepared per CI §7.1 — deep institutional purple) */
+  --sidebar: #341a54;
+  --sidebar-foreground: #f3effa;
+  --sidebar-primary: #f5c518;
+  --sidebar-primary-foreground: #241b04;
+  --sidebar-accent: #4a2873;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #f5c518;
+
+  /* Chart palette */
+  --chart-1: #5b2d8e; --chart-2: #f5c518; --chart-3: #16a34a;
+  --chart-4: #1e2a5e; --chart-5: #dc2626;
+
+  /* Status — aligned to CI (success green, destructive red, gold, navy) */
+  --color-success: #16a34a;
+  --color-success-bg: #eaf6ee;
+  --color-warning: #8a6a00;
+  --color-warning-bg: #fdf4d8;
+  --color-error: #dc2626;
+  --color-error-bg: #fdeaea;
+  --color-info: #1e2a5e;
+  --color-info-bg: #e9edf7;
 
   --text-xs: 11px;
   --text-sm: 13px;
@@ -40,17 +77,19 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  /* Radius — softer, CI base --radius: 0.85rem */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
   --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-xl: 22px;
   --radius-full: 9999px;
 
-  --shadow-sm: 0 1px 3px rgba(26, 26, 46, 0.08);
-  --shadow-md: 0 4px 12px rgba(26, 26, 46, 0.1);
-  --shadow-lg: 0 8px 24px rgba(26, 26, 46, 0.12);
-  --shadow-xl: 0 16px 40px rgba(26, 26, 46, 0.15);
+  --shadow-xs: 0 1px 2px rgba(26, 22, 37, 0.06);
+  --shadow-sm: 0 1px 3px rgba(26, 22, 37, 0.08);
+  --shadow-md: 0 4px 12px rgba(26, 22, 37, 0.1);
+  --shadow-lg: 0 8px 24px rgba(26, 22, 37, 0.12);
+  --shadow-xl: 0 16px 40px rgba(26, 22, 37, 0.15);
   --shadow-focus: 0 0 0 3px rgba(91, 45, 142, 0.25);
 
   --z-dropdown: 100;
@@ -59,12 +98,15 @@
   --z-toast: 400;
   --z-tooltip: 500;
 
-  --transition-fast: 100ms ease;
-  --transition-base: 200ms ease;
-  --transition-slow: 300ms ease-in-out;
+  /* Motion — CI easing ease-out-quint (no bounce/elastic) */
+  --ease-ci: cubic-bezier(0.22, 1, 0.36, 1);
+  --transition-fast: 150ms var(--ease-ci);
+  --transition-base: 200ms var(--ease-ci);
+  --transition-slow: 300ms var(--ease-ci);
 
-  --font-th: var(--font-noto-sans-thai), 'Noto Sans Thai', sans-serif;
-  --font-en: var(--font-inter), 'Inter', sans-serif;
+  /* Type — IBM Plex Sans Thai is the single CI typeface (thai + latin) */
+  --font-th: var(--font-plex-thai), 'IBM Plex Sans Thai', sans-serif;
+  --font-en: var(--font-plex-thai), 'IBM Plex Sans Thai', sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -145,11 +187,11 @@ button { font-family: inherit; }
 
 /* ── Cards ── */
 .card {
-  background: #fff;
-  border-radius: var(--radius-md);
-  border: 0.5px solid var(--skdw-border);
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--skdw-border);
   padding: var(--space-6);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-xs);
 }
 .card-header {
   padding: var(--space-4) var(--space-6);
@@ -177,7 +219,8 @@ button { font-family: inherit; }
   font-weight: 600;
 }
 .badge-purple { background: var(--skdw-purple-pale); color: var(--skdw-purple); }
-.badge-gold { background: #fff8dc; color: #7a5c00; }
+.badge-gold { background: rgba(245, 197, 24, 0.15); color: var(--skdw-gold-text); }
+.badge-navy { background: var(--color-info-bg); color: var(--skdw-navy); }
 .badge-success { background: var(--color-success-bg); color: var(--color-success); }
 .badge-warning { background: var(--color-warning-bg); color: var(--color-warning); }
 .badge-error { background: var(--color-error-bg); color: var(--color-error); }
@@ -209,10 +252,10 @@ button { font-family: inherit; }
 
 /* ── Stat card ── */
 .stat {
-  background: #fff;
-  border-radius: var(--radius-md);
-  border: 0.5px solid var(--skdw-border);
-  box-shadow: var(--shadow-sm);
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--skdw-border);
+  box-shadow: var(--shadow-xs);
   padding: var(--space-6);
   display: flex;
   flex-direction: column;
@@ -224,18 +267,30 @@ button { font-family: inherit; }
 
 /* ── Toast ── */
 .toast-stack { position: fixed; bottom: 24px; right: 24px; z-index: var(--z-toast); display: flex; flex-direction: column; gap: 8px; }
+/* CI: no thick left accent bar — use a small status dot + full border */
 .toast {
-  padding: 12px 20px;
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-xl);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   font-size: var(--text-md);
-  background: #fff;
-  border-left: 4px solid var(--skdw-purple);
-  animation: slideUp 0.2s ease;
+  background: var(--card);
+  border: 1px solid var(--skdw-border);
+  animation: slideUp 0.2s var(--ease-ci);
   max-width: 360px;
 }
-.toast.success { border-left-color: var(--color-success); }
-.toast.error { border-left-color: var(--color-error); }
+.toast::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--skdw-purple);
+}
+.toast.success::before { background: var(--color-success); }
+.toast.error::before { background: var(--color-error); }
 @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 /* ── Skeleton ── */
@@ -250,12 +305,12 @@ button { font-family: inherit; }
 
 /* ── Modal ── */
 .modal-scrim {
-  position: fixed; inset: 0; background: rgba(26, 26, 46, 0.5);
+  position: fixed; inset: 0; background: rgba(26, 22, 37, 0.5);
   z-index: var(--z-modal); display: flex; align-items: center; justify-content: center; padding: 16px;
 }
 .modal {
-  background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
-  width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; animation: slideUp 0.2s ease;
+  background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; animation: scale-in 0.3s var(--ease-ci);
 }
 
 /* ── Utilities ── */
@@ -269,6 +324,54 @@ button { font-family: inherit; }
 .page-title { font-size: var(--text-xl); font-weight: 700; }
 .section-title { font-size: var(--text-lg); font-weight: 600; margin-bottom: var(--space-3); }
 
+/* ── Motion system (CI §6) ── */
+@keyframes fade-up  { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scale-in { from { opacity: 0; transform: scale(0.94); }      to { opacity: 1; transform: scale(1); } }
+@keyframes bar-grow { from { transform: scaleX(0); }                     to { transform: scaleX(1); } }
+
+.anim-fade-up  { animation: fade-up 0.45s var(--ease-ci) both; animation-delay: var(--anim-delay, 0s); }
+.anim-scale-in { animation: scale-in 0.3s var(--ease-ci) both; }
+.anim-bar-grow { transform-origin: left; animation: bar-grow 0.7s var(--ease-ci) both; animation-delay: 0.15s; }
+
+/* stagger children of a grid/list: set --i per child by index */
+.stagger-children > * {
+  animation: fade-up 0.4s var(--ease-ci) both;
+  animation-delay: calc(var(--stagger-base, 0s) + var(--stagger-step, 40ms) * var(--i, 0));
+}
+
+/* ── Dark theme (prepared per CI §3 — add data-theme="dark"/`.dark` on <html> to enable).
+   Note: full dark mode also needs any hardcoded #fff backgrounds swapped for var(--card). ── */
+.dark, :root[data-theme="dark"] {
+  --skdw-purple: #b892e8;
+  --skdw-purple-light: #7a3fc0;
+  --skdw-purple-pale: #2a2140;
+  --skdw-gold: #f5c518;
+  --skdw-gold-text: #f0c94a;
+  --skdw-dark: #f3effa;
+  --skdw-white: #1e1730;
+  --skdw-bg: #150f20;
+  --skdw-muted: #a79bc0;
+  --skdw-border: rgba(255, 255, 255, 0.1);
+  --skdw-navy: #7c8fd6;
+
+  --primary-foreground: #1a1625;
+  --accent-foreground: #241b04;
+  --secondary-foreground: var(--skdw-dark);
+  --ring: #b892e8;
+
+  --color-success: #4ade80;  --color-success-bg: rgba(74, 222, 128, 0.14);
+  --color-warning: #f0c94a;  --color-warning-bg: rgba(245, 197, 24, 0.14);
+  --color-error: #f87171;    --color-error-bg: rgba(248, 113, 113, 0.14);
+  --color-info: #7c8fd6;     --color-info-bg: rgba(124, 143, 214, 0.14);
+
+  --sidebar: #150f20;
+  --sidebar-accent: #2a2140;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

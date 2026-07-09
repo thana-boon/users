@@ -5,16 +5,25 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { IconShield } from '@/components/Icons';
 
 /**
- * DEV login. In production this screen is replaced by real SSO; the module
- * only ever consumes the resulting JWT. Here we mint a mock teacher-admin
- * token via /api/auth/dev-token so you can explore the module locally.
+ * Local dev/standalone login. In production the SSO portal owns login and only
+ * hands this module the resulting `schoolos_token`; this screen mints a token
+ * with the same contract via /api/auth/dev-token so the module can be tested
+ * without the portal. "admin" = a token carrying the `users:write` permission.
  */
+type DevRole = 'admin' | 'teacher' | 'student';
+
+const DEV_BODY: Record<DevRole, { role: 'teacher' | 'student'; permissions: string[] }> = {
+  admin: { role: 'teacher', permissions: ['users:read', 'users:write'] },
+  teacher: { role: 'teacher', permissions: [] },
+  student: { role: 'student', permissions: [] },
+};
+
 function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
   const denied = params.get('denied') === '1';
   const next = params.get('next') || '/users';
-  const [role, setRole] = useState<'teacher-admin' | 'teacher' | 'student'>('teacher-admin');
+  const [role, setRole] = useState<DevRole>('admin');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,12 +34,12 @@ function LoginInner() {
       const res = await fetch('/api/auth/dev-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, sub: '0', name: 'ผู้ดูแลระบบ (Dev)' }),
+        body: JSON.stringify({ ...DEV_BODY[role], sub: 'DEV', name: 'ผู้ดูแลระบบ (Dev)' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'เข้าสู่ระบบไม่สำเร็จ');
-      if (role === 'teacher-admin') router.push(next);
-      else setError('ได้ token บทบาท ' + role + ' แล้ว — แต่โมดูลนี้เปิดให้เฉพาะ teacher-admin เท่านั้น');
+      if (role === 'admin') router.push(next);
+      else setError('ได้ token แล้ว — แต่โมดูลนี้เปิดให้เฉพาะผู้มีสิทธิ์ users:write เท่านั้น');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -52,21 +61,21 @@ function LoginInner() {
         <div className="alert alert-info" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 16 }}>
           <IconShield width={18} height={18} />
           <span style={{ fontSize: 13 }}>
-            โหมดพัฒนา: จำลอง SSO ด้วย mock JWT เข้าถึงโมดูลได้เฉพาะ <b>teacher-admin</b>
+            โหมดพัฒนา: จำลอง SSO ด้วย mock JWT เข้าถึงโมดูลได้เฉพาะผู้มีสิทธิ์ <b>users:write</b>
           </span>
         </div>
 
         {denied && (
           <div className="alert alert-error" style={{ marginBottom: 16, fontSize: 13 }}>
-            สิทธิ์ไม่เพียงพอ — โมดูลนี้เฉพาะ teacher-admin เท่านั้นที่เข้าได้
+            สิทธิ์ไม่เพียงพอ — โมดูลนี้ต้องมีสิทธิ์ users:write เท่านั้นที่เข้าได้
           </div>
         )}
 
-        <label className="form-label" htmlFor="role">เลือก role (สำหรับทดสอบ)</label>
-        <select id="role" className="form-select" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
-          <option value="teacher-admin">teacher-admin (เข้าได้)</option>
-          <option value="teacher">teacher (ทดสอบ—ถูกปฏิเสธ)</option>
-          <option value="student">student (ทดสอบ—ถูกปฏิเสธ)</option>
+        <label className="form-label" htmlFor="role">เลือกสิทธิ์ (สำหรับทดสอบ)</label>
+        <select id="role" className="form-select" value={role} onChange={(e) => setRole(e.target.value as DevRole)}>
+          <option value="admin">admin · users:write (เข้าได้)</option>
+          <option value="teacher">teacher · ไม่มีสิทธิ์ (ทดสอบ—ถูกปฏิเสธ)</option>
+          <option value="student">student · ไม่มีสิทธิ์ (ทดสอบ—ถูกปฏิเสธ)</option>
         </select>
 
         {error && <div className="form-error" style={{ marginTop: 8 }}>{error}</div>}
