@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { and, eq, ilike, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { teachers } from '@/db/schema';
+import { workers } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, created, badRequest, handleError } from '@/lib/http';
 import { encrypt } from '@/lib/crypto';
@@ -16,25 +16,20 @@ export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams;
     const q = (sp.get('q') ?? '').trim();
-    const subject = (sp.get('subjectGroup') ?? '').trim();
-    const role = (sp.get('role') ?? '').trim();
     const status = (sp.get('status') ?? '').trim();
     const page = Math.max(1, Number(sp.get('page') ?? '1') || 1);
     const pageSize = Math.min(100, Math.max(1, Number(sp.get('pageSize') ?? '25') || 25));
 
-    const conds = [eq(teachers.isArchived, false)];
-    if (subject) conds.push(eq(teachers.subjectGroup, subject));
-    if (role === 'teacher' || role === 'teacher-admin')
-      conds.push(eq(teachers.role, role));
+    const conds = [eq(workers.isArchived, false)];
     if (status === 'active' || status === 'resigned')
-      conds.push(eq(teachers.employmentStatus, status));
+      conds.push(eq(workers.employmentStatus, status));
     if (q) {
       conds.push(
         or(
-          ilike(teachers.firstName, `%${q}%`),
-          ilike(teachers.lastName, `%${q}%`),
-          ilike(teachers.teacherCode, `%${q}%`),
-          ilike(teachers.email, `%${q}%`),
+          ilike(workers.firstName, `%${q}%`),
+          ilike(workers.lastName, `%${q}%`),
+          ilike(workers.workerCode, `%${q}%`),
+          ilike(workers.position, `%${q}%`),
         )!,
       );
     }
@@ -43,23 +38,21 @@ export async function GET(req: NextRequest) {
     const [rows, countRes] = await Promise.all([
       db
         .select({
-          id: teachers.id,
-          teacherCode: teachers.teacherCode,
-          prefix: teachers.prefix,
-          firstName: teachers.firstName,
-          lastName: teachers.lastName,
-          email: teachers.email,
-          subjectGroup: teachers.subjectGroup,
-          gradeTaught: teachers.gradeTaught,
-          role: teachers.role,
-          employmentStatus: teachers.employmentStatus,
+          id: workers.id,
+          workerCode: workers.workerCode,
+          prefix: workers.prefix,
+          firstName: workers.firstName,
+          lastName: workers.lastName,
+          position: workers.position,
+          phone: workers.phone,
+          employmentStatus: workers.employmentStatus,
         })
-        .from(teachers)
+        .from(workers)
         .where(where)
-        .orderBy(teachers.teacherCode)
+        .orderBy(workers.workerCode)
         .limit(pageSize)
         .offset((page - 1) * pageSize),
-      db.select({ n: sql<number>`count(*)` }).from(teachers).where(where),
+      db.select({ n: sql<number>`count(*)` }).from(workers).where(where),
     ]);
 
     return ok({ data: rows, page, pageSize, total: Number(countRes[0]?.n ?? 0) });
@@ -69,16 +62,13 @@ export async function GET(req: NextRequest) {
 }
 
 const createSchema = z.object({
-  teacherCode: z.string().min(1),
+  workerCode: z.string().min(1),
   prefix: z.string().nullable().optional(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  email: z.string().nullable().optional(),
-  subjectGroup: z.string().nullable().optional(),
-  gradeTaught: z.string().nullable().optional(),
-  role: z.enum(['teacher', 'teacher-admin']).default('teacher'),
+  position: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
   citizenId: z.string().nullable().optional(),
-  password: z.string().nullable().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -86,34 +76,31 @@ export async function POST(req: NextRequest) {
   if (!guard.ok) return guard.response;
   try {
     const body = createSchema.parse(await req.json());
-    const dup = await db.query.teachers.findFirst({
-      where: eq(teachers.teacherCode, body.teacherCode),
+    const dup = await db.query.workers.findFirst({
+      where: eq(workers.workerCode, body.workerCode),
       columns: { id: true },
     });
-    if (dup) return badRequest('รหัสครูนี้มีในระบบแล้ว');
+    if (dup) return badRequest('รหัสคนงานนี้มีในระบบแล้ว');
 
     const [row] = await db
-      .insert(teachers)
+      .insert(workers)
       .values({
-        teacherCode: body.teacherCode,
+        workerCode: body.workerCode,
         prefix: body.prefix ?? null,
         firstName: body.firstName,
         lastName: body.lastName,
-        email: body.email ?? null,
-        subjectGroup: body.subjectGroup ?? null,
-        gradeTaught: body.gradeTaught ?? null,
-        role: body.role,
+        position: body.position ?? null,
+        phone: body.phone ?? null,
         citizenIdEncrypted: encrypt(body.citizenId ?? null),
-        passwordEncrypted: encrypt(body.password ?? null),
       })
-      .returning({ id: teachers.id });
+      .returning({ id: workers.id });
 
     await recordAudit({
       session: guard.session,
       action: 'create',
-      targetType: 'teacher',
+      targetType: 'worker',
       targetId: row.id,
-      targetLabel: `${body.teacherCode} ${body.firstName} ${body.lastName}`,
+      targetLabel: `${body.workerCode} ${body.firstName} ${body.lastName}`,
       req,
     });
     return created({ id: row.id });

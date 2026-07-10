@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db } from '@/db';
 import {
@@ -354,12 +354,24 @@ export interface SetStatusInput {
     academicYearId?: number | null;
     completionDate?: string | null;
   } | null;
+  /**
+   * On reinstate (status='studying'): place the student back into a room by
+   * upserting the enrollment for `academicYearId` with this grade/room. Defaults
+   * to the room they left, chosen in the UI.
+   */
+  placement?: {
+    academicYearId: number;
+    gradeLevel?: string | null;
+    classroom?: string | null;
+  } | null;
 }
 
 /**
  * Set a student's lifecycle status. `withdrawn`/`graduated` store the exit
  * date + reason (fed to the future document API); `studying` (reinstate) clears
  * them. Optionally records a key-stage completion milestone in the same tx.
+ * On reinstate an optional `placement` upserts the target-year enrollment so the
+ * returning student lands back in a room.
  */
 export async function setStudentStatus(id: number, input: SetStatusInput): Promise<void> {
   await db.transaction(async (tx) => {
@@ -368,6 +380,23 @@ export async function setStudentStatus(id: number, input: SetStatusInput): Promi
         .update(students)
         .set({ status: 'studying', exitType: null, exitReason: null, exitDate: null, exitAcademicYearId: null })
         .where(eq(students.id, id));
+
+      // Place the returning student back into a room for the chosen year.
+      if (input.placement) {
+        const p = input.placement;
+        await tx
+          .insert(enrollments)
+          .values({
+            studentId: id,
+            academicYearId: p.academicYearId,
+            gradeLevel: norm(p.gradeLevel),
+            classroom: norm(p.classroom),
+          })
+          .onConflictDoUpdate({
+            target: [enrollments.studentId, enrollments.academicYearId],
+            set: { gradeLevel: norm(p.gradeLevel), classroom: norm(p.classroom) },
+          });
+      }
     } else {
       await tx
         .update(students)
@@ -536,6 +565,98 @@ export async function listExitHistory(status: StudentStatus): Promise<ExitHistor
     .where(and(eq(students.status, status), eq(students.isArchived, false)))
     .orderBy(desc(exitYear.year), asc(students.studentCode));
   return rows;
+}
+
+export interface FormerStudentRow {
+  id: number;
+  studentCode: string;
+  prefix: string | null;
+  firstName: string;
+  lastName: string;
+  nickname: string | null;
+  gender: string | null;
+  status: StudentStatus;
+  exitType: string | null;
+  exitReason: string | null;
+  exitDate: string | null;
+  exitYear: number | null;
+  gradeLevel: string | null; // grade in the exit year
+  classroom: string | null;
+}
+
+/**
+ * Paged, searchable list of "นักเรียนเก่า" — everyone who has left the roll
+ * (status withdrawn OR graduated), independent of the active year (a former
+ * student has no current-year enrollment, so the registry's active-year join
+ * can't surface them). Joins the exit-year academic year + the enrollment in
+ * that year to show the grade/room they left at. Newest exit year first.
+ */
+export async function listFormerStudents(opts: {
+  q?: string;
+  status?: 'withdrawn' | 'graduated';
+  page?: number;
+  pageSize?: number;
+}): Promise<{ data: FormerStudentRow[]; total: number }> {
+  const page = Math.max(1, opts.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, opts.pageSize ?? 25));
+  const q = (opts.q ?? '').trim();
+
+  const exitYear = alias(academicYears, 'exit_year');
+  const exitEnr = alias(enrollments, 'exit_enr');
+
+  const conds = [
+    eq(students.isArchived, false),
+    opts.status
+      ? eq(students.status, opts.status)
+      : inArray(students.status, ['withdrawn', 'graduated']),
+  ];
+  if (q) {
+    conds.push(
+      or(
+        ilike(students.firstName, `%${q}%`),
+        ilike(students.lastName, `%${q}%`),
+        ilike(students.studentCode, `%${q}%`),
+        ilike(students.nickname, `%${q}%`),
+      )!,
+    );
+  }
+  const where = and(...conds);
+
+  const [rows, countRes] = await Promise.all([
+    db
+      .select({
+        id: students.id,
+        studentCode: students.studentCode,
+        prefix: students.prefix,
+        firstName: students.firstName,
+        lastName: students.lastName,
+        nickname: students.nickname,
+        gender: students.gender,
+        status: students.status,
+        exitType: students.exitType,
+        exitReason: students.exitReason,
+        exitDate: students.exitDate,
+        exitYear: exitYear.year,
+        gradeLevel: exitEnr.gradeLevel,
+        classroom: exitEnr.classroom,
+      })
+      .from(students)
+      .leftJoin(exitYear, eq(exitYear.id, students.exitAcademicYearId))
+      .leftJoin(
+        exitEnr,
+        and(
+          eq(exitEnr.studentId, students.id),
+          eq(exitEnr.academicYearId, students.exitAcademicYearId),
+        ),
+      )
+      .where(where)
+      .orderBy(desc(exitYear.year), asc(students.studentCode))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize),
+    db.select({ n: sql<number>`count(*)` }).from(students).where(where),
+  ]);
+
+  return { data: rows, total: Number(countRes[0]?.n ?? 0) };
 }
 
 /** Resolve the active academic year id, or the newest, creating 2569 if none. */

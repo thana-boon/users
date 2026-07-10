@@ -15,7 +15,11 @@ import {
   IconHash,
   IconGraduate,
   IconExit,
+  IconEnroll,
   IconChevron,
+  IconTrash,
+  IconWorker,
+  IconHistory,
 } from './Icons';
 
 interface SessionInfo {
@@ -36,14 +40,24 @@ const NAV: NavNode[] = [
     Icon: IconStudents,
     children: [
       { href: '/users/students', label: 'ทะเบียนนักเรียน', Icon: IconStudents },
+      { href: '/users/placements', label: 'จัดเข้าห้อง', Icon: IconEnroll },
       { href: '/users/promotions', label: 'เลื่อนชั้น', Icon: IconPromote },
       { href: '/users/class-numbers', label: 'จัดเลขที่', Icon: IconHash },
       { href: '/users/graduations', label: 'จบการศึกษา', Icon: IconGraduate },
       { href: '/users/withdrawals', label: 'จำหน่าย/ลาออก', Icon: IconExit },
+      { href: '/users/former-students', label: 'นักเรียนเก่า', Icon: IconHistory },
     ],
   },
-  { href: '/users/teachers', label: 'ครู', Icon: IconTeachers },
+  {
+    label: 'บุคลากร',
+    Icon: IconTeachers,
+    children: [
+      { href: '/users/teachers', label: 'ครู', Icon: IconTeachers },
+      { href: '/users/workers', label: 'คนงาน', Icon: IconWorker },
+    ],
+  },
   { href: '/users/academic-years', label: 'ปีการศึกษา', Icon: IconCalendar },
+  { href: '/users/archive', label: 'ถังขยะ', Icon: IconTrash },
   { href: '/users/audit', label: 'บันทึกการใช้งาน', Icon: IconAudit },
 ];
 

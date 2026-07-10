@@ -12,7 +12,7 @@ interface Log {
 
 const ACTION_LABEL: Record<string, string> = {
   reveal_password: 'ดูรหัสผ่าน', reveal_citizen_id: 'ดูเลขบัตร', reveal_income: 'ดูรายได้',
-  create: 'เพิ่ม', update: 'แก้ไข', delete: 'ลบ', archive: 'เก็บถาวร',
+  create: 'เพิ่ม', update: 'แก้ไข', delete: 'ลบ', archive: 'ย้ายไปถังขยะ', restore: 'กู้คืน',
   import: 'นำเข้า', export: 'ส่งออก', login: 'เข้าสู่ระบบ',
 };
 const REVEAL = new Set(['reveal_password', 'reveal_citizen_id', 'reveal_income']);

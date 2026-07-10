@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from './Toast';
 import { keyStageOf, KEY_STAGE_LABEL_TH } from '@/lib/grades';
+
+interface YearOpt { id: number; year: number; isActive: boolean }
 
 /**
  * จำหน่าย/ลาออก or จบการศึกษา a student. Records exit type/date/reason (fed to
@@ -27,9 +29,16 @@ export function StatusDialog({
   const [exitDate, setExitDate] = useState('');
   const [exitReason, setExitReason] = useState(graduate ? 'สำเร็จการศึกษา' : '');
   const [recordCompletion, setRecordCompletion] = useState(graduate && !!stage);
+  const [years, setYears] = useState<YearOpt[]>([]);
+  const [exitYearId, setExitYearId] = useState<number | null>(activeYearId);
   const [busy, setBusy] = useState(false);
 
-  const WITHDRAW_TYPES = ['ลาออก', 'พักการเรียน', 'เสียชีวิต', 'ย้ายสถานศึกษา', 'จำหน่าย', 'อื่น ๆ'];
+  // Year list for the "ปีการศึกษาที่ออก" selector (default = the passed active year).
+  useEffect(() => {
+    api<{ years: YearOpt[] }>('/api/users/meta').then((m) => setYears(m.years)).catch(() => {});
+  }, []);
+
+  const WITHDRAW_TYPES = ['ลาออก', 'พักการเรียน', 'เสียชีวิต', 'ย้ายสถานศึกษา', 'นักเรียนไปโครงการ', 'จำหน่าย', 'อื่น ๆ'];
 
   async function submit() {
     if (!exitDate.trim()) return toast('กรุณาระบุวันที่ออก', 'error');
@@ -41,9 +50,9 @@ export function StatusDialog({
         exitType,
         exitDate,
         exitReason,
-        academicYearId: activeYearId,
+        academicYearId: exitYearId,
         completion: recordCompletion && stage
-          ? { keyStage: stage, gradeLevel: activeGrade, academicYearId: activeYearId, completionDate: exitDate }
+          ? { keyStage: stage, gradeLevel: activeGrade, academicYearId: exitYearId, completionDate: exitDate }
           : null,
       }));
       toast(graduate ? 'บันทึกจบการศึกษาแล้ว' : 'บันทึกจำหน่าย/ลาออกแล้ว', 'success');
@@ -60,6 +69,13 @@ export function StatusDialog({
       <div className="modal">
         <div className="card-header">{graduate ? 'จบการศึกษา' : 'จำหน่าย / ลาออก'}</div>
         <div className="card-pad stack" style={{ gap: 12 }}>
+          <div>
+            <label className="form-label">ปีการศึกษาที่ออก</label>
+            <select className="form-select" value={exitYearId ?? ''} onChange={(e) => setExitYearId(Number(e.target.value))}>
+              {years.length === 0 && activeYearId != null && <option value={activeYearId}>—</option>}
+              {years.map((y) => <option key={y.id} value={y.id}>{y.year}{y.isActive ? ' (ปัจจุบัน)' : ''}</option>)}
+            </select>
+          </div>
           <div>
             <label className="form-label">ประเภท</label>
             {graduate ? (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/client';
 import { formatThaiDate } from '@/lib/thai';
@@ -38,14 +38,19 @@ function BarRow({ label, count, max }: { label: string; count: number; max: numb
 /** A stacked male/female bar. `w` is the shared width scale (px per student). */
 function GenderBar({ b, max, height = 12 }: { b: GenderBucket; max: number; height?: number }) {
   const pct = (n: number) => (max ? `${(n / max) * 100}%` : '0%');
+  const seg: CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+    color: '#fff', fontSize: Math.max(9, Math.round(height * 0.75)), fontWeight: 600,
+    lineHeight: 1, whiteSpace: 'nowrap', transition: 'width .3s ease',
+  };
   return (
     <div
       style={{ display: 'flex', width: '100%', height, borderRadius: 999, overflow: 'hidden', background: 'var(--skdw-bg)' }}
       title={`ชาย ${b.male} · หญิง ${b.female}${b.other ? ` · อื่น ๆ ${b.other}` : ''}`}
     >
-      <div style={{ width: pct(b.male), background: 'var(--gender-male)', transition: 'width .3s ease' }} />
-      <div style={{ width: pct(b.female), background: 'var(--gender-female)', transition: 'width .3s ease' }} />
-      {b.other > 0 && <div style={{ width: pct(b.other), background: 'var(--skdw-muted)', transition: 'width .3s ease' }} />}
+      <div style={{ ...seg, width: pct(b.male), background: 'var(--gender-male)' }}>{b.male > 0 ? b.male : ''}</div>
+      <div style={{ ...seg, width: pct(b.female), background: 'var(--gender-female)' }}>{b.female > 0 ? b.female : ''}</div>
+      {b.other > 0 && <div style={{ ...seg, width: pct(b.other), background: 'var(--skdw-muted)' }}>{b.other}</div>}
     </div>
   );
 }

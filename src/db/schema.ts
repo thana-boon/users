@@ -38,6 +38,9 @@ export const GUARDIAN_TYPES = ['guardian', 'father', 'mother'] as const;
 export const STUDENT_STATUSES = ['studying', 'withdrawn', 'graduated'] as const;
 // ช่วงชั้น — used by the key-stage completion milestone (for future document API).
 export const KEY_STAGES = ['kindergarten', 'primary', 'lower_secondary', 'upper_secondary'] as const;
+// Staff (teacher/worker) employment lifecycle. `active` = ยังทำงานอยู่;
+// `resigned` = ลาออก/พ้นสภาพ (records exitDate + exitAcademicYearId).
+export const EMPLOYMENT_STATUSES = ['active', 'resigned'] as const;
 
 export const studentRoleEnum = pgEnum('student_role', STUDENT_ROLES);
 export const teacherRoleEnum = pgEnum('teacher_role', TEACHER_ROLES);
@@ -45,6 +48,7 @@ export const addressTypeEnum = pgEnum('address_type', ADDRESS_TYPES);
 export const guardianTypeEnum = pgEnum('guardian_type', GUARDIAN_TYPES);
 export const studentStatusEnum = pgEnum('student_status', STUDENT_STATUSES);
 export const keyStageEnum = pgEnum('key_stage', KEY_STAGES);
+export const employmentStatusEnum = pgEnum('employment_status', EMPLOYMENT_STATUSES);
 
 const now = () => new Date();
 
@@ -330,6 +334,16 @@ export const teachers = pgTable(
     gradeTaught: varchar('grade_taught', { length: 128 }), // ชั้นที่สอน
     passwordEncrypted: text('password_encrypted'),
 
+    // Employment lifecycle (ยังทำงานอยู่ / ลาออก). Exit fields recorded on resign.
+    employmentStatus: employmentStatusEnum('employment_status').notNull().default('active'),
+    exitDate: varchar('exit_date', { length: 20 }), // raw Thai dd/mm/BBBB
+    exitReason: text('exit_reason'),
+    exitAcademicYearId: integer('exit_academic_year_id').references(() => academicYears.id),
+
+    // Profile photo stored inline (base64), like students — see photo route.
+    photoBase64: text('photo_base64'),
+    photoMime: varchar('photo_mime', { length: 32 }),
+
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow().$onUpdate(now),
@@ -337,6 +351,40 @@ export const teachers = pgTable(
   (t) => ({
     codeUniq: unique('teachers_code_uniq').on(t.teacherCode),
     emailIdx: index('teachers_email_idx').on(t.email),
+  }),
+);
+
+// -- workers (คนงาน) — non-login staff records only ------------------
+// Chosen as a SEPARATE table (not a teacher role) so it never touches teacher
+// RBAC/login. Workers carry no password/role/email — just identity, ตำแหน่ง,
+// employment status, sensitive citizen id, and an inline profile photo.
+export const workers = pgTable(
+  'workers',
+  {
+    id: serial('id').primaryKey(),
+    workerCode: varchar('worker_code', { length: 32 }).notNull(), // รหัสคนงาน
+    citizenIdEncrypted: text('citizen_id_encrypted'), // เลขบัตร ปชช. (AES-GCM)
+
+    prefix: varchar('prefix', { length: 32 }),
+    firstName: varchar('first_name', { length: 128 }).notNull(),
+    lastName: varchar('last_name', { length: 128 }).notNull(),
+    position: varchar('position', { length: 128 }), // ตำแหน่ง/หน้าที่ เช่น นักการภารโรง
+    phone: varchar('phone', { length: 32 }),
+
+    employmentStatus: employmentStatusEnum('employment_status').notNull().default('active'),
+    exitDate: varchar('exit_date', { length: 20 }),
+    exitReason: text('exit_reason'),
+    exitAcademicYearId: integer('exit_academic_year_id').references(() => academicYears.id),
+
+    photoBase64: text('photo_base64'),
+    photoMime: varchar('photo_mime', { length: 32 }),
+
+    isArchived: boolean('is_archived').notNull().default(false),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow().$onUpdate(now),
+  },
+  (t) => ({
+    codeUniq: unique('workers_code_uniq').on(t.workerCode),
   }),
 );
 
@@ -435,6 +483,8 @@ export type Student = typeof students.$inferSelect;
 export type NewStudent = typeof students.$inferInsert;
 export type Teacher = typeof teachers.$inferSelect;
 export type NewTeacher = typeof teachers.$inferInsert;
+export type Worker = typeof workers.$inferSelect;
+export type NewWorker = typeof workers.$inferInsert;
 export type Enrollment = typeof enrollments.$inferSelect;
 export type AcademicYear = typeof academicYears.$inferSelect;
 export type Guardian = typeof guardians.$inferSelect;

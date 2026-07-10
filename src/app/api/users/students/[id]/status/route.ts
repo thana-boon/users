@@ -27,6 +27,14 @@ const schema = z.object({
     })
     .nullable()
     .optional(),
+  placement: z
+    .object({
+      academicYearId: z.number().int(),
+      gradeLevel: z.string().nullable().optional(),
+      classroom: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 /**
@@ -65,7 +73,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       targetLabel: `${s.studentCode} ${s.firstName} ${s.lastName}`,
       detail:
         body.status === 'studying'
-          ? 'คืนสถานะกำลังศึกษา'
+          ? `คืนสถานะกำลังศึกษา${body.placement ? ` → ${body.placement.gradeLevel ?? '-'}/${body.placement.classroom ?? '-'}` : ''}`
           : `${body.exitType ?? body.status} — ${body.exitReason ?? ''} (${body.exitDate ?? ''})`,
       req,
     });

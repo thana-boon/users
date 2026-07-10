@@ -7,9 +7,10 @@ import { api } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
 import { RevealButton } from '@/components/RevealButton';
-import { IconBack, IconEdit } from '@/components/Icons';
+import { IconBack, IconEdit, IconTrash } from '@/components/Icons';
 import { formatThaiDate, ageFromThaiDate } from '@/lib/thai';
 import { StatusDialog } from '@/components/StatusDialog';
+import { ReinstateDialog } from '@/components/ReinstateDialog';
 
 type Dict = Record<string, string | null | undefined>;
 
@@ -107,13 +108,12 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const [busy, setBusy] = useState(false);
   const [photoVer, setPhotoVer] = useState(0);
   const [statusMode, setStatusMode] = useState<null | 'withdrawn'>(null);
+  const [reinstateOpen, setReinstateOpen] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
 
   // Editable form state (nested). Kept as string-only dicts so the PATCH payload
   // stays clean (no id/studentId numbers leaking into the child collections).
   const [core, setCore] = useState<Dict>({});
-  const [enroll, setEnroll] = useState<Dict>({});
-  const [enrollId, setEnrollId] = useState<number | undefined>(undefined);
   const [health, setHealth] = useState<Dict>({});
   const [prev, setPrev] = useState<Dict>({});
   const [addrs, setAddrs] = useState<Record<string, Dict>>({});
@@ -133,9 +133,6 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       gender: d.gender, birthDate: d.birthDate, religion: d.religion, nationality: d.nationality,
       ethnicity: d.ethnicity, phone: d.phone, email: d.email, admissionDate: d.admissionDate,
     });
-    const active = d.enrollments.find((e) => e.academicYear.isActive) ?? d.enrollments[0];
-    setEnrollId(active?.id);
-    setEnroll(active ? { gradeLevel: active.gradeLevel, classroom: active.classroom, classNumber: active.classNumber } : {});
     // Copy only known string fields (source rows also carry numeric id/studentId).
     const pick = (src: Dict | null | undefined, fields: { k: string }[]): Dict => {
       const out: Dict = {};
@@ -158,6 +155,8 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   if (!d) return <div className="skeleton" style={{ height: 200 }} />;
 
   const activeEnrollment = d.enrollments.find((e) => e.academicYear.isActive) ?? d.enrollments[0];
+  // Room the student left from (latest-year enrollment) — default for reinstate.
+  const lastEnrollment = d.enrollments.slice().sort((a, b) => b.academicYear.year - a.academicYear.year)[0];
   const addrByType = Object.fromEntries(d.addresses.map((a) => [a.addressType, a]));
   const guardByType = Object.fromEntries(d.guardians.map((g) => [g.guardianType, g]));
   const photoUrl = d.hasPhoto ? `/api/users/students/${id}/photo?v=${photoVer}` : null;
@@ -170,7 +169,6 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
         ...core,
         citizenId: sensitive.citizenId || undefined,
         password: sensitive.password || undefined,
-        enrollment: { id: enrollId, gradeLevel: enroll.gradeLevel, classroom: enroll.classroom, classNumber: enroll.classNumber },
         health,
         previousSchool: prev,
         addresses: ADDRESS_TYPES
@@ -221,37 +219,21 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
 
   async function archive() {
     if (!(await confirm({
-      title: 'ย้ายไปคลัง',
-      message: 'ยืนยันการย้ายนักเรียนไปคลัง (archive)? ข้อมูลจะไม่หาย แต่จะไม่แสดงในรายการ',
-      confirmText: 'ย้ายไปคลัง',
+      title: 'ย้ายไปถังขยะ',
+      message: 'ยืนยันการย้ายนักเรียนไปถังขยะ? ข้อมูลจะไม่หาย แต่จะไม่แสดงในรายการ — กู้คืนได้ที่หน้าถังขยะ',
+      confirmText: 'ย้ายไปถังขยะ',
       danger: true,
     }))) return;
     try {
       await api(`/api/users/students/${id}`, { method: 'DELETE' });
-      toast('ย้ายไปคลังแล้ว', 'success');
+      toast('ย้ายไปถังขยะแล้ว', 'success');
       router.push('/users/students');
     } catch (e) {
       toast((e as Error).message, 'error');
     }
   }
 
-  async function reinstate() {
-    if (!(await confirm({
-      title: 'คืนสถานะ',
-      message: 'คืนสถานะเป็น “กำลังศึกษา”? ข้อมูลการออก (วันที่/เหตุผล) จะถูกล้าง',
-      confirmText: 'คืนสถานะ',
-    }))) return;
-    try {
-      await api(`/api/users/students/${id}/status`, { method: 'POST', body: JSON.stringify({ status: 'studying' }) });
-      toast('คืนสถานะแล้ว', 'success');
-      load();
-    } catch (e) {
-      toast((e as Error).message, 'error');
-    }
-  }
-
   const setC = (k: string) => (v: string) => setCore((s) => ({ ...s, [k]: v }));
-  const setE = (k: string) => (v: string) => setEnroll((s) => ({ ...s, [k]: v }));
   const setH = (k: string) => (v: string) => setHealth((s) => ({ ...s, [k]: v }));
   const setP = (k: string) => (v: string) => setPrev((s) => ({ ...s, [k]: v }));
   const setA = (t: string, k: string) => (v: string) => setAddrs((s) => ({ ...s, [t]: { ...s[t], [k]: v } }));
@@ -265,7 +247,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           {!editing && <button className="btn btn-secondary btn-sm" onClick={beginEdit}><IconEdit width={16} height={16} /> แก้ไข</button>}
           {editing && <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>ยกเลิก</button>}
           {editing && <button className="btn btn-primary btn-sm" onClick={save} disabled={busy}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>}
-          {!editing && <button className="btn btn-danger btn-sm" onClick={archive}>ย้ายออก</button>}
+          {!editing && <button className="btn btn-danger btn-sm" onClick={archive}><IconTrash width={16} height={16} /> ย้ายไปถังขยะ</button>}
         </div>
       </div>
 
@@ -376,21 +358,28 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
               {d.status === 'studying' ? (
                 <button className="btn btn-danger btn-sm" onClick={() => setStatusMode('withdrawn')}>จำหน่าย/ลาออก</button>
               ) : (
-                <button className="btn btn-ghost btn-sm" onClick={reinstate}>คืนสถานะกำลังศึกษา</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setReinstateOpen(true)}>คืนสถานะกำลังศึกษา</button>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Current enrollment (edit) */}
+      {/* Current enrollment — read-only. Class/room moves go through เลื่อนชั้น/ย้ายห้อง;
+          เลขที่ through จัดเลขที่. Editing here is intentionally disabled. */}
       {editing && (
         <div className="card">
           <h2 className="section-title">ชั้น / ห้อง (ปีปัจจุบัน)</h2>
-          <div className="grid-3" style={{ gap: 12 }}>
-            <TInput label="ชั้น" value={enroll.gradeLevel} onChange={setE('gradeLevel')} />
-            <TInput label="ห้อง" value={enroll.classroom} onChange={setE('classroom')} />
-            <TInput label="เลขที่" value={enroll.classNumber} onChange={setE('classNumber')} />
+          <div className="row" style={{ gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="badge badge-purple" style={{ fontSize: 13, padding: '6px 12px' }}>
+              {activeEnrollment?.gradeLevel ?? '-'} / ห้อง {activeEnrollment?.classroom ?? '-'} / เลขที่ {activeEnrollment?.classNumber ?? '-'}
+            </span>
+            <span className="muted" style={{ fontSize: 13 }}>
+              แก้ไขชั้น/ห้องที่นี่ไม่ได้ — ย้ายที่หน้า{' '}
+              <Link href="/users/promotions" style={{ color: 'var(--skdw-purple)', textDecoration: 'underline' }}>เลื่อนชั้น / ย้ายห้อง</Link>{' '}
+              และแก้เลขที่ที่หน้า{' '}
+              <Link href="/users/class-numbers" style={{ color: 'var(--skdw-purple)', textDecoration: 'underline' }}>จัดเลขที่</Link>
+            </span>
           </div>
         </div>
       )}
@@ -539,6 +528,17 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           activeYearId={activeEnrollment?.academicYearId ?? null}
           onClose={() => setStatusMode(null)}
           onDone={() => { setStatusMode(null); load(); }}
+        />
+      )}
+
+      {reinstateOpen && (
+        <ReinstateDialog
+          studentId={d.id}
+          studentLabel={`${d.studentCode} ${d.firstName} ${d.lastName}`}
+          defaultGrade={lastEnrollment?.gradeLevel ?? null}
+          defaultClassroom={lastEnrollment?.classroom ?? null}
+          onClose={() => setReinstateOpen(false)}
+          onDone={() => { setReinstateOpen(false); load(); }}
         />
       )}
     </div>

@@ -29,7 +29,6 @@ export default function StudentsPage() {
   const [q, setQ] = useState('');
   const [grade, setGrade] = useState('');
   const [classroom, setClassroom] = useState('');
-  const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<Meta>({ grades: [], classrooms: [] });
   const [showImport, setShowImport] = useState(false);
@@ -49,7 +48,9 @@ export default function StudentsPage() {
       if (q) sp.set('q', q);
       if (grade) sp.set('grade', grade);
       if (classroom) sp.set('classroom', classroom);
-      if (status) sp.set('status', status);
+      // Registry shows only students still on the roll — จบ/จำหน่าย/ลาออก live
+      // on the นักเรียนเก่า page (/users/former-students).
+      sp.set('status', 'studying');
       const res = await api<{ data: Row[]; total: number }>(`/api/users/students?${sp}`);
       setRows(res.data);
       setTotal(res.total);
@@ -59,14 +60,14 @@ export default function StudentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [q, grade, classroom, status, toast]);
+  }, [q, grade, classroom, toast]);
 
   // debounce search + filter changes
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => load(1), 300);
     return () => clearTimeout(debounceRef.current);
-  }, [q, grade, classroom, status, load]);
+  }, [q, grade, classroom, load]);
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -82,6 +83,7 @@ export default function StudentsPage() {
       <div className="row-between">
         <h1 className="page-title">นักเรียน</h1>
         <div className="row" style={{ gap: 8 }}>
+          <Link className="btn btn-ghost btn-sm" href="/users/former-students">นักเรียนเก่า</Link>
           <Link className="btn btn-ghost btn-sm" href={`/users/class-numbers${grade ? `?grade=${encodeURIComponent(grade)}${classroom ? `&classroom=${encodeURIComponent(classroom)}` : ''}` : ''}`}>จัดเลขที่</Link>
           <a className="btn btn-ghost btn-sm" href="/api/users/students/template">เทมเพลต</a>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(true)}><IconUpload width={16} height={16} /> นำเข้า</button>
@@ -112,12 +114,6 @@ export default function StudentsPage() {
           <select className="form-select" style={{ width: 130 }} value={classroom} onChange={(e) => setClassroom(e.target.value)} aria-label="กรองห้อง">
             <option value="">ทุกห้อง</option>
             {meta.classrooms.map((c) => <option key={c} value={c}>ห้อง {c}</option>)}
-          </select>
-          <select className="form-select" style={{ width: 150 }} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="กรองสถานะ">
-            <option value="">ทุกสถานะ</option>
-            <option value="studying">กำลังศึกษา</option>
-            <option value="withdrawn">จำหน่าย/ลาออก</option>
-            <option value="graduated">จบการศึกษา</option>
           </select>
         </div>
       </div>

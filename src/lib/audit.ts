@@ -18,19 +18,23 @@ export type AuditAction =
   | 'update'
   | 'delete'
   | 'archive'
+  | 'restore'
   | 'import'
   | 'export'
   | 'login'
   | 'promote'
+  | 'transfer_room'
+  | 'place_student'
   | 'renumber'
   | 'withdraw'
   | 'graduate'
-  | 'reinstate';
+  | 'reinstate'
+  | 'resign';
 
 export interface AuditInput {
   session: SessionClaims | null;
   action: AuditAction;
-  targetType: 'student' | 'teacher' | 'academic_year' | 'enrollment' | 'promotion' | 'auth';
+  targetType: 'student' | 'teacher' | 'worker' | 'academic_year' | 'enrollment' | 'promotion' | 'auth';
   targetId?: number | null;
   targetLabel?: string | null;
   detail?: string | null;
