@@ -7,13 +7,19 @@ import { useToast } from '@/components/Toast';
 import { IconSearch, IconPlus, IconDownload, IconUpload } from '@/components/Icons';
 import { ImportDialog } from '@/components/ImportDialog';
 import { NewStudentDialog } from '@/components/NewStudentDialog';
+import { PhotoImportDialog } from '@/components/PhotoImportDialog';
 
 interface Row {
   id: number; studentCode: string; prefix: string | null;
   firstName: string; lastName: string; nickname: string | null;
-  gender: string | null; gradeLevel: string | null; classroom: string | null; classNumber: string | null;
+  gender: string | null; status: string;
+  gradeLevel: string | null; classroom: string | null; classNumber: string | null;
 }
 interface Meta { grades: string[]; classrooms: string[]; }
+
+const STATUS_LABEL: Record<string, string> = {
+  studying: 'กำลังศึกษา', withdrawn: 'จำหน่าย/ลาออก', graduated: 'จบการศึกษา',
+};
 
 export default function StudentsPage() {
   const toast = useToast();
@@ -23,9 +29,11 @@ export default function StudentsPage() {
   const [q, setQ] = useState('');
   const [grade, setGrade] = useState('');
   const [classroom, setClassroom] = useState('');
+  const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<Meta>({ grades: [], classrooms: [] });
   const [showImport, setShowImport] = useState(false);
+  const [showPhotoImport, setShowPhotoImport] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const pageSize = 25;
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -41,6 +49,7 @@ export default function StudentsPage() {
       if (q) sp.set('q', q);
       if (grade) sp.set('grade', grade);
       if (classroom) sp.set('classroom', classroom);
+      if (status) sp.set('status', status);
       const res = await api<{ data: Row[]; total: number }>(`/api/users/students?${sp}`);
       setRows(res.data);
       setTotal(res.total);
@@ -50,14 +59,14 @@ export default function StudentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [q, grade, classroom, toast]);
+  }, [q, grade, classroom, status, toast]);
 
   // debounce search + filter changes
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => load(1), 300);
     return () => clearTimeout(debounceRef.current);
-  }, [q, grade, classroom, load]);
+  }, [q, grade, classroom, status, load]);
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -73,8 +82,10 @@ export default function StudentsPage() {
       <div className="row-between">
         <h1 className="page-title">นักเรียน</h1>
         <div className="row" style={{ gap: 8 }}>
+          <Link className="btn btn-ghost btn-sm" href={`/users/class-numbers${grade ? `?grade=${encodeURIComponent(grade)}${classroom ? `&classroom=${encodeURIComponent(classroom)}` : ''}` : ''}`}>จัดเลขที่</Link>
           <a className="btn btn-ghost btn-sm" href="/api/users/students/template">เทมเพลต</a>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(true)}><IconUpload width={16} height={16} /> นำเข้า</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowPhotoImport(true)}><IconUpload width={16} height={16} /> นำเข้ารูป</button>
           <button className="btn btn-secondary btn-sm" onClick={exportXlsx}><IconDownload width={16} height={16} /> ส่งออก</button>
           <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}><IconPlus width={16} height={16} /> เพิ่ม</button>
         </div>
@@ -102,6 +113,12 @@ export default function StudentsPage() {
             <option value="">ทุกห้อง</option>
             {meta.classrooms.map((c) => <option key={c} value={c}>ห้อง {c}</option>)}
           </select>
+          <select className="form-select" style={{ width: 150 }} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="กรองสถานะ">
+            <option value="">ทุกสถานะ</option>
+            <option value="studying">กำลังศึกษา</option>
+            <option value="withdrawn">จำหน่าย/ลาออก</option>
+            <option value="graduated">จบการศึกษา</option>
+          </select>
         </div>
       </div>
 
@@ -127,7 +144,14 @@ export default function StudentsPage() {
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td className="mono">{r.studentCode}</td>
-                  <td>{r.prefix ?? ''}{r.firstName} {r.lastName}</td>
+                  <td>
+                    {r.prefix ?? ''}{r.firstName} {r.lastName}
+                    {r.status && r.status !== 'studying' && (
+                      <span className="badge" style={{ marginLeft: 8, background: 'var(--skdw-bg)', fontSize: 11 }}>
+                        {STATUS_LABEL[r.status] ?? r.status}
+                      </span>
+                    )}
+                  </td>
                   <td>{r.nickname ?? '-'}</td>
                   <td>{r.gender ?? '-'}</td>
                   <td>{r.gradeLevel ?? '-'}</td>
@@ -155,6 +179,12 @@ export default function StudentsPage() {
           kind="students"
           onClose={() => setShowImport(false)}
           onDone={() => { setShowImport(false); load(1); }}
+        />
+      )}
+      {showPhotoImport && (
+        <PhotoImportDialog
+          onClose={() => setShowPhotoImport(false)}
+          onDone={() => setShowPhotoImport(false)}
         />
       )}
       {showNew && (

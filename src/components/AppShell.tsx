@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import {
   IconDashboard,
   IconStudents,
@@ -10,6 +11,11 @@ import {
   IconAudit,
   IconLogout,
   IconShield,
+  IconPromote,
+  IconHash,
+  IconGraduate,
+  IconExit,
+  IconChevron,
 } from './Icons';
 
 interface SessionInfo {
@@ -17,17 +23,43 @@ interface SessionInfo {
   role: string;
 }
 
-const NAV = [
+type Leaf = { href: string; label: string; Icon: typeof IconDashboard; exact?: boolean };
+type Group = { label: string; Icon: typeof IconDashboard; children: Leaf[] };
+type NavNode = Leaf | Group;
+
+const isGroup = (n: NavNode): n is Group => 'children' in n;
+
+const NAV: NavNode[] = [
   { href: '/users', label: 'ภาพรวม', Icon: IconDashboard, exact: true },
-  { href: '/users/students', label: 'นักเรียน', Icon: IconStudents },
+  {
+    label: 'นักเรียน',
+    Icon: IconStudents,
+    children: [
+      { href: '/users/students', label: 'ทะเบียนนักเรียน', Icon: IconStudents },
+      { href: '/users/promotions', label: 'เลื่อนชั้น', Icon: IconPromote },
+      { href: '/users/class-numbers', label: 'จัดเลขที่', Icon: IconHash },
+      { href: '/users/graduations', label: 'จบการศึกษา', Icon: IconGraduate },
+      { href: '/users/withdrawals', label: 'จำหน่าย/ลาออก', Icon: IconExit },
+    ],
+  },
   { href: '/users/teachers', label: 'ครู', Icon: IconTeachers },
   { href: '/users/academic-years', label: 'ปีการศึกษา', Icon: IconCalendar },
   { href: '/users/audit', label: 'บันทึกการใช้งาน', Icon: IconAudit },
 ];
 
+// Flat list of every leaf (for the mobile bottom nav — the group collapses to
+// its first child there so the bar stays compact).
+const MOBILE_NAV: Leaf[] = NAV.map((n) =>
+  isGroup(n) ? { ...n.children[0], label: n.label, Icon: n.Icon } : n,
+);
+
 function isActive(pathname: string, href: string, exact?: boolean) {
   if (exact) return pathname === href;
   return pathname === href || pathname.startsWith(href + '/');
+}
+
+function groupActive(pathname: string, g: Group) {
+  return g.children.some((c) => isActive(pathname, c.href, c.exact));
 }
 
 export function AppShell({
@@ -100,21 +132,22 @@ export function AppShell({
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {/* Sidebar (desktop) */}
         <nav className="sidebar-desktop" aria-label="เมนูหลัก">
-          {NAV.map(({ href, label, Icon, exact }) => {
-            const active = isActive(pathname, href, exact);
-            return (
+          {NAV.map((node) =>
+            isGroup(node) ? (
+              <NavGroup key={node.label} group={node} pathname={pathname} />
+            ) : (
               <Link
-                key={href}
-                href={href}
+                key={node.href}
+                href={node.href}
                 className="side-item"
-                aria-current={active ? 'page' : undefined}
-                data-active={active}
+                aria-current={isActive(pathname, node.href, node.exact) ? 'page' : undefined}
+                data-active={isActive(pathname, node.href, node.exact)}
               >
-                <Icon width={20} height={20} />
-                <span>{label}</span>
+                <node.Icon width={20} height={20} />
+                <span>{node.label}</span>
               </Link>
-            );
-          })}
+            ),
+          )}
         </nav>
 
         {/* Main */}
@@ -132,7 +165,7 @@ export function AppShell({
 
       {/* Bottom nav (mobile) */}
       <nav className="bottom-nav" aria-label="เมนูหลัก (มือถือ)">
-        {NAV.map(({ href, label, Icon, exact }) => {
+        {MOBILE_NAV.map(({ href, label, Icon, exact }) => {
           const active = isActive(pathname, href, exact);
           return (
             <Link key={href} href={href} className="bottom-item" data-active={active} aria-current={active ? 'page' : undefined}>
@@ -156,6 +189,23 @@ export function AppShell({
         }
         .side-item:hover { background: var(--skdw-bg); }
         .side-item[data-active="true"] { background: var(--skdw-purple-pale); color: var(--skdw-purple); font-weight: 600; }
+        .side-group-btn {
+          display: flex; align-items: center; gap: var(--space-3); padding: 10px 14px; width: 100%;
+          border: none; background: none; cursor: pointer; text-align: left;
+          border-radius: var(--radius-sm); font-size: var(--text-md); color: var(--skdw-dark);
+          font-family: inherit; transition: background var(--transition-fast);
+        }
+        .side-group-btn:hover { background: var(--skdw-bg); }
+        .side-group-btn[data-active="true"] { color: var(--skdw-purple); font-weight: 600; }
+        .side-group-chevron { margin-left: auto; transition: transform var(--transition-fast); }
+        .side-group-chevron[data-open="false"] { transform: rotate(-90deg); }
+        .side-subitem {
+          display: flex; align-items: center; gap: var(--space-3); padding: 8px 14px 8px 40px;
+          border-radius: var(--radius-sm); font-size: var(--text-md); color: var(--skdw-muted);
+          transition: background var(--transition-fast);
+        }
+        .side-subitem:hover { background: var(--skdw-bg); }
+        .side-subitem[data-active="true"] { background: var(--skdw-purple-pale); color: var(--skdw-purple); font-weight: 600; }
         .bottom-nav { display: none; }
         @media (max-width: 900px) {
           .sidebar-desktop { display: none; }
@@ -172,6 +222,48 @@ export function AppShell({
           .bottom-item[data-active="true"] { color: var(--skdw-purple); font-weight: 600; }
         }
       `}</style>
+    </div>
+  );
+}
+
+function NavGroup({ group, pathname }: { group: Group; pathname: string }) {
+  const active = groupActive(pathname, group);
+  const [open, setOpen] = useState(active);
+
+  // Auto-expand when navigating into one of the group's pages.
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active]);
+
+  return (
+    <div>
+      <button
+        type="button"
+        className="side-group-btn"
+        data-active={active}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <group.Icon width={20} height={20} />
+        <span>{group.label}</span>
+        <IconChevron width={16} height={16} className="side-group-chevron" data-open={open} />
+      </button>
+      {open &&
+        group.children.map((c) => {
+          const a = isActive(pathname, c.href, c.exact);
+          return (
+            <Link
+              key={c.href}
+              href={c.href}
+              className="side-subitem"
+              aria-current={a ? 'page' : undefined}
+              data-active={a}
+            >
+              <c.Icon width={16} height={16} />
+              <span>{c.label}</span>
+            </Link>
+          );
+        })}
     </div>
   );
 }

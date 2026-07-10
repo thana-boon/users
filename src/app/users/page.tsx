@@ -5,13 +5,16 @@ import Link from 'next/link';
 import { api } from '@/lib/client';
 import { formatThaiDate } from '@/lib/thai';
 
+interface GenderBucket { male: number; female: number; other: number; count: number }
+interface RoomBucket extends GenderBucket { classroom: string }
+interface GradeBucket extends GenderBucket { grade: string; rooms: RoomBucket[] }
+
 interface Dashboard {
   activeYear: { id: number; year: number } | null;
   totalStudents: number;
   totalTeachers: number;
-  byGrade: { grade: string; count: number }[];
+  byGrade: GradeBucket[];
   byGender: { gender: string; count: number }[];
-  byReligion: { religion: string; count: number }[];
   newestStudents: {
     id: number; studentCode: string; firstName: string; lastName: string;
     admissionDate: string | null; gradeLevel: string | null;
@@ -28,6 +31,79 @@ function BarRow({ label, count, max }: { label: string; count: number; max: numb
         <div style={{ width: `${pct}%`, height: '100%', background: 'var(--skdw-purple)', borderRadius: 999, transition: 'width .3s ease' }} />
       </div>
       <span className="mono" style={{ fontSize: 13, textAlign: 'right' }}>{count.toLocaleString('th-TH')}</span>
+    </div>
+  );
+}
+
+/** A stacked male/female bar. `w` is the shared width scale (px per student). */
+function GenderBar({ b, max, height = 12 }: { b: GenderBucket; max: number; height?: number }) {
+  const pct = (n: number) => (max ? `${(n / max) * 100}%` : '0%');
+  return (
+    <div
+      style={{ display: 'flex', width: '100%', height, borderRadius: 999, overflow: 'hidden', background: 'var(--skdw-bg)' }}
+      title={`ชาย ${b.male} · หญิง ${b.female}${b.other ? ` · อื่น ๆ ${b.other}` : ''}`}
+    >
+      <div style={{ width: pct(b.male), background: 'var(--gender-male)', transition: 'width .3s ease' }} />
+      <div style={{ width: pct(b.female), background: 'var(--gender-female)', transition: 'width .3s ease' }} />
+      {b.other > 0 && <div style={{ width: pct(b.other), background: 'var(--skdw-muted)', transition: 'width .3s ease' }} />}
+    </div>
+  );
+}
+
+function GradeChart({ grades }: { grades: GradeBucket[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const max = Math.max(1, ...grades.map((g) => g.count));
+
+  if (grades.length === 0) return <p className="muted">ยังไม่มีข้อมูล</p>;
+
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      {/* Legend */}
+      <div className="row" style={{ gap: 16, marginBottom: 4, fontSize: 12 }}>
+        <span className="row" style={{ gap: 6 }}>
+          <i style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--gender-male)', display: 'inline-block' }} /> ชาย
+        </span>
+        <span className="row" style={{ gap: 6 }}>
+          <i style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--gender-female)', display: 'inline-block' }} /> หญิง
+        </span>
+      </div>
+
+      {grades.map((g) => {
+        const isOpen = open === g.grade;
+        return (
+          <div key={g.grade} className="stack" style={{ gap: 6 }}>
+            <button
+              type="button"
+              onClick={() => setOpen(isOpen ? null : g.grade)}
+              aria-expanded={isOpen}
+              style={{
+                display: 'grid', gridTemplateColumns: '16px 78px 1fr 52px', alignItems: 'center', gap: 8,
+                background: 'none', border: 'none', padding: '4px 2px', cursor: 'pointer', width: '100%',
+                textAlign: 'left', color: 'inherit', borderRadius: 8,
+              }}
+              title="คลิกเพื่อดูรายห้อง"
+            >
+              <span className="muted" style={{ fontSize: 11, transition: 'transform .2s', transform: isOpen ? 'rotate(90deg)' : 'none' }}>▶</span>
+              <span style={{ fontSize: 13 }}>{g.grade}</span>
+              <GenderBar b={g} max={max} />
+              <span className="mono" style={{ fontSize: 13, textAlign: 'right' }}>{g.count.toLocaleString('th-TH')}</span>
+            </button>
+
+            {isOpen && (
+              <div className="stack" style={{ gap: 6, paddingLeft: 24, marginBottom: 6 }}>
+                {g.rooms.map((r) => (
+                  <div key={r.classroom} style={{ display: 'grid', gridTemplateColumns: '78px 1fr 52px', alignItems: 'center', gap: 8 }}>
+                    <span className="muted" style={{ fontSize: 12 }}>ห้อง {r.classroom}</span>
+                    <GenderBar b={r} max={max} height={9} />
+                    <span className="mono muted" style={{ fontSize: 12, textAlign: 'right' }}>{r.count.toLocaleString('th-TH')}</span>
+                  </div>
+                ))}
+                {g.rooms.length === 0 && <span className="muted" style={{ fontSize: 12 }}>ไม่มีข้อมูลห้อง</span>}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -52,7 +128,6 @@ export default function DashboardPage() {
     );
   }
 
-  const maxGrade = Math.max(1, ...data.byGrade.map((g) => g.count));
   const maxSubject = Math.max(1, ...data.teachersBySubject.map((s) => s.count));
   const totalGender = Math.max(1, data.byGender.reduce((a, b) => a + b.count, 0));
 
@@ -90,39 +165,21 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid-2" style={{ alignItems: 'start' }}>
-        {/* By grade */}
+        {/* By grade — stacked male/female, click a grade to see its rooms */}
         <div className="card">
           <h2 className="section-title">จำนวนนักเรียนตามชั้น</h2>
-          <div className="stack" style={{ gap: 10 }}>
-            {data.byGrade.map((g) => (
-              <BarRow key={g.grade} label={g.grade} count={g.count} max={maxGrade} />
-            ))}
-            {data.byGrade.length === 0 && <p className="muted">ยังไม่มีข้อมูล</p>}
-          </div>
+          <p className="muted" style={{ margin: '-4px 0 10px', fontSize: 12 }}>คลิกที่ชั้นเพื่อดูรายห้อง</p>
+          <GradeChart grades={data.byGrade} />
         </div>
 
-        <div className="stack" style={{ gap: 16 }}>
-          {/* Religion */}
-          <div className="card">
-            <h2 className="section-title">จำนวนตามศาสนา</h2>
-            <div className="stack" style={{ gap: 8 }}>
-              {data.byReligion.map((r) => (
-                <div key={r.religion} className="row-between" style={{ padding: '4px 0' }}>
-                  <span>{r.religion}</span>
-                  <span className="chip mono">{r.count.toLocaleString('th-TH')}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Teachers by subject */}
-          <div className="card">
-            <h2 className="section-title">ครูตามกลุ่มสาระ</h2>
-            <div className="stack" style={{ gap: 10 }}>
-              {data.teachersBySubject.slice(0, 8).map((s) => (
-                <BarRow key={s.subjectGroup} label={s.subjectGroup.replace('กลุ่มสาระการเรียนรู้', '')} count={s.count} max={maxSubject} />
-              ))}
-            </div>
+        {/* Teachers by subject */}
+        <div className="card">
+          <h2 className="section-title">ครูตามกลุ่มสาระ</h2>
+          <div className="stack" style={{ gap: 10 }}>
+            {data.teachersBySubject.slice(0, 8).map((s) => (
+              <BarRow key={s.subjectGroup} label={s.subjectGroup.replace('กลุ่มสาระการเรียนรู้', '')} count={s.count} max={maxSubject} />
+            ))}
+            {data.teachersBySubject.length === 0 && <p className="muted">ยังไม่มีข้อมูล</p>}
           </div>
         </div>
       </div>

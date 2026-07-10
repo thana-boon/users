@@ -50,6 +50,10 @@
   --chart-1: #5b2d8e; --chart-2: #f5c518; --chart-3: #16a34a;
   --chart-4: #1e2a5e; --chart-5: #dc2626;
 
+  /* Gender palette (student charts) — accessible on light */
+  --gender-male: #2f6bed;
+  --gender-female: #d94a97;
+
   /* Status — aligned to CI (success green, destructive red, gold, navy) */
   --color-success: #16a34a;
   --color-success-bg: #eaf6ee;
@@ -363,6 +367,9 @@ button { font-family: inherit; }
   --color-warning: #f0c94a;  --color-warning-bg: rgba(245, 197, 24, 0.14);
   --color-error: #f87171;    --color-error-bg: rgba(248, 113, 113, 0.14);
   --color-info: #7c8fd6;     --color-info-bg: rgba(124, 143, 214, 0.14);
+
+  --gender-male: #6a9bff;
+  --gender-female: #f07ab6;
 
   --sidebar: #150f20;
   --sidebar-accent: #2a2140;

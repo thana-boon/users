@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { hasPermission, USERS_WRITE } from '@/lib/jwt';
 import { AppShell } from '@/components/AppShell';
 import { ToastProvider } from '@/components/Toast';
+import { ConfirmProvider } from '@/components/Confirm';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,9 +20,11 @@ export default async function UsersLayout({
 
   return (
     <ToastProvider>
-      <AppShell session={{ name: session.name ?? null, role: session.role }}>
-        {children}
-      </AppShell>
+      <ConfirmProvider>
+        <AppShell session={{ name: session.name ?? null, role: session.role }}>
+          {children}
+        </AppShell>
+      </ConfirmProvider>
     </ToastProvider>
   );
 }

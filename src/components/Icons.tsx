@@ -55,3 +55,21 @@ export const IconBack = (p: SVGProps<SVGSVGElement>) => (
 export const IconShield = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} aria-hidden><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="m9 12 2 2 4-4" /></svg>
 );
+export const IconPromote = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><path d="M12 19V5M6 11l6-6 6 6" /><path d="M5 21h14" /></svg>
+);
+export const IconHash = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg>
+);
+export const IconGraduate = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><path d="M22 10 12 5 2 10l10 5 10-5Z" /><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5" /><path d="M22 10v6" /></svg>
+);
+export const IconExit = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><path d="M14 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" /><path d="m18 8 4 4-4 4M22 12H10" /></svg>
+);
+export const IconChevron = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><path d="m6 9 6 6 6-6" /></svg>
+);
+export const IconRestore = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>
+);

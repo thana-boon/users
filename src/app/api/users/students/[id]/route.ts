@@ -7,6 +7,7 @@ import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, notFound, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { maskCitizenId, tryDecrypt } from '@/lib/crypto';
+import { updateStudentAggregate } from '@/lib/services/students';
 
 export const runtime = 'nodejs';
 
@@ -39,8 +40,8 @@ export async function GET(req: NextRequest, { params }: Ctx) {
     });
     if (!s) return notFound();
 
-    // Shape: strip ciphertext, expose masked/flags only.
-    const { passwordEncrypted, citizenIdEncrypted, ...core } = s;
+    // Shape: strip ciphertext + photo blob, expose masked/flags only.
+    const { passwordEncrypted, citizenIdEncrypted, photoBase64, ...core } = s;
     const guardiansSafe = s.guardians.map((g) => {
       const { citizenIdEncrypted: gc, incomeMonthlyEncrypted, incomeYearlyEncrypted, ...rest } =
         g;
@@ -57,6 +58,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       citizenIdMasked: maskCitizenId(tryDecrypt(citizenIdEncrypted)),
       hasCitizenId: !!citizenIdEncrypted,
       hasPassword: !!passwordEncrypted,
+      hasPhoto: !!photoBase64,
       guardians: guardiansSafe,
     });
   } catch (err) {
@@ -64,21 +66,39 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   }
 }
 
+const nstr = z.string().nullable().optional();
+const recStr = z.record(z.string(), z.string().nullable().optional());
+
 const patchSchema = z.object({
-  prefix: z.string().nullable().optional(),
+  prefix: nstr,
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
-  nickname: z.string().nullable().optional(),
-  firstNameEn: z.string().nullable().optional(),
-  lastNameEn: z.string().nullable().optional(),
-  nicknameEn: z.string().nullable().optional(),
-  gender: z.string().nullable().optional(),
-  birthDate: z.string().nullable().optional(),
-  religion: z.string().nullable().optional(),
-  nationality: z.string().nullable().optional(),
-  ethnicity: z.string().nullable().optional(),
-  phone: z.string().nullable().optional(),
-  email: z.string().nullable().optional(),
+  nickname: nstr,
+  firstNameEn: nstr,
+  lastNameEn: nstr,
+  nicknameEn: nstr,
+  gender: nstr,
+  birthDate: nstr,
+  religion: nstr,
+  nationality: nstr,
+  ethnicity: nstr,
+  phone: nstr,
+  email: nstr,
+  admissionDate: nstr,
+  citizenId: nstr,
+  password: nstr,
+  enrollment: z
+    .object({
+      id: z.number().optional(),
+      gradeLevel: nstr,
+      classroom: nstr,
+      classNumber: nstr,
+    })
+    .optional(),
+  health: recStr.optional(),
+  previousSchool: recStr.optional(),
+  addresses: z.array(recStr.and(z.object({ addressType: z.string() }))).optional(),
+  guardians: z.array(recStr.and(z.object({ guardianType: z.string() }))).optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
@@ -93,7 +113,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     });
     if (!s) return notFound();
 
-    await db.update(students).set(body).where(eq(students.id, id));
+    await updateStudentAggregate(id, body);
     await recordAudit({
       session: guard.session,
       action: 'update',

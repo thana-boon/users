@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/client';
 import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/Confirm';
 import { RevealButton } from '@/components/RevealButton';
 import { IconBack } from '@/components/Icons';
 
@@ -19,6 +20,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Detail> & { password?: string }>({});
@@ -53,7 +55,12 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
   }
 
   async function archive() {
-    if (!confirm('ย้ายครูคนนี้ไปคลัง (archive)?')) return;
+    if (!(await confirm({
+      title: 'ย้ายไปคลัง',
+      message: 'ย้ายครูคนนี้ไปคลัง (archive)?',
+      confirmText: 'ย้ายไปคลัง',
+      danger: true,
+    }))) return;
     try {
       await api(`/api/users/teachers/${id}`, { method: 'DELETE' });
       toast('ย้ายไปคลังแล้ว', 'success');

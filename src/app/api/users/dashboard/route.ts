@@ -28,31 +28,32 @@ export async function GET(req: NextRequest) {
       eq(students.isArchived, false),
     );
 
-    const [totalRes, byGrade, byGender, byReligion, newest, teacherBySubject, teacherTotal] =
+    const [totalRes, byGradeRoomGender, byGender, newest, teacherBySubject, teacherTotal] =
       await Promise.all([
         db
           .select({ n: sql<number>`count(*)` })
           .from(students)
           .innerJoin(enrollments, eq(enrollments.studentId, students.id))
           .where(base),
+        // grade × room × gender counts — enough to build both the stacked
+        // by-grade chart and its per-room drill-down in one round-trip.
         db
-          .select({ grade: enrollments.gradeLevel, n: sql<number>`count(*)` })
+          .select({
+            grade: enrollments.gradeLevel,
+            classroom: enrollments.classroom,
+            gender: students.gender,
+            n: sql<number>`count(*)`,
+          })
           .from(students)
           .innerJoin(enrollments, eq(enrollments.studentId, students.id))
           .where(base)
-          .groupBy(enrollments.gradeLevel),
+          .groupBy(enrollments.gradeLevel, enrollments.classroom, students.gender),
         db
           .select({ gender: students.gender, n: sql<number>`count(*)` })
           .from(students)
           .innerJoin(enrollments, eq(enrollments.studentId, students.id))
           .where(base)
           .groupBy(students.gender),
-        db
-          .select({ religion: students.religion, n: sql<number>`count(*)` })
-          .from(students)
-          .innerJoin(enrollments, eq(enrollments.studentId, students.id))
-          .where(base)
-          .groupBy(students.religion),
         db
           .select({
             id: students.id,
@@ -78,15 +79,55 @@ export async function GET(req: NextRequest) {
           .where(eq(teachers.isArchived, false)),
       ]);
 
-    const gradeMap = new Map(byGrade.map((r) => [r.grade ?? '-', Number(r.n)]));
-    const byGradeSorted = GRADE_ORDER.filter((gr) => gradeMap.has(gr)).map((gr) => ({
-      grade: gr,
-      count: gradeMap.get(gr)!,
-    }));
-    // include any grades not in the canonical order
-    for (const [gr, n] of gradeMap) {
-      if (!GRADE_ORDER.includes(gr)) byGradeSorted.push({ grade: gr, count: n });
+    // Classify a raw gender string into male / female / other buckets.
+    const genderBucket = (g: string | null): 'male' | 'female' | 'other' => {
+      const v = (g ?? '').trim();
+      if (v.includes('ชาย')) return 'male'; // ชาย, เด็กชาย, นาย
+      if (v.includes('หญิง')) return 'female'; // หญิง, เด็กหญิง
+      return 'other';
+    };
+
+    type Bucket = { male: number; female: number; other: number; count: number };
+    const emptyBucket = (): Bucket => ({ male: 0, female: 0, other: 0, count: 0 });
+    const addTo = (b: Bucket, bucket: keyof Bucket, n: number) => {
+      b[bucket] += n;
+      b.count += n;
+    };
+
+    // grade -> { totals, rooms: room -> bucket }
+    const gradeAgg = new Map<string, { totals: Bucket; rooms: Map<string, Bucket> }>();
+    for (const r of byGradeRoomGender) {
+      const grade = r.grade ?? 'ไม่ระบุ';
+      const room = r.classroom ?? '-';
+      const n = Number(r.n);
+      const b = genderBucket(r.gender);
+      let g = gradeAgg.get(grade);
+      if (!g) {
+        g = { totals: emptyBucket(), rooms: new Map() };
+        gradeAgg.set(grade, g);
+      }
+      addTo(g.totals, b, n);
+      let rb = g.rooms.get(room);
+      if (!rb) {
+        rb = emptyBucket();
+        g.rooms.set(room, rb);
+      }
+      addTo(rb, b, n);
     }
+
+    const gradeSortKey = (gr: string) => {
+      const i = GRADE_ORDER.indexOf(gr);
+      return i === -1 ? 99 : i;
+    };
+    const byGrade = [...gradeAgg.entries()]
+      .sort((a, b) => gradeSortKey(a[0]) - gradeSortKey(b[0]))
+      .map(([grade, g]) => ({
+        grade,
+        ...g.totals,
+        rooms: [...g.rooms.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0], 'th', { numeric: true }))
+          .map(([classroom, rb]) => ({ classroom, ...rb })),
+      }));
 
     return ok({
       activeYear: activeYear
@@ -94,11 +135,8 @@ export async function GET(req: NextRequest) {
         : null,
       totalStudents: Number(totalRes[0]?.n ?? 0),
       totalTeachers: Number(teacherTotal[0]?.n ?? 0),
-      byGrade: byGradeSorted,
+      byGrade,
       byGender: byGender.map((r) => ({ gender: r.gender ?? 'ไม่ระบุ', count: Number(r.n) })),
-      byReligion: byReligion
-        .map((r) => ({ religion: r.religion || 'ไม่ระบุ', count: Number(r.n) }))
-        .sort((a, b) => b.count - a.count),
       newestStudents: newest,
       teachersBySubject: teacherBySubject
         .map((r) => ({ subjectGroup: r.subjectGroup || 'ไม่ระบุ', count: Number(r.n) }))

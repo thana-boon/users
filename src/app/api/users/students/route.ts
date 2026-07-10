@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
     const q = (sp.get('q') ?? '').trim();
     const grade = (sp.get('grade') ?? '').trim();
     const classroom = (sp.get('classroom') ?? '').trim();
+    const status = (sp.get('status') ?? '').trim();
     const page = Math.max(1, Number(sp.get('page') ?? '1') || 1);
     const pageSize = Math.min(100, Math.max(1, Number(sp.get('pageSize') ?? '25') || 25));
     const yearId = sp.get('yearId')
@@ -36,6 +37,9 @@ export async function GET(req: NextRequest) {
     const conds = [eq(enrollments.academicYearId, yearId), eq(students.isArchived, false)];
     if (grade) conds.push(eq(enrollments.gradeLevel, grade));
     if (classroom) conds.push(eq(enrollments.classroom, classroom));
+    if (status === 'studying' || status === 'withdrawn' || status === 'graduated') {
+      conds.push(eq(students.status, status));
+    }
     if (q) {
       conds.push(
         or(
@@ -58,6 +62,7 @@ export async function GET(req: NextRequest) {
           lastName: students.lastName,
           nickname: students.nickname,
           gender: students.gender,
+          status: students.status,
           gradeLevel: enrollments.gradeLevel,
           classroom: enrollments.classroom,
           classNumber: enrollments.classNumber,

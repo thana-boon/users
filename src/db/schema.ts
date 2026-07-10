@@ -30,10 +30,21 @@ export const TEACHER_ROLES = ['teacher', 'teacher-admin'] as const;
 export const ADDRESS_TYPES = ['household', 'birth_place', 'current', 'hometown'] as const;
 export const GUARDIAN_TYPES = ['guardian', 'father', 'mother'] as const;
 
+// Person-level lifecycle status. `studying` = active on the school roll;
+// `withdrawn` = ลาออก/จำหน่าย mid-way (needs exitDate + exitReason); `graduated`
+// = finished the school's top grade and left. Crossing a key-stage boundary
+// INSIDE the same school (ป.6→ม.1) is NOT an exit — it stays `studying` and is
+// recorded as a `completions` milestone instead. See src/lib/grades.ts.
+export const STUDENT_STATUSES = ['studying', 'withdrawn', 'graduated'] as const;
+// ช่วงชั้น — used by the key-stage completion milestone (for future document API).
+export const KEY_STAGES = ['kindergarten', 'primary', 'lower_secondary', 'upper_secondary'] as const;
+
 export const studentRoleEnum = pgEnum('student_role', STUDENT_ROLES);
 export const teacherRoleEnum = pgEnum('teacher_role', TEACHER_ROLES);
 export const addressTypeEnum = pgEnum('address_type', ADDRESS_TYPES);
 export const guardianTypeEnum = pgEnum('guardian_type', GUARDIAN_TYPES);
+export const studentStatusEnum = pgEnum('student_status', STUDENT_STATUSES);
+export const keyStageEnum = pgEnum('key_stage', KEY_STAGES);
 
 const now = () => new Date();
 
@@ -89,6 +100,22 @@ export const students = pgTable(
     passwordEncrypted: text('password_encrypted'),
     admissionDate: varchar('admission_date', { length: 20 }),
 
+    // Profile photo stored inline (base64) so it travels with the DB backup and
+    // needs no writable volume on the standalone Docker image. Served via the
+    // audited /api/users/students/[id]/photo route, never in list payloads.
+    photoBase64: text('photo_base64'),
+    photoMime: varchar('photo_mime', { length: 32 }),
+
+    // Lifecycle status (see STUDENT_STATUSES). Exit fields feed the future
+    // document-export API (ลาออก/จำหน่าย/จบการศึกษา).
+    status: studentStatusEnum('status').notNull().default('studying'),
+    exitType: varchar('exit_type', { length: 32 }), // ลาออก | จำหน่าย | ย้ายสถานศึกษา | จบการศึกษา ...
+    exitReason: text('exit_reason'),
+    exitDate: varchar('exit_date', { length: 20 }), // raw Thai dd/mm/BBBB
+    // Academic year in which the student graduated/withdrew. Anchors the exit
+    // history views (which cohort left in which year) without parsing exitDate.
+    exitAcademicYearId: integer('exit_academic_year_id').references(() => academicYears.id),
+
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow().$onUpdate(now),
@@ -126,6 +153,36 @@ export const enrollments = pgTable(
     ),
     yearIdx: index('enrollments_year_idx').on(t.academicYearId),
     gradeIdx: index('enrollments_grade_idx').on(t.academicYearId, t.gradeLevel),
+  }),
+);
+
+// -- completions (จบช่วงชั้น milestone) -----------------------------
+// One row per (student, key stage) the student has completed — even while they
+// keep studying at the same school. Lets the future document-export API issue
+// "สำเร็จการศึกษาระดับประถม/ม.ต้น/ม.ปลาย" (ปพ.) without conflating it with an
+// exit. Written automatically when a promotion crosses a key-stage boundary.
+export const completions = pgTable(
+  'completions',
+  {
+    id: serial('id').primaryKey(),
+    studentId: integer('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    // The academic year in which the stage was completed (the source year).
+    academicYearId: integer('academic_year_id').references(() => academicYears.id),
+    keyStage: keyStageEnum('key_stage').notNull(),
+    gradeLevel: varchar('grade_level', { length: 32 }), // ชั้นที่จบ เช่น ป.6
+    completionDate: varchar('completion_date', { length: 20 }), // raw Thai dd/mm/BBBB
+    gpa: varchar('gpa', { length: 16 }),
+    note: text('note'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    studentStageUniq: unique('completions_student_stage_uniq').on(
+      t.studentId,
+      t.keyStage,
+    ),
+    studentIdx: index('completions_student_idx').on(t.studentId),
   }),
 );
 
@@ -314,6 +371,18 @@ export const studentsRelations = relations(students, ({ many, one }) => ({
   previousSchool: one(previousSchools),
   guardians: many(guardians),
   health: one(studentHealth),
+  completions: many(completions),
+}));
+
+export const completionsRelations = relations(completions, ({ one }) => ({
+  student: one(students, {
+    fields: [completions.studentId],
+    references: [students.id],
+  }),
+  academicYear: one(academicYears, {
+    fields: [completions.academicYearId],
+    references: [academicYears.id],
+  }),
 }));
 
 export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
@@ -371,3 +440,7 @@ export type AcademicYear = typeof academicYears.$inferSelect;
 export type Guardian = typeof guardians.$inferSelect;
 export type StudentAddress = typeof studentAddresses.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type Completion = typeof completions.$inferSelect;
+export type NewCompletion = typeof completions.$inferInsert;
+export type StudentStatus = (typeof STUDENT_STATUSES)[number];
+export type KeyStage = (typeof KEY_STAGES)[number];

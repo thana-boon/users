@@ -20,12 +20,17 @@ export type AuditAction =
   | 'archive'
   | 'import'
   | 'export'
-  | 'login';
+  | 'login'
+  | 'promote'
+  | 'renumber'
+  | 'withdraw'
+  | 'graduate'
+  | 'reinstate';
 
 export interface AuditInput {
   session: SessionClaims | null;
   action: AuditAction;
-  targetType: 'student' | 'teacher' | 'academic_year' | 'enrollment' | 'auth';
+  targetType: 'student' | 'teacher' | 'academic_year' | 'enrollment' | 'promotion' | 'auth';
   targetId?: number | null;
   targetLabel?: string | null;
   detail?: string | null;
