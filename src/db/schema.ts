@@ -388,6 +388,57 @@ export const workers = pgTable(
   }),
 );
 
+// -- api_keys (machine-to-machine access for OTHER SchoolOS systems) -
+// Issued from the API Manager UI so a sibling system (e.g. ห้องสมุด, การเงิน)
+// can pull the student/teacher roster over `/api/public/v1/*`.
+//
+// Two representations of the same secret are stored, deliberately:
+//   key_hash      SHA-256 — the ONLY thing an incoming request is matched on.
+//                 Deterministic, so it can carry a unique index; AES-GCM uses a
+//                 random IV per encrypt and therefore cannot be looked up.
+//   key_encrypted AES-256-GCM (src/lib/crypto.ts) — lets an admin re-reveal the
+//                 key later, same trade-off already accepted for student
+//                 passwords: the school needs to hand the value back, so a
+//                 one-way hash alone will not do. Every reveal is audited.
+// Verification never decrypts: it hashes the presented key and compares.
+export const apiKeys = pgTable(
+  'api_keys',
+  {
+    id: serial('id').primaryKey(),
+    name: varchar('name', { length: 128 }).notNull(), // ชื่อระบบที่มาเรียก
+    description: text('description'),
+
+    keyPrefix: varchar('key_prefix', { length: 32 }).notNull(), // e.g. sk_live_9f3c — display only
+    keyHash: varchar('key_hash', { length: 64 }).notNull(), // sha256 hex — lookup/verify
+    keyEncrypted: text('key_encrypted').notNull(), // AES-GCM — for the audited reveal
+
+    // Granted scopes, e.g. ['students:read','teachers:read','students:pii'].
+    // See API_SCOPES in src/lib/apikey.ts — that list is the source of truth.
+    // No SQL default on purpose: a key with no scopes can do nothing, so every
+    // insert must state them. (It also avoids a permanent drizzle-kit push diff
+    // — Postgres rewrites `ARRAY[]::text[]` to `'{}'::text[]` and push would
+    // then re-propose the default on every run, hanging the migrate service.)
+    scopes: text('scopes').array().notNull(),
+
+    isActive: boolean('is_active').notNull().default(true),
+    expiresAt: timestamp('expires_at'), // null = ไม่มีวันหมดอายุ
+    revokedAt: timestamp('revoked_at'),
+
+    // Usage telemetry — powers the "ตรวจสอบ" side of the manager page.
+    lastUsedAt: timestamp('last_used_at'),
+    lastUsedIp: varchar('last_used_ip', { length: 64 }),
+    usageCount: integer('usage_count').notNull().default(0),
+
+    createdByLabel: varchar('created_by_label', { length: 128 }), // teacher_code of issuer
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow().$onUpdate(now),
+  },
+  (t) => ({
+    hashUniq: unique('api_keys_hash_uniq').on(t.keyHash),
+    activeIdx: index('api_keys_active_idx').on(t.isActive),
+  }),
+);
+
 // -- audit_logs (who viewed/changed sensitive data & passwords) ----
 export const auditLogs = pgTable(
   'audit_logs',
@@ -490,6 +541,8 @@ export type AcademicYear = typeof academicYears.$inferSelect;
 export type Guardian = typeof guardians.$inferSelect;
 export type StudentAddress = typeof studentAddresses.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type NewApiKey = typeof apiKeys.$inferInsert;
 export type Completion = typeof completions.$inferSelect;
 export type NewCompletion = typeof completions.$inferInsert;
 export type StudentStatus = (typeof STUDENT_STATUSES)[number];

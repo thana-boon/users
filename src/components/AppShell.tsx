@@ -20,6 +20,7 @@ import {
   IconTrash,
   IconWorker,
   IconHistory,
+  IconKey,
 } from './Icons';
 
 interface SessionInfo {
@@ -58,6 +59,7 @@ const NAV: NavNode[] = [
   },
   { href: '/users/academic-years', label: 'ปีการศึกษา', Icon: IconCalendar },
   { href: '/users/archive', label: 'ถังขยะ', Icon: IconTrash },
+  { href: '/users/api-manager', label: 'API Manager', Icon: IconKey },
   { href: '/users/audit', label: 'บันทึกการใช้งาน', Icon: IconAudit },
 ];
 

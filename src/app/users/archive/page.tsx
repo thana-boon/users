@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
 import { IconSearch, IconRestore, IconTrash } from '@/components/Icons';
 import { DeleteForeverDialog } from '@/components/DeleteForeverDialog';
+import { BulkDeleteForeverDialog } from '@/components/BulkDeleteForeverDialog';
 
 /**
  * ถังขยะ — records removed with the ย้ายไปถังขยะ button (soft-delete,
@@ -50,6 +51,7 @@ export default function ArchivePage() {
   const [delTarget, setDelTarget] = useState<
     { type: 'student' | 'teacher' | 'worker'; id: number; code: string; label: string } | null
   >(null);
+  const [bulkDel, setBulkDel] = useState<'student' | 'teacher' | 'worker' | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -111,6 +113,10 @@ export default function ArchivePage() {
     }
   }
 
+  const activeType: 'student' | 'teacher' | 'worker' =
+    tab === 'students' ? 'student' : tab === 'teachers' ? 'teacher' : 'worker';
+  const activeCount = tab === 'students' ? students.length : tab === 'teachers' ? teachers.length : workers.length;
+
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div>
@@ -139,6 +145,14 @@ export default function ArchivePage() {
           <input className="form-input" style={{ paddingLeft: 32 }} placeholder="ค้นหาในถังขยะ…"
             value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        <button
+          className="btn btn-sm btn-danger"
+          disabled={loading || activeCount === 0}
+          title={activeCount === 0 ? 'ถังขยะว่าง' : 'ลบทุกรายการในแท็บนี้ออกจากฐานข้อมูลอย่างถาวร'}
+          onClick={() => setBulkDel(activeType)}
+        >
+          <IconTrash width={14} height={14} /> ลบทั้งหมด ({activeCount})
+        </button>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -278,6 +292,20 @@ export default function ArchivePage() {
             else if (type === 'teacher') setTeachers((xs) => xs.filter((x) => x.id !== id));
             else setWorkers((xs) => xs.filter((x) => x.id !== id));
             setDelTarget(null);
+          }}
+        />
+      )}
+
+      {bulkDel && (
+        <BulkDeleteForeverDialog
+          type={bulkDel}
+          count={bulkDel === 'student' ? students.length : bulkDel === 'teacher' ? teachers.length : workers.length}
+          onClose={() => setBulkDel(null)}
+          onDone={() => {
+            if (bulkDel === 'student') setStudents([]);
+            else if (bulkDel === 'teacher') setTeachers([]);
+            else setWorkers([]);
+            setBulkDel(null);
           }}
         />
       )}

@@ -199,17 +199,33 @@ export async function POST(req: NextRequest) {
   }
 }
 
-const deleteSchema = z.object({
-  type: z.enum(['student', 'teacher', 'worker']),
-  id: z.number().int(),
-  confirmCode: z.string(),
-});
+const kindOf = { student: students, teacher: teachers, worker: workers } as const;
+
+/** Phrase the admin must type to unlock the bulk "ลบทั้งหมด" (empty-the-trash) action. */
+const BULK_CONFIRM_PHRASE = 'ลบทั้งหมด';
+
+const deleteSchema = z.union([
+  z.object({
+    type: z.enum(['student', 'teacher', 'worker']),
+    id: z.number().int(),
+    confirmCode: z.string(),
+  }),
+  z.object({
+    type: z.enum(['student', 'teacher', 'worker']),
+    all: z.literal(true),
+    confirmCode: z.string(),
+  }),
+]);
 
 /**
- * DELETE /api/users/archived — PERMANENT hard delete of a single record. Guard
- * rails: (1) the record must already be in the trash (is_archived = true), and
- * (2) the caller must echo back its exact code. Child rows (enrollments,
- * guardians, addresses, …) cascade via FK. The audit row is intentionally kept.
+ * DELETE /api/users/archived — PERMANENT hard delete of trashed records. Two modes:
+ *
+ *   { type, id, confirmCode }   — one record; confirmCode must equal its exact code.
+ *   { type, all: true, confirmCode } — empty the whole tab; confirmCode must equal
+ *                                      the phrase "ลบทั้งหมด".
+ *
+ * Guard rails: records must already be in the trash (is_archived = true). Child rows
+ * (enrollments, guardians, addresses, …) cascade via FK. Audit rows are kept.
  *
  * ⚠ This orphans any downstream reference to the enrollment_id (e.g. ScoreBridge)
  * — intended only for records created by mistake and never used elsewhere.
@@ -218,7 +234,35 @@ export async function DELETE(req: NextRequest) {
   const guard = await requireTeacherAdmin(req);
   if (!guard.ok) return guard.response;
   try {
-    const { type, id, confirmCode } = deleteSchema.parse(await req.json());
+    const body = deleteSchema.parse(await req.json());
+
+    // ── Bulk: empty the trash for one tab ───────────────────────────────────
+    if ('all' in body) {
+      const { type } = body;
+      if (body.confirmCode.trim() !== BULK_CONFIRM_PHRASE) {
+        return badRequest(`พิมพ์ “${BULK_CONFIRM_PHRASE}” เพื่อยืนยันการลบทั้งหมด`);
+      }
+      const table = kindOf[type];
+      const rows = await db
+        .select({ id: table.id })
+        .from(table)
+        .where(eq(table.isArchived, true));
+      if (rows.length === 0) return ok({ ok: true, deleted: true, count: 0 });
+
+      await db.delete(table).where(eq(table.isArchived, true)); // children cascade
+      await recordAudit({
+        session: guard.session,
+        action: 'delete',
+        targetType: type,
+        targetId: null,
+        targetLabel: `ลบทั้งหมดในถังขยะ (${rows.length} รายการ)`,
+        detail: `ลบถาวรจากถังขยะทั้งหมด ${rows.length} รายการ (bulk hard delete)`,
+        req,
+      });
+      return ok({ ok: true, deleted: true, count: rows.length });
+    }
+
+    const { type, id, confirmCode } = body;
     const typed = confirmCode.trim();
 
     if (type === 'student') {

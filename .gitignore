@@ -14,6 +14,10 @@ next-env.d.ts
 /.example/*.xlsx
 /.example/*.csv
 
+# mediapipe wasm runtime — staged from node_modules by scripts/copy-mediapipe.mjs
+# (~22MB of binaries; the .tflite model beside it IS committed)
+/public/mediapipe/wasm
+
 *.tsbuildinfo
 npm-debug.log*
 .DS_Store

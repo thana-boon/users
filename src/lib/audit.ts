@@ -29,16 +29,36 @@ export type AuditAction =
   | 'withdraw'
   | 'graduate'
   | 'reinstate'
-  | 'resign';
+  | 'resign'
+  | 'reveal_api_key'
+  | 'create_api_key'
+  | 'revoke_api_key'
+  | 'rotate_api_key'
+  | 'api_read';
 
 export interface AuditInput {
   session: SessionClaims | null;
   action: AuditAction;
-  targetType: 'student' | 'teacher' | 'worker' | 'academic_year' | 'enrollment' | 'promotion' | 'auth';
+  targetType:
+    | 'student'
+    | 'teacher'
+    | 'worker'
+    | 'academic_year'
+    | 'enrollment'
+    | 'promotion'
+    | 'auth'
+    | 'api_key';
   targetId?: number | null;
   targetLabel?: string | null;
   detail?: string | null;
   req?: NextRequest;
+  /**
+   * Override the actor columns for callers that have no session — i.e. an API
+   * key hitting /api/public/v1/*. Without this the row would land with a null
+   * actor and the trail could not say WHICH integration read the data.
+   */
+  actorLabel?: string | null;
+  actorRole?: string | null;
 }
 
 function clientIp(req?: NextRequest): string | null {
@@ -56,8 +76,9 @@ export async function recordAudit(input: AuditInput): Promise<void> {
     const numericActor = sub && /^\d+$/.test(sub) ? Number(sub) : null;
     await db.insert(auditLogs).values({
       actorId: numericActor,
-      actorRole: input.session?.role ?? null,
-      actorLabel: input.session?.name ?? input.session?.code ?? sub ?? null,
+      actorRole: input.actorRole ?? input.session?.role ?? null,
+      actorLabel:
+        input.actorLabel ?? input.session?.name ?? input.session?.code ?? sub ?? null,
       action: input.action,
       targetType: input.targetType,
       targetId: input.targetId ?? null,

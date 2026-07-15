@@ -14,8 +14,13 @@ const ACTION_LABEL: Record<string, string> = {
   reveal_password: 'ดูรหัสผ่าน', reveal_citizen_id: 'ดูเลขบัตร', reveal_income: 'ดูรายได้',
   create: 'เพิ่ม', update: 'แก้ไข', delete: 'ลบ', archive: 'ย้ายไปถังขยะ', restore: 'กู้คืน',
   import: 'นำเข้า', export: 'ส่งออก', login: 'เข้าสู่ระบบ',
+  create_api_key: 'สร้าง API key', reveal_api_key: 'ดู API key',
+  rotate_api_key: 'สร้างรหัส API ใหม่', revoke_api_key: 'ปิดใช้งาน API key',
 };
-const REVEAL = new Set(['reveal_password', 'reveal_citizen_id', 'reveal_income']);
+// Actions that disclosed sensitive data — highlighted amber in the table.
+const REVEAL = new Set([
+  'reveal_password', 'reveal_citizen_id', 'reveal_income', 'reveal_api_key',
+]);
 
 export default function AuditPage() {
   const toast = useToast();

@@ -325,6 +325,9 @@ button { font-family: inherit; }
 .stack { display: flex; flex-direction: column; gap: var(--space-4); }
 .spacer { flex: 1; }
 .chip { display: inline-flex; padding: 4px 10px; border-radius: var(--radius-full); background: var(--skdw-purple-pale); color: var(--skdw-purple); font-size: var(--text-sm); }
+/* .chip is normally a link; reset UA button styling so it can also be an action. */
+button.chip { border: none; font-family: inherit; cursor: pointer; transition: background var(--transition-fast); }
+button.chip:hover { background: var(--skdw-purple); color: #fff; }
 .page-title { font-size: var(--text-xl); font-weight: 700; }
 .section-title { font-size: var(--text-lg); font-weight: 600; margin-bottom: var(--space-3); }
 

@@ -88,3 +88,6 @@ export const IconWorker = (p: SVGProps<SVGSVGElement>) => (
 export const IconHistory = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} aria-hidden><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></svg>
 );
+export const IconKey = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><circle cx="7.5" cy="15.5" r="4.5" /><path d="m10.7 12.3 8.3-8.3" /><path d="m17 5 3 3" /><path d="m14 8 3 3" /></svg>
+);

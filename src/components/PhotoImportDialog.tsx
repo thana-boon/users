@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { cropToFace, preloadFaceDetector } from '@/lib/face-crop';
 import { useToast } from './Toast';
 
 interface PhotoIssue { file: string; reason: string; studentCode?: string; teacherCode?: string; workerCode?: string }
@@ -8,6 +9,9 @@ interface Report {
   totalFiles: number; matched: number; skipped: number;
   committed?: number; issues: PhotoIssue[];
 }
+
+/** A source file after auto-cropping, plus what the detector made of it. */
+interface Prepared { file: File; faceFound: boolean; multipleFaces: boolean }
 
 /** Read whichever *Code field the server returned on an issue row. */
 function issueCode(it: PhotoIssue): string {
@@ -19,6 +23,12 @@ function issueCode(it: PhotoIssue): string {
  * extension must equal the person's code. Generic across นักเรียน/ครู/คนงาน via
  * the `endpoint` + label props (defaults to students so existing usage is
  * unchanged). Two-step: preview (dryRun) then commit.
+ *
+ * Every file is auto-cropped to its subject's face in the browser first (see
+ * lib/face-crop). That happens during ตรวจสอบ and the result is reused for the
+ * commit, so a few hundred photos are only decoded once. Photos where no face
+ * was found still upload — they are centre-cropped and flagged in the preview,
+ * since a wrong crop is easier to spot in the list than after the fact.
  */
 export function PhotoImportDialog({
   onClose, onDone,
@@ -35,16 +45,40 @@ export function PhotoImportDialog({
   codeExample?: string;
 }) {
   const toast = useToast();
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [prepared, setPrepared] = useState<Prepared[] | null>(null);
+  const [cropDone, setCropDone] = useState(0);
   const [report, setReport] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // The dialog only exists to import photos, so the model is certain to be
+  // needed — fetch it while the user is still picking files.
+  useEffect(() => { preloadFaceDetector(); }, []);
+
+  /**
+   * Crop every selected file, one at a time. Sequential on purpose: decoding a
+   * few hundred multi-megabyte images at once is a good way to have the tab
+   * killed. Cached so ยืนยันอัปโหลด doesn't redo the work.
+   */
+  async function prepare(): Promise<Prepared[]> {
+    if (prepared) return prepared;
+    setCropDone(0);
+    const out: Prepared[] = [];
+    for (const f of files) {
+      out.push(await cropToFace(f));
+      setCropDone(out.length);
+    }
+    setPrepared(out);
+    return out;
+  }
+
   async function send(dryRun: boolean) {
-    if (!files || files.length === 0) return;
+    if (files.length === 0) return;
     setBusy(true);
     try {
+      const items = await prepare();
       const fd = new FormData();
-      for (const f of Array.from(files)) fd.append('files', f);
+      for (const it of items) fd.append('files', it.file);
       fd.append('dryRun', String(dryRun));
       const res = await fetch(endpoint, { method: 'POST', body: fd });
       const data = (await res.json()) as Report & { error?: string };
@@ -61,7 +95,16 @@ export function PhotoImportDialog({
     }
   }
 
+  function pick(list: FileList | null) {
+    setFiles(list ? Array.from(list) : []);
+    setPrepared(null); // Different files: the cached crops no longer apply.
+    setReport(null);
+  }
+
   const canCommit = report && report.matched > 0;
+  const noFace = prepared?.filter((p) => !p.faceFound) ?? [];
+  const manyFaces = prepared?.filter((p) => p.faceFound && p.multipleFaces) ?? [];
+  const cropping = busy && prepared === null && files.length > 0;
 
   return (
     <div className="modal-scrim" role="dialog" aria-modal="true" aria-label={title}>
@@ -74,9 +117,35 @@ export function PhotoImportDialog({
             multiple
             className="form-input"
             style={{ paddingTop: 8 }}
-            onChange={(e) => { setFiles(e.target.files); setReport(null); }}
+            onChange={(e) => pick(e.target.files)}
           />
-          <p className="form-hint">{hint} <b>{codeExample}</b> ระบบจะจับคู่ให้อัตโนมัติ (รองรับหลายไฟล์พร้อมกัน, สูงสุด 5MB/ไฟล์)</p>
+          <p className="form-hint">{hint} <b>{codeExample}</b> ระบบจะจับคู่ให้อัตโนมัติ (รองรับหลายไฟล์พร้อมกัน)</p>
+          <p className="form-hint">ระบบจะตรวจจับใบหน้าและครอบตัดรูปให้อัตโนมัติก่อนอัปโหลด รูปใหญ่แค่ไหนก็ได้ — จะถูกย่อเป็น 480×640 ให้เอง</p>
+
+          {cropping && (
+            <div className="stack" style={{ gap: 4 }}>
+              <div className="row-between" style={{ fontSize: 13 }}>
+                <span>กำลังครอบตัดรูป…</span>
+                <span className="mono">{cropDone}/{files.length}</span>
+              </div>
+              <progress value={cropDone} max={files.length} style={{ width: '100%' }} />
+            </div>
+          )}
+
+          {noFace.length > 0 && (
+            <div className="stack" style={{ gap: 6 }}>
+              <span className="badge badge-warning">หาใบหน้าไม่พบ {noFace.length} รูป — ครอบตัดกลางภาพให้แทน</span>
+              <div style={{ maxHeight: 120, overflowY: 'auto', fontSize: 13 }} className="stack">
+                {noFace.map((p, i) => <span key={`${p.file.name}-${i}`} className="mono">{p.file.name}</span>)}
+              </div>
+            </div>
+          )}
+
+          {manyFaces.length > 0 && (
+            <span className="badge badge-warning">
+              พบหลายใบหน้า {manyFaces.length} รูป — เลือกใบหน้าที่ใหญ่ที่สุดให้ ควรตรวจสอบอีกครั้ง
+            </span>
+          )}
 
           {report && (
             <div className="stack" style={{ gap: 8 }}>
@@ -107,7 +176,7 @@ export function PhotoImportDialog({
           <div className="row-between">
             <button className="btn btn-ghost btn-sm" onClick={onClose} disabled={busy}>ปิด</button>
             <div className="row" style={{ gap: 8 }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => send(true)} disabled={!files || busy}>ตรวจสอบ</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => send(true)} disabled={files.length === 0 || busy}>ตรวจสอบ</button>
               <button className="btn btn-primary btn-sm" onClick={() => send(false)} disabled={!canCommit || busy}>ยืนยันอัปโหลด</button>
             </div>
           </div>
