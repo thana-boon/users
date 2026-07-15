@@ -13,6 +13,9 @@ interface Report {
 /** A source file after auto-cropping, plus what the detector made of it. */
 interface Prepared { file: File; faceFound: boolean; multipleFaces: boolean }
 
+/** A file that could not be turned into a 480x640 frame, so is not uploaded. */
+interface Broken { name: string; reason: string }
+
 /** Read whichever *Code field the server returned on an issue row. */
 function issueCode(it: PhotoIssue): string {
   return it.studentCode ?? it.teacherCode ?? it.workerCode ?? '-';
@@ -47,6 +50,7 @@ export function PhotoImportDialog({
   const toast = useToast();
   const [files, setFiles] = useState<File[]>([]);
   const [prepared, setPrepared] = useState<Prepared[] | null>(null);
+  const [broken, setBroken] = useState<Broken[]>([]);
   const [cropDone, setCropDone] = useState(0);
   const [report, setReport] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,16 +63,25 @@ export function PhotoImportDialog({
    * Crop every selected file, one at a time. Sequential on purpose: decoding a
    * few hundred multi-megabyte images at once is a good way to have the tab
    * killed. Cached so ยืนยันอัปโหลด doesn't redo the work.
+   *
+   * A file that can't be cropped is set aside rather than thrown — one corrupt
+   * photo must not sink a 300-file import.
    */
   async function prepare(): Promise<Prepared[]> {
     if (prepared) return prepared;
     setCropDone(0);
     const out: Prepared[] = [];
+    const bad: Broken[] = [];
     for (const f of files) {
-      out.push(await cropToFace(f));
-      setCropDone(out.length);
+      try {
+        out.push(await cropToFace(f));
+      } catch (e) {
+        bad.push({ name: f.name, reason: (e as Error).message });
+      }
+      setCropDone(out.length + bad.length);
     }
     setPrepared(out);
+    setBroken(bad);
     return out;
   }
 
@@ -77,6 +90,7 @@ export function PhotoImportDialog({
     setBusy(true);
     try {
       const items = await prepare();
+      if (items.length === 0) { toast('ไม่มีรูปที่ใช้ได้เลย', 'error'); return; }
       const fd = new FormData();
       for (const it of items) fd.append('files', it.file);
       fd.append('dryRun', String(dryRun));
@@ -98,6 +112,7 @@ export function PhotoImportDialog({
   function pick(list: FileList | null) {
     setFiles(list ? Array.from(list) : []);
     setPrepared(null); // Different files: the cached crops no longer apply.
+    setBroken([]);
     setReport(null);
   }
 
@@ -129,6 +144,20 @@ export function PhotoImportDialog({
                 <span className="mono">{cropDone}/{files.length}</span>
               </div>
               <progress value={cropDone} max={files.length} style={{ width: '100%' }} />
+            </div>
+          )}
+
+          {broken.length > 0 && (
+            <div className="stack" style={{ gap: 6 }}>
+              <span className="badge badge-error">ใช้ไม่ได้ {broken.length} ไฟล์ — ไม่ถูกอัปโหลด</span>
+              <div style={{ maxHeight: 120, overflowY: 'auto', fontSize: 13 }} className="stack">
+                {broken.map((b, i) => (
+                  <span key={`${b.name}-${i}`}>
+                    <span className="mono">{b.name}</span>
+                    <span style={{ color: 'var(--color-error)' }}> — {b.reason}</span>
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 

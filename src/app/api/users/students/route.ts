@@ -67,6 +67,9 @@ export async function GET(req: NextRequest) {
           classroom: enrollments.classroom,
           classNumber: enrollments.classNumber,
           enrollmentId: enrollments.id,
+          // Boolean expression, not the column: photo_base64 is a multi-MB
+          // string and must never be shipped in a list response.
+          hasPhoto: sql<boolean>`${students.photoBase64} is not null`,
         })
         .from(students)
         .innerJoin(enrollments, eq(enrollments.studentId, students.id))

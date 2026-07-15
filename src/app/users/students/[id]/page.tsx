@@ -4,6 +4,7 @@ import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/client';
+import { cropToFace, preloadFaceDetector } from '@/lib/face-crop';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
 import { RevealButton } from '@/components/RevealButton';
@@ -192,10 +193,14 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   async function uploadPhoto(file: File) {
     setBusy(true);
     try {
+      // Same auto-crop the ครู/คนงาน pages get via PhotoCard, and the same one
+      // the bulk import applies — every stored photo is a 480x640 face frame.
+      const { file: cropped, faceFound } = await cropToFace(file);
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append('file', cropped);
       await api(`/api/users/students/${id}/photo`, { method: 'POST', body: fd });
-      toast('อัปโหลดรูปแล้ว', 'success');
+      if (faceFound) toast('อัปโหลดรูปแล้ว', 'success');
+      else toast('อัปโหลดรูปแล้ว — หาใบหน้าไม่พบ จึงครอบตัดกลางภาพให้แทน', 'info');
       setD((s) => (s ? { ...s, hasPhoto: true } : s));
       setPhotoVer((v) => v + 1);
     } catch (e) {
@@ -257,7 +262,8 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           {/* Photo */}
           <div className="stack" style={{ gap: 8, alignItems: 'center', width: 116 }}>
             <div style={{
-              width: 116, height: 140, borderRadius: 12, overflow: 'hidden', background: 'var(--skdw-purple-pale)',
+              // 3:4, matching the frame face-crop produces (see PhotoCard).
+              width: 116, height: 155, borderRadius: 12, overflow: 'hidden', background: 'var(--skdw-purple-pale)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--skdw-border)',
             }}>
               {photoUrl
@@ -269,7 +275,12 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
               onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); e.target.value = ''; }}
             />
             <div className="row" style={{ gap: 4 }}>
-              <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => photoInput.current?.click()} disabled={busy}>
+              <button
+                className="btn btn-ghost btn-sm" style={{ fontSize: 12, padding: '4px 8px' }}
+                // Fetch the model during the file picker, so it costs no wait.
+                onClick={() => { preloadFaceDetector(); photoInput.current?.click(); }}
+                disabled={busy}
+              >
                 {d.hasPhoto ? 'เปลี่ยนรูป' : 'อัปโหลดรูป'}
               </button>
               {d.hasPhoto && <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, padding: '4px 8px', color: 'var(--color-error)' }} onClick={removePhoto} disabled={busy}>ลบ</button>}

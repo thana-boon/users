@@ -8,12 +8,14 @@ import { IconSearch, IconPlus, IconDownload, IconUpload } from '@/components/Ico
 import { ImportDialog } from '@/components/ImportDialog';
 import { NewStudentDialog } from '@/components/NewStudentDialog';
 import { PhotoImportDialog } from '@/components/PhotoImportDialog';
+import { PhotoThumb, PhotoLightbox } from '@/components/PhotoThumb';
 
 interface Row {
   id: number; studentCode: string; prefix: string | null;
   firstName: string; lastName: string; nickname: string | null;
   gender: string | null; status: string;
   gradeLevel: string | null; classroom: string | null; classNumber: string | null;
+  hasPhoto: boolean;
 }
 interface Meta { grades: string[]; classrooms: string[]; }
 
@@ -34,6 +36,7 @@ export default function StudentsPage() {
   const [showImport, setShowImport] = useState(false);
   const [showPhotoImport, setShowPhotoImport] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [zoom, setZoom] = useState<Row | null>(null);
   const pageSize = 25;
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -124,21 +127,29 @@ export default function StudentsPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>รหัส</th><th>ชื่อ-นามสกุล</th><th>ชื่อเล่น</th><th>เพศ</th><th>ชั้น</th><th>ห้อง</th><th>เลขที่</th><th></th>
+                <th style={{ width: 48 }}>รูป</th><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>ชื่อเล่น</th><th>เพศ</th><th>ชั้น</th><th>ห้อง</th><th>เลขที่</th><th></th>
               </tr>
             </thead>
             <tbody>
               {loading && rows.length === 0 &&
                 Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i}><td colSpan={8}><div className="skeleton" style={{ height: 20 }} /></td></tr>
+                  <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 20 }} /></td></tr>
                 ))}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40 }} className="muted">
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40 }} className="muted">
                   ไม่พบนักเรียนที่ค้นหา
                 </td></tr>
               )}
               {rows.map((r) => (
                 <tr key={r.id}>
+                  <td style={{ paddingTop: 6, paddingBottom: 6 }}>
+                    <PhotoThumb
+                      src={r.hasPhoto ? `/api/users/students/${r.id}/photo` : null}
+                      initials={(r.firstName[0] ?? '') + (r.lastName[0] ?? '')}
+                      alt={`${r.firstName} ${r.lastName}`}
+                      onClick={() => setZoom(r)}
+                    />
+                  </td>
                   <td className="mono">{r.studentCode}</td>
                   <td>
                     {r.prefix ?? ''}{r.firstName} {r.lastName}
@@ -188,6 +199,14 @@ export default function StudentsPage() {
           grades={meta.grades}
           onClose={() => setShowNew(false)}
           onCreated={() => { setShowNew(false); load(1); toast('เพิ่มนักเรียนแล้ว', 'success'); }}
+        />
+      )}
+      {zoom && (
+        <PhotoLightbox
+          src={`/api/users/students/${zoom.id}/photo`}
+          alt={`${zoom.firstName} ${zoom.lastName}`}
+          caption={`${zoom.studentCode} · ${zoom.prefix ?? ''}${zoom.firstName} ${zoom.lastName}`}
+          onClose={() => setZoom(null)}
         />
       )}
     </div>

@@ -57,7 +57,9 @@ export function PhotoCard({
   return (
     <div className="stack" style={{ gap: 8, alignItems: 'center', width: 116 }}>
       <div style={{
-        width: 116, height: 140, borderRadius: 12, overflow: 'hidden', background: 'var(--skdw-purple-pale)',
+        // 3:4, matching the frame face-crop produces, so `cover` has nothing to
+        // shave off the sides and what is stored is what is shown.
+        width: 116, height: 155, borderRadius: 12, overflow: 'hidden', background: 'var(--skdw-purple-pale)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--skdw-border)',
       }}>
         {photoUrl

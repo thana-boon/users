@@ -53,6 +53,9 @@ export async function GET(req: NextRequest) {
           gradeTaught: teachers.gradeTaught,
           role: teachers.role,
           employmentStatus: teachers.employmentStatus,
+          // Boolean expression, not the column: photo_base64 is a multi-MB
+          // string and must never be shipped in a list response.
+          hasPhoto: sql<boolean>`${teachers.photoBase64} is not null`,
         })
         .from(teachers)
         .where(where)

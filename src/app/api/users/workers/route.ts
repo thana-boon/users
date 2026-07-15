@@ -46,6 +46,9 @@ export async function GET(req: NextRequest) {
           position: workers.position,
           phone: workers.phone,
           employmentStatus: workers.employmentStatus,
+          // Boolean expression, not the column: photo_base64 is a multi-MB
+          // string and must never be shipped in a list response.
+          hasPhoto: sql<boolean>`${workers.photoBase64} is not null`,
         })
         .from(workers)
         .where(where)

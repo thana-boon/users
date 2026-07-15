@@ -7,12 +7,14 @@ import { useToast } from '@/components/Toast';
 import { IconSearch, IconPlus, IconDownload, IconUpload, IconImage } from '@/components/Icons';
 import { ImportDialog } from '@/components/ImportDialog';
 import { PhotoImportDialog } from '@/components/PhotoImportDialog';
+import { PhotoThumb, PhotoLightbox } from '@/components/PhotoThumb';
 
 interface Row {
   id: number; teacherCode: string; prefix: string | null;
   firstName: string; lastName: string; email: string | null;
   subjectGroup: string | null; gradeTaught: string | null; role: string;
   employmentStatus: 'active' | 'resigned';
+  hasPhoto: boolean;
 }
 
 export default function TeachersPage() {
@@ -27,6 +29,7 @@ export default function TeachersPage() {
   const [showImport, setShowImport] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [zoom, setZoom] = useState<Row | null>(null);
   const pageSize = 25;
   const deb = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -86,16 +89,24 @@ export default function TeachersPage() {
       <div className="card" style={{ padding: 0 }}>
         <div className="table-wrap">
           <table className="table">
-            <thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>กลุ่มสาระ</th><th>อีเมล</th><th>สิทธิ์</th><th>สถานะ</th><th></th></tr></thead>
+            <thead><tr><th style={{ width: 48 }}>รูป</th><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>กลุ่มสาระ</th><th>อีเมล</th><th>สิทธิ์</th><th>สถานะ</th><th></th></tr></thead>
             <tbody>
               {loading && rows.length === 0 && Array.from({ length: 8 }).map((_, i) => (
-                <tr key={i}><td colSpan={7}><div className="skeleton" style={{ height: 20 }} /></td></tr>
+                <tr key={i}><td colSpan={8}><div className="skeleton" style={{ height: 20 }} /></td></tr>
               ))}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={7} className="muted" style={{ textAlign: 'center', padding: 40 }}>ไม่พบครูที่ค้นหา</td></tr>
+                <tr><td colSpan={8} className="muted" style={{ textAlign: 'center', padding: 40 }}>ไม่พบครูที่ค้นหา</td></tr>
               )}
               {rows.map((r) => (
                 <tr key={r.id}>
+                  <td style={{ paddingTop: 6, paddingBottom: 6 }}>
+                    <PhotoThumb
+                      src={r.hasPhoto ? `/api/users/teachers/${r.id}/photo` : null}
+                      initials={(r.firstName[0] ?? '') + (r.lastName[0] ?? '')}
+                      alt={`${r.firstName} ${r.lastName}`}
+                      onClick={() => setZoom(r)}
+                    />
+                  </td>
                   <td className="mono">{r.teacherCode}</td>
                   <td>{r.prefix ?? ''}{r.firstName} {r.lastName}</td>
                   <td style={{ fontSize: 13 }}>{r.subjectGroup ?? '-'}</td>
@@ -136,6 +147,14 @@ export default function TeachersPage() {
         />
       )}
       {showNew && <NewTeacher onClose={() => setShowNew(false)} onCreated={() => { setShowNew(false); load(1); toast('เพิ่มครูแล้ว', 'success'); }} />}
+      {zoom && (
+        <PhotoLightbox
+          src={`/api/users/teachers/${zoom.id}/photo`}
+          alt={`${zoom.firstName} ${zoom.lastName}`}
+          caption={`${zoom.teacherCode} · ${zoom.prefix ?? ''}${zoom.firstName} ${zoom.lastName}`}
+          onClose={() => setZoom(null)}
+        />
+      )}
     </div>
   );
 }

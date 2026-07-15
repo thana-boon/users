@@ -15,12 +15,17 @@ import type { Detection, FaceDetector } from '@mediapipe/tasks-vision';
  * raw 5MB upload, base64'd (~6.7MB per row). A cropped 480x640 WebP lands
  * around 40-60KB, ~100x smaller.
  *
- * Everything here degrades rather than throws: if the model or WASM can't load
+ * Detection degrades rather than throws: if the model or WASM can't load
  * (offline, blocked, unsupported browser) we fall back to a geometric crop, so
  * uploading always works. Callers get `faceFound` and can say so in the UI.
  */
 
-/** Output frame. 3:4 portrait, matching the ~116x140 slot the UI renders into. */
+/**
+ * Output frame — every photo is re-encoded to exactly this, no exceptions, so
+ * the whole system holds one size. 3:4 is the usual ID-photo portrait ratio.
+ * Changing these two numbers changes every future upload; photos already in the
+ * database keep whatever size they were stored at.
+ */
 const TARGET_W = 480;
 const TARGET_H = 640;
 const TARGET_RATIO = TARGET_W / TARGET_H;
@@ -186,11 +191,15 @@ function renameTo(original: string, ext: string): string {
 }
 
 /**
- * Crop `file` to the subject's face and re-encode it at 480x640.
+ * Crop `file` to the subject's face and re-encode it at exactly TARGET_W x
+ * TARGET_H. Every stored photo goes through here, so every stored photo has
+ * those dimensions — that uniformity is the point, and the UI can rely on it.
  *
- * Never throws for image reasons — an undecodable file comes back as the
- * original `file` with `faceFound: false`, letting the server's existing
- * validation produce the error message.
+ * Losing the face is NOT a failure: we fall back to a geometric crop and say so
+ * via `faceFound`, because a centre-cropped photo at the right size still beats
+ * refusing the upload. Failing to produce the frame at all IS a failure and
+ * throws, rather than quietly letting an odd-sized original through and
+ * breaking the one guarantee this module makes.
  */
 export async function cropToFace(file: File): Promise<CropResult> {
   let bitmap: ImageBitmap;
@@ -199,7 +208,7 @@ export async function cropToFace(file: File): Promise<CropResult> {
     // done against a sideways image.
     bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
   } catch {
-    return { file, faceFound: false, multipleFaces: false };
+    throw new Error('ไฟล์นี้ไม่ใช่รูปภาพ หรือไฟล์เสียหาย');
   }
 
   try {
@@ -225,7 +234,7 @@ export async function cropToFace(file: File): Promise<CropResult> {
     canvas.width = TARGET_W;
     canvas.height = TARGET_H;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return { file, faceFound: false, multipleFaces: false };
+    if (!ctx) throw new Error('เบราว์เซอร์นี้ไม่รองรับการครอบตัดรูป');
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(bitmap, box.x, box.y, box.w, box.h, 0, 0, TARGET_W, TARGET_H);
 
@@ -238,8 +247,6 @@ export async function cropToFace(file: File): Promise<CropResult> {
       faceFound: face !== null,
       multipleFaces,
     };
-  } catch {
-    return { file, faceFound: false, multipleFaces: false };
   } finally {
     bitmap.close();
   }
