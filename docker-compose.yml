@@ -6,16 +6,18 @@ services:
     container_name: schoolos-users-postgres
     restart: unless-stopped
     environment:
+      # Credentials come from .env only — no hardcoded defaults. Compose aborts
+      # with the given message if POSTGRES_USER / POSTGRES_PASSWORD are unset.
       POSTGRES_DB: ${POSTGRES_DB:-users}
-      POSTGRES_USER: ${POSTGRES_USER:-schoolos}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-schoolos}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     ports:
       # host:container — Postgres is reachable from the host (npm run dev) at :5002.
       - "5002:5432"
     volumes:
       - schoolos_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-schoolos} -d ${POSTGRES_DB:-users}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-users}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -32,7 +34,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: "postgres://${POSTGRES_USER:-schoolos}:${POSTGRES_PASSWORD:-schoolos}@postgres:5432/${POSTGRES_DB:-users}"
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-users}"
     restart: "no"
 
   app:
@@ -46,9 +48,9 @@ services:
         condition: service_completed_successfully
     environment:
       # Inside compose the DB host is the service name "postgres".
-      DATABASE_URL: "postgres://${POSTGRES_USER:-schoolos}:${POSTGRES_PASSWORD:-schoolos}@postgres:5432/${POSTGRES_DB:-users}"
-      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-users}"
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       # Keep false for plain-HTTP LAN access (http://<ip>:3002); set true behind HTTPS.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
@@ -73,9 +75,9 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: "postgres://${POSTGRES_USER:-schoolos}:${POSTGRES_PASSWORD:-schoolos}@postgres:5432/${POSTGRES_DB:-users}"
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-users}"
       # Must match the app's key — seed encrypts password/citizen_id on insert.
-      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env}
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-sukhon.ac.th}
     volumes:
       - ./.example:/app/.example:ro   # host xlsx -> container, read-only
