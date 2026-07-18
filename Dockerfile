@@ -18,7 +18,7 @@ FROM node:22-alpine AS migrator
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-CMD ["npx", "drizzle-kit", "push"]
+CMD ["npx", "drizzle-kit", "push", "--force"]
 
 FROM node:22-alpine AS runner
 WORKDIR /app
