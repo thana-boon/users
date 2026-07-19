@@ -53,7 +53,7 @@ function LoginInner() {
           <div aria-hidden style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--skdw-purple)', color: 'var(--skdw-gold)', display: 'grid', placeItems: 'center', fontWeight: 800, fontFamily: 'var(--font-en)' }}>S</div>
           <div>
             <div style={{ fontWeight: 700 }}>SchoolOS</div>
-            <div className="muted" style={{ fontSize: 13 }}>ข้อมูลนักเรียนและครู อิอิ</div>
+            <div className="muted" style={{ fontSize: 13 }}>ข้อมูลนักเรียนและครู</div>
           </div>
         </div>
 

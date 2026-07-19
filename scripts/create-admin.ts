@@ -6,9 +6,13 @@
  *   npm run admin:create -- T00001 "myPassword" "ชื่อ นามสกุล"
  *   npm run admin:create -- T00001 "myPassword"          # name optional
  *
+ * With no arguments it falls back to SEED_ADMIN_CODE / SEED_ADMIN_PASSWORD /
+ * SEED_ADMIN_NAME from the environment — that is how the one-shot `seed-admin`
+ * compose service bootstraps a login on `docker compose up`, unattended.
+ *
  * If the teacher_code already exists it is PROMOTED to teacher-admin and (if a
  * password is given) its password is reset. Password is stored AES-256-GCM
- * encrypted, same as every other credential.
+ * encrypted, same as every other credential. Re-running is therefore safe.
  */
 import 'dotenv/config';
 import { eq } from 'drizzle-orm';
@@ -17,9 +21,15 @@ import { teachers } from '../src/db/schema';
 import { encrypt } from '../src/lib/crypto';
 
 async function main() {
-  const [code, password, name] = process.argv.slice(2);
+  const [argCode, argPassword, ...argName] = process.argv.slice(2);
+  const code = argCode || process.env.SEED_ADMIN_CODE;
+  const password = argPassword || process.env.SEED_ADMIN_PASSWORD;
+  const name = argName.join(' ') || process.env.SEED_ADMIN_NAME;
   if (!code || !password) {
-    console.error('Usage: npm run admin:create -- <teacher_code> <password> [full name]');
+    console.error(
+      'Usage: npm run admin:create -- <teacher_code> <password> [full name]\n' +
+        '   or: set SEED_ADMIN_CODE and SEED_ADMIN_PASSWORD in the environment',
+    );
     process.exit(1);
   }
   const teacherCode = code.trim();

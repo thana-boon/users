@@ -1,60 +1,75 @@
-# Local-only testing stack: Next.js app + PostgreSQL, isolated to this machine.
-# Not for shared/remote use. Bring up with:  docker compose up --build
+# SchoolOS "users" module — app only. The database is NOT created here.
+#
+# This stack attaches to the school's EXISTING PostgreSQL container
+# (`postgres-core`, which already hosts the per-module databases) over the
+# shared external network `school-net`. We connect as the per-module role
+# `users` to the `users` database — nothing else on that server is touched.
+#
+# Bring up (fully unattended — no prompts, no manual db:push):
+#   docker compose up -d --build
+#
+# Order on `up`: migrate (schema push) -> seed-admin (bootstrap login) -> app.
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: schoolos-users-postgres
-    restart: unless-stopped
-    environment:
-      # Credentials come from .env only — no hardcoded defaults. Compose aborts
-      # with the given message if POSTGRES_USER / POSTGRES_PASSWORD are unset.
-      POSTGRES_DB: ${POSTGRES_DB:-users}
-      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-    ports:
-      # host:container — Postgres is reachable from the host (npm run dev) at :5002.
-      - "5002:5432"
-    volumes:
-      - schoolos_pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-users}"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
   # One-shot: creates/updates tables from the Drizzle schema, then exits.
-  # Runs after postgres is healthy and before the app starts, so a fresh
-  # `docker compose up` yields a ready-to-use database (no manual db:push).
+  # `push --force` (the migrator image CMD) skips drizzle-kit's interactive
+  # confirmation, so this never blocks waiting for input.
   migrate:
     build:
       context: .
       target: migrator
     container_name: schoolos-users-migrate
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-users}"
-    restart: "no"
+      DATABASE_URL: ${DATABASE_URL_INTERNAL:?set DATABASE_URL_INTERNAL in .env}
+    networks:
+      - school-net
+    # The DB lives outside this stack, so we cannot depends_on its health.
+    # Retry a few times instead — covers the server rebooting and bringing up
+    # postgres-core and this stack at the same moment.
+    restart: on-failure:5
+
+  # One-shot: guarantees a teacher-admin login exists so the module is usable
+  # the moment it comes up (the UI is admin-only, and importing staff needs a
+  # login first). Idempotent — a re-run promotes/resets the same teacher_code
+  # instead of duplicating it.
+  seed-admin:
+    build:
+      context: .
+      target: migrator          # migrator image has full deps (tsx) + scripts/
+    container_name: schoolos-users-seed-admin
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: ${DATABASE_URL_INTERNAL:?set DATABASE_URL_INTERNAL in .env}
+      # Must match the app's key — the password is stored AES-GCM encrypted.
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env}
+      SEED_ADMIN_CODE: ${SEED_ADMIN_CODE:?set SEED_ADMIN_CODE in .env}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?set SEED_ADMIN_PASSWORD in .env}
+      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-ผู้ดูแล ระบบ}
+    networks:
+      - school-net
+    command: ["npm", "run", "admin:create"]
+    restart: on-failure:5
 
   app:
     build: .
     container_name: schoolos-users-app
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      seed-admin:
+        condition: service_completed_successfully
     environment:
-      # Inside compose the DB host is the service name "postgres".
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-users}"
+      DATABASE_URL: ${DATABASE_URL_INTERNAL:?set DATABASE_URL_INTERNAL in .env}
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       # Keep false for plain-HTTP LAN access (http://<ip>:3002); set true behind HTTPS.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-sukhon.ac.th}
+    networks:
+      - school-net
     ports:
       - "3002:3002"
 
@@ -67,22 +82,25 @@ services:
   seed:
     build:
       context: .
-      target: migrator          # migrator image has full deps (tsx) + scripts/
+      target: migrator
     profiles: ["seed"]
     depends_on:
-      postgres:
-        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-users}"
+      DATABASE_URL: ${DATABASE_URL_INTERNAL:?set DATABASE_URL_INTERNAL in .env}
       # Must match the app's key — seed encrypts password/citizen_id on insert.
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env}
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-sukhon.ac.th}
+    networks:
+      - school-net
     volumes:
       - ./.example:/app/.example:ro   # host xlsx -> container, read-only
     command: ["npm", "run", "seed"]
     restart: "no"
 
-volumes:
-  schoolos_pg_data:
+# The DB's network, created and owned by the postgres-core stack. `external`
+# means compose joins it and never creates or deletes it.
+networks:
+  school-net:
+    external: true
