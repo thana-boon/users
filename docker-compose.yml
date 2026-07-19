@@ -5,10 +5,12 @@
 # shared external network `school-net`. We connect as the per-module role
 # `users` to the `users` database — nothing else on that server is touched.
 #
-# Bring up (fully unattended — no prompts, no manual db:push):
+# Bring up (fully unattended — no prompts, no manual db:push, no seeding step):
 #   docker compose up -d --build
 #
-# Order on `up`: migrate (schema push) -> seed-admin (bootstrap login) -> app.
+# Order on `up`: migrate (schema push) -> app. The app creates the first
+# teacher-admin itself at startup if none exists (src/instrumentation.ts), so
+# there is no bootstrap service in the deploy path to fail the stack.
 services:
   # One-shot: creates/updates tables from the Drizzle schema, then exits.
   # `push --force` (the migrator image CMD) skips drizzle-kit's interactive
@@ -27,38 +29,17 @@ services:
     # postgres-core and this stack at the same moment.
     restart: on-failure:5
 
-  # One-shot: guarantees a teacher-admin login exists so the module is usable
-  # the moment it comes up (the UI is admin-only, and importing staff needs a
-  # login first). Idempotent — a re-run promotes/resets the same teacher_code
-  # instead of duplicating it.
-  seed-admin:
-    build:
-      context: .
-      target: migrator          # migrator image has full deps (tsx) + scripts/
-    container_name: schoolos-users-seed-admin
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    environment:
-      DATABASE_URL: ${DATABASE_URL_INTERNAL:?set DATABASE_URL_INTERNAL in .env}
-      # Must match the app's key — the password is stored AES-GCM encrypted.
-      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env}
-      SEED_ADMIN_CODE: ${SEED_ADMIN_CODE:?set SEED_ADMIN_CODE in .env}
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?set SEED_ADMIN_PASSWORD in .env}
-      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-ผู้ดูแล ระบบ}
-    networks:
-      - school-net
-    command: ["npm", "run", "admin:create"]
-    restart: on-failure:5
 
   app:
     build: .
     container_name: schoolos-users-app
     restart: unless-stopped
+    # Gates on `migrate` only — the schema must exist before the app boots and
+    # bootstraps its first admin. There is deliberately no bootstrap SERVICE to
+    # gate on: that design let one bad SEED_ADMIN_* value abort the whole stack.
+    # The app now does it in-process and a failure there is logged, not fatal.
     depends_on:
       migrate:
-        condition: service_completed_successfully
-      seed-admin:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: ${DATABASE_URL_INTERNAL:?set DATABASE_URL_INTERNAL in .env}
@@ -68,6 +49,12 @@ services:
       # Keep false for plain-HTTP LAN access (http://<ip>:3002); set true behind HTTPS.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-sukhon.ac.th}
+      # Read at startup by src/instrumentation.ts: if the DB holds NO active
+      # teacher-admin, one is created from these. A no-op once an admin exists,
+      # and never fatal — see src/lib/bootstrap.ts.
+      SEED_ADMIN_CODE: ${SEED_ADMIN_CODE:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-ผู้ดูแล ระบบ}
     networks:
       - school-net
     ports:
@@ -79,6 +66,13 @@ services:
   # ./.example/ on the host, then run:
   #   docker compose run --rm seed
   # Guarded by a profile so a plain `docker compose up` never triggers it.
+  #
+  # NOTE this is the ONLY remaining way to run a one-off script in the deployed
+  # stack: it is built from the `migrator` target, so it has tsx + scripts/,
+  # which the `app` image (Next.js standalone) does not. Overriding its command
+  # is how you reset a FORGOTTEN admin password — the startup bootstrap only
+  # ever creates an admin when none exists, and never overwrites one:
+  #   docker compose run --rm seed npm run admin:create -- <code> "<newPassword>"
   seed:
     build:
       context: .
