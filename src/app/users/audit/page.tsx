@@ -14,6 +14,7 @@ const ACTION_LABEL: Record<string, string> = {
   reveal_password: 'ดูรหัสผ่าน', reveal_citizen_id: 'ดูเลขบัตร', reveal_income: 'ดูรายได้',
   create: 'เพิ่ม', update: 'แก้ไข', delete: 'ลบ', archive: 'ย้ายไปถังขยะ', restore: 'กู้คืน',
   import: 'นำเข้า', export: 'ส่งออก', login: 'เข้าสู่ระบบ',
+  assign_homeroom: 'กำหนดครูประจำชั้น',
   create_api_key: 'สร้าง API key', reveal_api_key: 'ดู API key',
   rotate_api_key: 'สร้างรหัส API ใหม่', revoke_api_key: 'ปิดใช้งาน API key',
 };

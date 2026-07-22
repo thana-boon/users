@@ -25,6 +25,7 @@ export type AuditAction =
   | 'promote'
   | 'transfer_room'
   | 'place_student'
+  | 'assign_homeroom'
   | 'renumber'
   | 'withdraw'
   | 'graduate'
@@ -45,6 +46,7 @@ export interface AuditInput {
     | 'worker'
     | 'academic_year'
     | 'enrollment'
+    | 'homeroom'
     | 'promotion'
     | 'auth'
     | 'api_key';

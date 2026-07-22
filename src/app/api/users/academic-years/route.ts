@@ -19,6 +19,10 @@ export async function GET(req: NextRequest) {
         year: academicYears.year,
         startDate: academicYears.startDate,
         endDate: academicYears.endDate,
+        term1Start: academicYears.term1Start,
+        term1End: academicYears.term1End,
+        term2Start: academicYears.term2Start,
+        term2End: academicYears.term2End,
         isActive: academicYears.isActive,
         isArchived: academicYears.isArchived,
         studentCount: sql<number>`count(${enrollments.id})`,
@@ -37,6 +41,10 @@ const createSchema = z.object({
   year: z.number().int().min(2400).max(2700),
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
+  term1Start: z.string().nullable().optional(),
+  term1End: z.string().nullable().optional(),
+  term2Start: z.string().nullable().optional(),
+  term2End: z.string().nullable().optional(),
   setActive: z.boolean().default(false),
 });
 
@@ -59,6 +67,10 @@ export async function POST(req: NextRequest) {
         year: body.year,
         startDate: body.startDate ?? null,
         endDate: body.endDate ?? null,
+        term1Start: body.term1Start ?? null,
+        term1End: body.term1End ?? null,
+        term2Start: body.term2Start ?? null,
+        term2End: body.term2End ?? null,
         isActive: body.setActive,
       })
       .returning({ id: academicYears.id });

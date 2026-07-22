@@ -60,6 +60,11 @@ export const academicYears = pgTable(
     year: integer('year').notNull(), // Thai Buddhist year, e.g. 2569
     startDate: varchar('start_date', { length: 10 }), // ISO yyyy-mm-dd
     endDate: varchar('end_date', { length: 10 }),
+    // Semester windows (ภาคเรียนที่ 1/2), same ISO yyyy-mm-dd convention.
+    term1Start: varchar('term1_start', { length: 10 }),
+    term1End: varchar('term1_end', { length: 10 }),
+    term2Start: varchar('term2_start', { length: 10 }),
+    term2End: varchar('term2_end', { length: 10 }),
     isActive: boolean('is_active').notNull().default(false),
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -354,6 +359,36 @@ export const teachers = pgTable(
   }),
 );
 
+// -- homeroom_teachers (ครูประจำชั้น per ห้อง per ปีการศึกษา) --------
+// A room may have more than one homeroom teacher (ครูคู่ชั้น), so the natural
+// key is (year, grade, room, teacher) — saving a room replaces its whole
+// teacher list. Rooms themselves are not a table: a "room" is whatever
+// (grade, classroom) combinations exist in `enrollments` for that year.
+export const homeroomTeachers = pgTable(
+  'homeroom_teachers',
+  {
+    id: serial('id').primaryKey(),
+    academicYearId: integer('academic_year_id')
+      .notNull()
+      .references(() => academicYears.id),
+    gradeLevel: varchar('grade_level', { length: 32 }).notNull(), // ชั้น เช่น ป.1
+    classroom: varchar('classroom', { length: 16 }).notNull(), // ห้อง
+    teacherId: integer('teacher_id')
+      .notNull()
+      .references(() => teachers.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    roomTeacherUniq: unique('homeroom_room_teacher_uniq').on(
+      t.academicYearId,
+      t.gradeLevel,
+      t.classroom,
+      t.teacherId,
+    ),
+    yearIdx: index('homeroom_year_idx').on(t.academicYearId),
+  }),
+);
+
 // -- workers (คนงาน) — non-login staff records only ------------------
 // Chosen as a SEPARATE table (not a teacher role) so it never touches teacher
 // RBAC/login. Workers carry no password/role/email — just identity, ตำแหน่ง,
@@ -543,6 +578,8 @@ export type StudentAddress = typeof studentAddresses.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
+export type HomeroomTeacher = typeof homeroomTeachers.$inferSelect;
+export type NewHomeroomTeacher = typeof homeroomTeachers.$inferInsert;
 export type Completion = typeof completions.$inferSelect;
 export type NewCompletion = typeof completions.$inferInsert;
 export type StudentStatus = (typeof STUDENT_STATUSES)[number];

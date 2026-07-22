@@ -19,6 +19,10 @@ type Ctx = { params: Promise<{ id: string }> };
 const schema = z.object({
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
+  term1Start: z.string().nullable().optional(),
+  term1End: z.string().nullable().optional(),
+  term2Start: z.string().nullable().optional(),
+  term2End: z.string().nullable().optional(),
   setActive: z.boolean().optional(),
   isArchived: z.boolean().optional(),
 });
@@ -38,6 +42,10 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const set: Record<string, unknown> = {};
     if (body.startDate !== undefined) set.startDate = body.startDate;
     if (body.endDate !== undefined) set.endDate = body.endDate;
+    if (body.term1Start !== undefined) set.term1Start = body.term1Start;
+    if (body.term1End !== undefined) set.term1End = body.term1End;
+    if (body.term2Start !== undefined) set.term2Start = body.term2Start;
+    if (body.term2End !== undefined) set.term2End = body.term2End;
     if (body.setActive !== undefined) set.isActive = body.setActive;
     if (body.isArchived !== undefined) set.isArchived = body.isArchived;
 

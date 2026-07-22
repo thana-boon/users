@@ -122,7 +122,20 @@ export async function GET(req: NextRequest) {
       page,
       pageSize,
       total: Number(countRes[0]?.n ?? 0),
-      academicYear: yearRow ? { id: yearRow.id, year: yearRow.year } : null,
+      academicYear: yearRow
+        ? {
+            id: yearRow.id,
+            year: yearRow.year,
+            // Term windows are additive fields — existing consumers that only
+            // read {id, year} are unaffected.
+            startDate: yearRow.startDate,
+            endDate: yearRow.endDate,
+            term1Start: yearRow.term1Start,
+            term1End: yearRow.term1End,
+            term2Start: yearRow.term2Start,
+            term2End: yearRow.term2End,
+          }
+        : null,
     });
   } catch (err) {
     return handleError(err);

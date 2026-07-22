@@ -25,6 +25,9 @@ export const IconTeachers = (p: SVGProps<SVGSVGElement>) => (
 export const IconCalendar = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} aria-hidden><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
 );
+export const IconHomeroom = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><rect x="3" y="3" width="18" height="12" rx="1.5" /><path d="M7 7h7M7 10h4" /><circle cx="17" cy="16.5" r="2.2" /><path d="M13.3 22c0-2 1.7-3.5 3.7-3.5s3.7 1.5 3.7 3.5" /></svg>
+);
 export const IconAudit = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} aria-hidden><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6M9 15l2 2 4-4" /></svg>
 );

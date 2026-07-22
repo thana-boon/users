@@ -21,6 +21,7 @@ import {
   IconWorker,
   IconHistory,
   IconKey,
+  IconHomeroom,
 } from './Icons';
 
 interface SessionInfo {
@@ -54,6 +55,7 @@ const NAV: NavNode[] = [
     Icon: IconTeachers,
     children: [
       { href: '/users/teachers', label: 'ครู', Icon: IconTeachers },
+      { href: '/users/homerooms', label: 'ครูประจำชั้น', Icon: IconHomeroom },
       { href: '/users/workers', label: 'คนงาน', Icon: IconWorker },
     ],
   },

@@ -310,7 +310,14 @@ Authorization: Bearer sk_live_xxxxxxxx`}
     ?yearId=&grade=ป.6&classroom=2&status=studying&q=&page=1&pageSize=50
 
 GET /api/public/v1/teachers   # ต้องมีสิทธิ์ teachers:read
-    ?subjectGroup=&role=teacher&status=active&q=&page=1&pageSize=50
+    ?subjectGroup=&role=teacher&status=active&q=&yearId=&page=1&pageSize=50
+    # แต่ละคนมี homerooms: [{gradeLevel, classroom}] = ห้องที่ประจำชั้น
+    # ในปีนั้น (ค่าเริ่มต้น: ปีปัจจุบัน)
+
+GET /api/public/v1/homerooms  # ครูประจำชั้นรายห้อง — ใช้สิทธิ์ teachers:read
+    ?yearId=&grade=ป.6&classroom=2
+    # ตอบทุกห้องที่มีนักเรียนในปีนั้น + รายชื่อครูประจำชั้น
+    # และข้อมูลปีการศึกษา (วันเปิด–ปิด เทอม 1/เทอม 2)
 
 GET /api/public/v1/me         # ตรวจสอบว่า key ใช้ได้ไหม + มีสิทธิ์อะไร
 
