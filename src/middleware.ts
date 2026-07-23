@@ -11,7 +11,8 @@ import { verifySession, hasPermission, USERS_WRITE, SESSION_COOKIE } from '@/lib
  *
  * Public:
  *   /api/auth/**         - login endpoints
- *   /login               - local login page
+ *   /users/login         - local login page (rewritten to src/app/login —
+ *                          the gateway only routes /users/* to this app)
  *   static/next assets
  *
  * A request with no token, an invalid token, or one lacking `users:write` is
@@ -22,7 +23,9 @@ import { verifySession, hasPermission, USERS_WRITE, SESSION_COOKIE } from '@/lib
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  const isProtectedUi = pathname === '/users' || pathname.startsWith('/users/');
+  const isProtectedUi =
+    (pathname === '/users' || pathname.startsWith('/users/')) &&
+    pathname !== '/users/login'; // public: the login page lives under /users too
   const isProtectedApi = pathname.startsWith('/api/users');
   if (!isProtectedUi && !isProtectedApi) return NextResponse.next();
 
@@ -41,7 +44,7 @@ export async function middleware(req: NextRequest) {
       return NextResponse.json({ error: msg }, { status });
     }
     const url = req.nextUrl.clone();
-    url.pathname = '/login';
+    url.pathname = '/users/login';
     url.searchParams.set('next', pathname);
     if (session) url.searchParams.set('denied', '1');
     return NextResponse.redirect(url);

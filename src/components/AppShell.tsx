@@ -93,7 +93,7 @@ export function AppShell({
 
   async function logout() {
     await fetch(withBase('/api/auth/logout'), { method: 'POST' });
-    router.push('/login');
+    router.push('/users/login');
   }
 
   return (

@@ -20,6 +20,10 @@ export const API_SCOPES = [
   'students:pii',
   'teachers:read',
   'teachers:pii',
+  // School calendar: academic years + term windows. Read-only, no PII.
+  // Added after the first keys were issued — existing keys keep working
+  // unchanged, they just don't have this scope until an admin ticks it.
+  'years:read',
   'auth:students',
   'auth:teachers',
 ] as const;
@@ -32,6 +36,7 @@ export const SCOPE_LABEL_TH: Record<ApiScope, string> = {
   'students:pii': 'อ่านเลขบัตร ปชช. นักเรียน',
   'teachers:read': 'อ่านรายชื่อครู',
   'teachers:pii': 'อ่านเลขบัตร ปชช. ครู',
+  'years:read': 'อ่านปีการศึกษาและช่วงภาคเรียน',
   'auth:students': 'ตรวจรหัสผ่านนักเรียน (ล็อกอิน)',
   'auth:teachers': 'ตรวจรหัสผ่านครู (ล็อกอิน)',
 };

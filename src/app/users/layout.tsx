@@ -15,7 +15,7 @@ export default async function UsersLayout({
   // Middleware already gates this, but re-check for defence in depth.
   const session = await getSession();
   if (!session || !hasPermission(session, USERS_WRITE)) {
-    redirect('/login?next=/users');
+    redirect('/users/login?next=/users');
   }
 
   return (

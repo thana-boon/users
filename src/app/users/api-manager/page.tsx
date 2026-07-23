@@ -319,6 +319,10 @@ GET ${BASE_PATH}/api/public/v1/homerooms  # ครูประจำชั้น
     # ตอบทุกห้องที่มีนักเรียนในปีนั้น + รายชื่อครูประจำชั้น
     # และข้อมูลปีการศึกษา (วันเปิด–ปิด เทอม 1/เทอม 2)
 
+GET ${BASE_PATH}/api/public/v1/academic-years  # ปีการศึกษา + ช่วงภาคเรียน — ใช้สิทธิ์ years:read
+    ?year=2569 | ?active=1
+    # แต่ละปีมี startDate/endDate และ terms: [{term, startDate, endDate}]
+
 GET ${BASE_PATH}/api/public/v1/me         # ตรวจสอบว่า key ใช้ได้ไหม + มีสิทธิ์อะไร
 
 POST ${BASE_PATH}/api/public/v1/auth/verify   # ตรวจรหัสผ่าน (ล็อกอิน)

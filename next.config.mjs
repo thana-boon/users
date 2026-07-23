@@ -15,6 +15,17 @@ const nextConfig = {
   },
   serverExternalPackages: ['exceljs', 'mysql2'],
   eslint: { ignoreDuringBuilds: true },
+  // The deployed gateway only routes /users/* and /api/* to this app, so the
+  // login page must be reachable UNDER /users. The page itself stays at
+  // src/app/login — moving it under src/app/users/ would put it inside the
+  // auth-redirecting users layout (infinite loop). A rewrite serves it at
+  // /users/login instead; the redirect keeps one canonical URL.
+  async rewrites() {
+    return [{ source: '/users/login', destination: '/login' }];
+  },
+  async redirects() {
+    return [{ source: '/login', destination: '/users/login', permanent: false }];
+  },
 };
 
 export default nextConfig;
