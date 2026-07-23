@@ -3,7 +3,7 @@
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/client';
+import { api, withBase } from '@/lib/client';
 import { cropToFace, preloadFaceDetector } from '@/lib/face-crop';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
@@ -160,7 +160,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const lastEnrollment = d.enrollments.slice().sort((a, b) => b.academicYear.year - a.academicYear.year)[0];
   const addrByType = Object.fromEntries(d.addresses.map((a) => [a.addressType, a]));
   const guardByType = Object.fromEntries(d.guardians.map((g) => [g.guardianType, g]));
-  const photoUrl = d.hasPhoto ? `/api/users/students/${id}/photo?v=${photoVer}` : null;
+  const photoUrl = d.hasPhoto ? withBase(`/api/users/students/${id}/photo?v=${photoVer}`) : null;
   const initials = (d.firstName?.[0] ?? '') + (d.lastName?.[0] ?? '');
 
   async function save() {

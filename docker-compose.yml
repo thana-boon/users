@@ -34,10 +34,11 @@ services:
     build:
       context: .
       args:
-        # Sub-path the app is served under behind the gateway (e.g. /users-app).
-        # Baked in at BUILD time — after changing it, `docker compose build app`.
-        # Leave empty to keep serving at the root as before.
-        BASE_PATH: ${BASE_PATH:-}
+        # Prefix the gateway serves this app under (assets + API rewrites —
+        # see next.config.mjs). Baked in at BUILD time: after changing it,
+        # `docker compose build app`. Defaults to /users to match the deployed
+        # gateway; set BASE_PATH= (empty) in .env for a root-mounted app.
+        BASE_PATH: ${BASE_PATH:-/users}
     container_name: schoolos-users-app
     restart: unless-stopped
     # Gates on `migrate` only — the schema must exist before the app boots and

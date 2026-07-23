@@ -1,6 +1,7 @@
 'use client';
 
 import type { Detection, FaceDetector } from '@mediapipe/tasks-vision';
+import { withBase } from './client';
 
 /**
  * Auto-crop a profile photo to the subject's face, in the browser, before it is
@@ -57,8 +58,8 @@ const FALLBACK_TOP_BIAS = 0.25;
  * 800KB more model. Both fail below ~8%, which is a person too small to crop
  * usefully anyway.
  */
-const MODEL_URL = '/mediapipe/blaze_face_full_range.tflite';
-const WASM_PATH = '/mediapipe/wasm';
+const MODEL_URL = withBase('/mediapipe/blaze_face_full_range.tflite');
+const WASM_PATH = withBase('/mediapipe/wasm');
 
 export interface CropResult {
   /** The cropped image, ready to hand to FormData. */

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { withBase } from '@/lib/client';
 
 /**
  * Small 3:4 profile thumbnail for list tables (ครู / นักเรียน / คนงาน), plus the
@@ -28,7 +29,7 @@ export function PhotoThumb({
       }}
     >
       {src
-        ? <img src={src} alt={alt} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ? <img src={withBase(src)} alt={alt} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         : <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--skdw-purple)' }}>{initials || '—'}</span>}
     </div>
   );
@@ -70,7 +71,7 @@ export function PhotoLightbox({
         </div>
         <div className="card-pad" style={{ display: 'flex', justifyContent: 'center' }}>
           <img
-            src={src}
+            src={withBase(src)}
             alt={alt}
             // width:100% (not max-width) so bulk-imported photos, which are not
             // normalised to the 480x640 the upload cropper produces, all fill

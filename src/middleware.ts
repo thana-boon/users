@@ -23,10 +23,27 @@ import { verifySession, hasPermission, USERS_WRITE, SESSION_COOKIE } from '@/lib
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Behind the gateway, asset/API requests carry the BASE_PATH prefix (e.g.
+  // /users/_next/*, /users/api/*). next.config.mjs rewrites strip it again —
+  // but middleware runs BEFORE rewrites, so classify on the inner path here.
+  // Page routes genuinely live at /users/* and must NOT be stripped.
+  const base = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  let path = pathname;
+  if (base) {
+    if (
+      path.startsWith(`${base}/_next/`) ||
+      path.startsWith(`${base}/mediapipe/`) ||
+      path === `${base}/icon.svg`
+    ) {
+      return NextResponse.next(); // public static assets
+    }
+    if (path.startsWith(`${base}/api/`)) path = path.slice(base.length);
+  }
+
   const isProtectedUi =
-    (pathname === '/users' || pathname.startsWith('/users/')) &&
-    pathname !== '/users/login'; // public: the login page lives under /users too
-  const isProtectedApi = pathname.startsWith('/api/users');
+    (path === '/users' || path.startsWith('/users/')) &&
+    path !== '/users/login'; // public: the login page lives under /users too
+  const isProtectedApi = path.startsWith('/api/users');
   if (!isProtectedUi && !isProtectedApi) return NextResponse.next();
 
   const token =
