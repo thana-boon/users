@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { withBase } from '@/lib/client';
 
 /**
  * Login screen for this module — local login only (no external SSO).
@@ -28,7 +29,7 @@ function LoginInner() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/auth/teacher-login', {
+      const res = await fetch(withBase('/api/auth/teacher-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teacher_code: teacherCode.trim(), password }),

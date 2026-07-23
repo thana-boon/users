@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { api } from '@/lib/client';
+import { api, withBase } from '@/lib/client';
 import { cropToFace, preloadFaceDetector } from '@/lib/face-crop';
 import { useToast } from './Toast';
 
@@ -26,7 +26,7 @@ export function PhotoCard({
   const inputRef = useRef<HTMLInputElement>(null);
   const [ver, setVer] = useState(0);
   const [busy, setBusy] = useState(false);
-  const photoUrl = hasPhoto ? `${baseEndpoint}?v=${ver}` : null;
+  const photoUrl = hasPhoto ? withBase(`${baseEndpoint}?v=${ver}`) : null;
 
   async function upload(file: File) {
     setBusy(true);

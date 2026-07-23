@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, jsonBody } from '@/lib/client';
+import { api, jsonBody, BASE_PATH } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { IconSearch, IconPlus, IconKey } from '@/components/Icons';
 import { ApiKeyDialog, RevealDialog, type ApiKeyFormValue } from '@/components/ApiKeyDialog';
@@ -306,22 +306,22 @@ Authorization: Bearer sk_live_xxxxxxxx`}
         <div>
           <div className="form-label" style={{ marginBottom: 4 }}>ปลายทางที่เรียกได้</div>
           <pre className="mono" style={{ background: 'var(--skdw-bg)', padding: 12, borderRadius: 8, overflowX: 'auto', fontSize: 12 }}>
-{`GET /api/public/v1/students   # ต้องมีสิทธิ์ students:read
+{`GET ${BASE_PATH}/api/public/v1/students   # ต้องมีสิทธิ์ students:read
     ?yearId=&grade=ป.6&classroom=2&status=studying&q=&page=1&pageSize=50
 
-GET /api/public/v1/teachers   # ต้องมีสิทธิ์ teachers:read
+GET ${BASE_PATH}/api/public/v1/teachers   # ต้องมีสิทธิ์ teachers:read
     ?subjectGroup=&role=teacher&status=active&q=&yearId=&page=1&pageSize=50
     # แต่ละคนมี homerooms: [{gradeLevel, classroom}] = ห้องที่ประจำชั้น
     # ในปีนั้น (ค่าเริ่มต้น: ปีปัจจุบัน)
 
-GET /api/public/v1/homerooms  # ครูประจำชั้นรายห้อง — ใช้สิทธิ์ teachers:read
+GET ${BASE_PATH}/api/public/v1/homerooms  # ครูประจำชั้นรายห้อง — ใช้สิทธิ์ teachers:read
     ?yearId=&grade=ป.6&classroom=2
     # ตอบทุกห้องที่มีนักเรียนในปีนั้น + รายชื่อครูประจำชั้น
     # และข้อมูลปีการศึกษา (วันเปิด–ปิด เทอม 1/เทอม 2)
 
-GET /api/public/v1/me         # ตรวจสอบว่า key ใช้ได้ไหม + มีสิทธิ์อะไร
+GET ${BASE_PATH}/api/public/v1/me         # ตรวจสอบว่า key ใช้ได้ไหม + มีสิทธิ์อะไร
 
-POST /api/public/v1/auth/verify   # ตรวจรหัสผ่าน (ล็อกอิน)
+POST ${BASE_PATH}/api/public/v1/auth/verify   # ตรวจรหัสผ่าน (ล็อกอิน)
     # ต้องมีสิทธิ์ auth:students หรือ auth:teachers`}
           </pre>
         </div>
@@ -330,7 +330,7 @@ POST /api/public/v1/auth/verify   # ตรวจรหัสผ่าน (ล็
           <div className="form-label" style={{ marginBottom: 4 }}>ตัวอย่าง — ดึงรายชื่อ</div>
           <pre className="mono" style={{ background: 'var(--skdw-bg)', padding: 12, borderRadius: 8, overflowX: 'auto', fontSize: 12 }}>
 {`curl -H "X-API-Key: sk_live_xxxx" \\
-  "http://localhost:3002/api/public/v1/students?grade=ป.6&pageSize=100"`}
+  "http://localhost:3002${BASE_PATH}/api/public/v1/students?grade=ป.6&pageSize=100"`}
           </pre>
         </div>
 
@@ -340,7 +340,7 @@ POST /api/public/v1/auth/verify   # ตรวจรหัสผ่าน (ล็
 {`curl -X POST -H "X-API-Key: sk_live_xxxx" \\
   -H "Content-Type: application/json" \\
   -d '{"role":"teacher","username":"T00116","password":"…"}' \\
-  "http://localhost:3002/api/public/v1/auth/verify"
+  "http://localhost:3002${BASE_PATH}/api/public/v1/auth/verify"
 
 # ถูก  -> 200 {"valid":true,"user":{
 #           "code":"T00116","name":"…",

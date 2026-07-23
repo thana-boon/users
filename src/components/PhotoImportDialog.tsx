@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { withBase } from '@/lib/client';
 import { cropToFace, preloadFaceDetector } from '@/lib/face-crop';
 import { useToast } from './Toast';
 
@@ -94,7 +95,7 @@ export function PhotoImportDialog({
       const fd = new FormData();
       for (const it of items) fd.append('files', it.file);
       fd.append('dryRun', String(dryRun));
-      const res = await fetch(endpoint, { method: 'POST', body: fd });
+      const res = await fetch(withBase(endpoint), { method: 'POST', body: fd });
       const data = (await res.json()) as Report & { error?: string };
       if (!res.ok) { toast(data.error ?? 'นำเข้าไม่สำเร็จ', 'error'); return; }
       setReport(data);

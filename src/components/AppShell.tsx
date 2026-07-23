@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { withBase } from '@/lib/client';
 import {
   IconDashboard,
   IconStudents,
@@ -91,7 +92,7 @@ export function AppShell({
   const router = useRouter();
 
   async function logout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch(withBase('/api/auth/logout'), { method: 'POST' });
     router.push('/login');
   }
 

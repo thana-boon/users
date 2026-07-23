@@ -9,6 +9,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# Mount the app under a sub-path (e.g. /users-app) behind the SchoolOS gateway.
+# Build-time only — basePath is baked into the bundle by next.config.mjs, so
+# changing it means rebuilding the image, not restarting the container.
+ARG BASE_PATH=
+ENV BASE_PATH=$BASE_PATH
 RUN npm run build
 
 # ─── Migrator: full deps (incl. drizzle-kit) + source, runs schema push ───

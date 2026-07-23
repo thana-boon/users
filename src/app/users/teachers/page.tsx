@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { api, jsonBody } from '@/lib/client';
+import { api, jsonBody, withBase } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { IconSearch, IconPlus, IconDownload, IconUpload, IconImage } from '@/components/Icons';
 import { ImportDialog } from '@/components/ImportDialog';
@@ -59,10 +59,10 @@ export default function TeachersPage() {
       <div className="row-between">
         <h1 className="page-title">ครู</h1>
         <div className="row" style={{ gap: 8 }}>
-          <a className="btn btn-ghost btn-sm" href="/api/users/teachers/template">เทมเพลต</a>
+          <a className="btn btn-ghost btn-sm" href={withBase('/api/users/teachers/template')}>เทมเพลต</a>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(true)}><IconUpload width={16} height={16} /> นำเข้า</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowPhotos(true)}><IconImage width={16} height={16} /> นำเข้ารูป</button>
-          <a className="btn btn-secondary btn-sm" href="/api/users/teachers/export"><IconDownload width={16} height={16} /> ส่งออก</a>
+          <a className="btn btn-secondary btn-sm" href={withBase('/api/users/teachers/export')}><IconDownload width={16} height={16} /> ส่งออก</a>
           <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}><IconPlus width={16} height={16} /> เพิ่ม</button>
         </div>
       </div>

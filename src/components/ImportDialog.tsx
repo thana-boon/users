@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { withBase } from '@/lib/client';
 import { useToast } from './Toast';
 
 interface Issue { row: number; studentCode?: string; teacherCode?: string; errors: string[] }
@@ -35,7 +36,7 @@ export function ImportDialog({
       const fd = new FormData();
       fd.append('file', file);
       fd.append('dryRun', String(dryRun));
-      const res = await fetch(`/api/users/${kind}/import`, { method: 'POST', body: fd });
+      const res = await fetch(withBase(`/api/users/${kind}/import`), { method: 'POST', body: fd });
       const data = (await res.json()) as Report & { error?: string; details?: Report };
       if (!res.ok) {
         setReport(data.details ?? { totalRows: 0, valid: 0, invalid: 0, issues: [] });

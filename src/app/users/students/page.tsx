@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { api } from '@/lib/client';
+import { api, withBase } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { IconSearch, IconPlus, IconDownload, IconUpload } from '@/components/Icons';
 import { ImportDialog } from '@/components/ImportDialog';
@@ -78,7 +78,7 @@ export default function StudentsPage() {
     const sp = new URLSearchParams();
     if (grade) sp.set('grade', grade);
     if (classroom) sp.set('classroom', classroom);
-    window.location.href = `/api/users/students/export?${sp}`;
+    window.location.href = withBase(`/api/users/students/export?${sp}`);
   }
 
   return (
@@ -88,7 +88,7 @@ export default function StudentsPage() {
         <div className="row" style={{ gap: 8 }}>
           <Link className="btn btn-ghost btn-sm" href="/users/former-students">นักเรียนเก่า</Link>
           <Link className="btn btn-ghost btn-sm" href={`/users/class-numbers${grade ? `?grade=${encodeURIComponent(grade)}${classroom ? `&classroom=${encodeURIComponent(classroom)}` : ''}` : ''}`}>จัดเลขที่</Link>
-          <a className="btn btn-ghost btn-sm" href="/api/users/students/template">เทมเพลต</a>
+          <a className="btn btn-ghost btn-sm" href={withBase('/api/users/students/template')}>เทมเพลต</a>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(true)}><IconUpload width={16} height={16} /> นำเข้า</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowPhotoImport(true)}><IconUpload width={16} height={16} /> นำเข้ารูป</button>
           <button className="btn btn-secondary btn-sm" onClick={exportXlsx}><IconDownload width={16} height={16} /> ส่งออก</button>
