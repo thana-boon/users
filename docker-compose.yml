@@ -53,8 +53,13 @@ services:
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
-      # Keep false for plain-HTTP LAN access (http://<ip>:3002); set true behind HTTPS.
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Secure-by-default: the session cookie gets the Secure flag unless you
+      # explicitly opt out. Set COOKIE_SECURE=false in .env ONLY for plain-HTTP
+      # LAN access (http://<ip>:3002) — never on an HTTPS/internet-facing deploy.
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      # Trusted reverse-proxy hops in front of the app (see .env.example). Drives
+      # real-client-IP extraction for audit logs and per-IP rate limiting.
+      TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-1}
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-sukhon.ac.th}
       # Read at startup by src/instrumentation.ts: if the DB holds NO active
       # teacher-admin, one is created from these. A no-op once an admin exists,

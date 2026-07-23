@@ -42,14 +42,15 @@ function parseExpiry(): string {
 }
 
 /**
- * Whether to set the `Secure` flag on the session cookie. Defaults to FALSE so
- * a plain-HTTP LAN/self-hosted deployment (e.g. http://192.168.x.x) works — a
- * Secure cookie is silently dropped by the browser over HTTP, which looks like
- * "login succeeds but never redirects". Set COOKIE_SECURE=true when serving
- * over HTTPS.
+ * Whether to set the `Secure` flag on the session cookie. Secure-by-default:
+ * over HTTPS the session cookie is never sent in the clear. Explicitly opt OUT
+ * (COOKIE_SECURE=false) ONLY for a plain-HTTP LAN/self-hosted deployment (e.g.
+ * http://192.168.x.x) — a Secure cookie is silently dropped by the browser over
+ * HTTP, which looks like "login succeeds but never redirects". Do not disable it
+ * on any internet-facing/HTTPS deployment.
  */
 export function cookieSecure(): boolean {
-  return (process.env.COOKIE_SECURE ?? 'false').toLowerCase() === 'true';
+  return (process.env.COOKIE_SECURE ?? 'true').toLowerCase() !== 'false';
 }
 
 /** Shared cookie options for the session cookie (set on login, cleared on logout). */

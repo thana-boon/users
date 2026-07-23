@@ -17,7 +17,17 @@ function makeClient(): Sql {
   // credentials live only in .env / the compose environment, never in git.
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is not set (see .env.example)');
-  const client = postgres(url, { max: 10 });
+  const client = postgres(url, {
+    max: 10,
+    // Return an idle connection to the OS after 20s so a burst of exports/imports
+    // doesn't pin all 10 slots indefinitely.
+    idle_timeout: 20,
+    // Fail fast if postgres-core is unreachable instead of hanging the request.
+    connect_timeout: 10,
+    // Server-side kill switch: any single statement running longer than 30s is
+    // aborted, so a pathological query can't hold a pooled connection forever.
+    connection: { statement_timeout: 30_000 },
+  });
   if (process.env.NODE_ENV !== 'production') globalForDb.__schoolosSql = client;
   return client;
 }

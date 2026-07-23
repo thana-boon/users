@@ -6,7 +6,22 @@ import { apiKeys } from '@/db/schema';
 import { getSessionFromRequest } from './auth';
 import { hasPermission, USERS_WRITE, type SessionClaims } from './jwt';
 import { extractApiKey, hashApiKey, hasScope, type ApiScope } from './apikey';
+import { clientIp } from './ip';
+import { rateLimit } from './rate-limit';
 import type { ApiKey } from '@/db/schema';
+
+/** Per-credential request budget for the public API (fixed window). */
+const API_RATE_LIMIT = 600;
+const API_RATE_WINDOW_MS = 60_000;
+
+function throttled(bucketKey: string): NextResponse | null {
+  const r = rateLimit(bucketKey, API_RATE_LIMIT, API_RATE_WINDOW_MS);
+  if (r.allowed) return null;
+  return NextResponse.json(
+    { error: { code: 'rate_limited', message: 'คำขอถี่เกินไป ลองใหม่อีกครั้งภายหลัง' } },
+    { status: 429, headers: { 'Retry-After': String(r.retryAfterSec) } },
+  );
+}
 
 /**
  * Auth for the public `/api/public/v1/*` surface.
@@ -37,12 +52,6 @@ function deny(status: number, code: string, message: string): NextResponse {
   return NextResponse.json({ error: { code, message } }, { status });
 }
 
-function clientIp(req: NextRequest): string | null {
-  const xff = req.headers.get('x-forwarded-for');
-  if (xff) return xff.split(',')[0].trim();
-  return req.headers.get('x-real-ip') ?? null;
-}
-
 /**
  * Require a credential carrying `scope`.
  *
@@ -54,6 +63,11 @@ export async function requireApiScope(
   req: NextRequest,
   scope: ApiScope,
 ): Promise<ApiGuard> {
+  // Per-IP budget guards the pre-auth work (a DB lookup per presented key), so
+  // an unauthenticated flood of bogus keys can't hammer the database.
+  const ipLimited = throttled(`api-ip:${clientIp(req) ?? 'unknown'}`);
+  if (ipLimited) return { ok: false, response: ipLimited };
+
   const presented = extractApiKey(req.headers);
 
   if (presented) {
@@ -74,6 +88,10 @@ export async function requireApiScope(
         response: deny(403, 'insufficient_scope', `API key นี้ไม่มีสิทธิ์ ${scope}`),
       };
     }
+
+    // Per-key budget so one integration cannot exhaust the DB pool / CPU.
+    const limited = throttled(`api-key:${key.id}`);
+    if (limited) return { ok: false, response: limited };
 
     void touchKey(key.id, clientIp(req));
     return { ok: true, actor: { kind: 'key', key, label: `apikey:${key.name}` } };

@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { db } from '@/db';
 import { auditLogs } from '@/db/schema';
 import type { SessionClaims } from './jwt';
+import { clientIp } from './ip';
 
 /**
  * Append-only audit trail. Every reveal/decrypt of sensitive data and every
@@ -61,13 +62,6 @@ export interface AuditInput {
    */
   actorLabel?: string | null;
   actorRole?: string | null;
-}
-
-function clientIp(req?: NextRequest): string | null {
-  if (!req) return null;
-  const xff = req.headers.get('x-forwarded-for');
-  if (xff) return xff.split(',')[0].trim();
-  return req.headers.get('x-real-ip') ?? null;
 }
 
 export async function recordAudit(input: AuditInput): Promise<void> {

@@ -5,9 +5,10 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { teachers } from '@/db/schema';
 import { signSession, SESSION_COOKIE, USERS_READ, USERS_WRITE, sessionCookieOptions } from '@/lib/jwt';
-import { decrypt } from '@/lib/crypto';
+import { decrypt, safeStrEqual } from '@/lib/crypto';
 import { badRequest, handleError } from '@/lib/http';
-import { checkLockout, registerFailure, clearFailures } from '@/lib/rate-limit';
+import { checkLockout, registerFailure, clearFailures, rateLimit } from '@/lib/rate-limit';
+import { clientIp } from '@/lib/ip';
 import { recordAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -28,6 +29,17 @@ const INVALID = 'รหัสครู หรือรหัสผ่านไ�
 
 export async function POST(req: NextRequest) {
   try {
+    // Per-IP throttle FIRST — blunts password-spraying across many usernames,
+    // which the per-username lockout below cannot see. 30 attempts / 5 min / IP.
+    const ip = clientIp(req) ?? 'unknown';
+    const ipGate = rateLimit(`login-ip:${ip}`, 30, 5 * 60_000);
+    if (!ipGate.allowed) {
+      return NextResponse.json(
+        { error: `พยายามเข้าสู่ระบบบ่อยเกินไป ลองใหม่ใน ${ipGate.retryAfterSec} วินาที` },
+        { status: 429, headers: { 'Retry-After': String(ipGate.retryAfterSec) } },
+      );
+    }
+
     const body = bodySchema.parse(await req.json());
     const code = body.teacher_code.trim();
 
@@ -46,7 +58,8 @@ export async function POST(req: NextRequest) {
     let valid = false;
     if (row && !row.isArchived && row.passwordEncrypted) {
       try {
-        valid = decrypt(row.passwordEncrypted) === body.password;
+        const stored = decrypt(row.passwordEncrypted);
+        valid = stored !== null && safeStrEqual(stored, body.password);
       } catch {
         valid = false;
       }

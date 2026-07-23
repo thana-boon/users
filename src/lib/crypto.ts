@@ -2,6 +2,7 @@ import {
   createCipheriv,
   createDecipheriv,
   randomBytes,
+  timingSafeEqual,
 } from 'node:crypto';
 
 /**
@@ -74,6 +75,20 @@ export function tryDecrypt(payload: string | null | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Constant-time string compare. Used for password verification so the decrypt-
+ * then-compare login path does not leak, via response timing, how many leading
+ * characters of a guess were correct. A length mismatch short-circuits (it only
+ * reveals the length, not the content), so equal-length inputs are compared in
+ * time independent of where they first differ.
+ */
+export function safeStrEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a, 'utf8');
+  const bb = Buffer.from(b, 'utf8');
+  if (ba.length !== bb.length) return false;
+  return timingSafeEqual(ba, bb);
 }
 
 /** Mask a citizen id for display: keep first 1 and last 4 -> 1-2345-XXXXX-XX-1 style. */
