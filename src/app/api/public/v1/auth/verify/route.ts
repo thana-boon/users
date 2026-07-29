@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { eq, or } from 'drizzle-orm';
+import { eq, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { students, teachers } from '@/db/schema';
@@ -26,7 +26,7 @@ export const runtime = 'nodejs';
  * only serves students cannot test passwords against staff accounts.
  *
  * Body: { role: 'student'|'teacher', username, password }
- *   student username = student_code OR email; teacher username = teacher_code.
+ *   username = student_code / teacher_code OR email (either audience).
  *
  * Never returns the password, the citizen id, or any token.
  */
@@ -168,9 +168,24 @@ async function verifyStudent(username: string, password: string): Promise<Verifi
 }
 
 async function verifyTeacher(username: string, password: string): Promise<VerifiedUser | null> {
-  const row = await db.query.teachers.findFirst({
-    where: eq(teachers.teacherCode, username),
-  });
+  // teacher_code matches as given (it is unique); email matches case-insensitively
+  // because it is stored raw — neither the create route nor the importer folds it.
+  // Unlimited fetch: `teachers.email` has an index but no UNIQUE constraint, so the
+  // match set can hold several rows and a LIMIT could hide the code match behind them.
+  const rows = await db
+    .select()
+    .from(teachers)
+    .where(
+      or(
+        eq(teachers.teacherCode, username),
+        sql`lower(${teachers.email}) = ${username.toLowerCase()}`,
+      ),
+    );
+
+  // A teacher_code hit always wins, so nobody can shadow another account's login by
+  // putting its code in their own email field. Falling back to the email match only
+  // when it is unambiguous: a shared address fails closed rather than picking a row.
+  const row = rows.find((r) => r.teacherCode === username) ?? (rows.length === 1 ? rows[0] : null);
   if (!row || row.isArchived || !row.passwordEncrypted) return null;
 
   let ok = false;

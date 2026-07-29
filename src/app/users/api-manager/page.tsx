@@ -346,6 +346,7 @@ POST ${BASE_PATH}/api/public/v1/auth/verify   # ตรวจรหัสผ่�
   -d '{"role":"teacher","username":"T00116","password":"…"}' \\
   "http://localhost:3002${BASE_PATH}/api/public/v1/auth/verify"
 
+# username = รหัสประจำตัว หรือ อีเมล ก็ได้ (ทั้งครูและนักเรียน)
 # ถูก  -> 200 {"valid":true,"user":{
 #           "code":"T00116","name":"…",
 #           "role":"teacher-admin","active":true,"status":"active"}}
