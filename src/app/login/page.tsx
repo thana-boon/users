@@ -17,6 +17,10 @@ function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
   const denied = params.get('denied') === '1';
+  // Set by SessionGuard when the idle window (or the 8h cap) ran out, so the
+  // sudden trip back to this page reads as "your session ended", not "you were
+  // kicked out for no reason".
+  const expired = params.get('expired') === '1';
   const next = params.get('next') || '/users';
 
   const [teacherCode, setTeacherCode] = useState('');
@@ -57,6 +61,13 @@ function LoginInner() {
             <div className="muted" style={{ fontSize: 13 }}>ข้อมูลนักเรียนและครู</div>
           </div>
         </div>
+
+        {expired && !denied && (
+          <div className="alert alert-warning" style={{ marginBottom: 16, fontSize: 13 }}>
+            หมดเวลาการใช้งาน — ระบบออกจากระบบให้อัตโนมัติเพราะไม่มีการใช้งานสักพัก
+            กรุณาเข้าสู่ระบบใหม่อีกครั้ง
+          </div>
+        )}
 
         {denied && (
           <div className="alert alert-error" style={{ marginBottom: 16, fontSize: 13 }}>

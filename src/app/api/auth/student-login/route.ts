@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { eq, or } from 'drizzle-orm';
 import { db } from '@/db';
 import { students } from '@/db/schema';
-import { signSession, SESSION_COOKIE, sessionCookieOptions } from '@/lib/jwt';
+import { issueSession } from '@/lib/jwt';
 import { decrypt, safeStrEqual } from '@/lib/crypto';
 import { badRequest, handleError } from '@/lib/http';
 import { checkLockout, registerFailure, clearFailures, rateLimit } from '@/lib/rate-limit';
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     clearFailures(`student:${id.toLowerCase()}`);
     // Students get a valid platform token but no `users:*` permission, so this
     // admin-only module rejects them (parity with the portal contract).
-    const token = await signSession({
+    const session = await issueSession({
       sub: row.studentCode,
       role: 'student',
       name: `${row.firstName} ${row.lastName}`.trim(),
@@ -94,10 +94,10 @@ export async function POST(req: NextRequest) {
     });
 
     const res = NextResponse.json({
-      token,
+      token: session.token,
       user: { id: row.id, role: 'student', studentCode: row.studentCode },
     });
-    res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(60 * 60 * 8));
+    session.apply(res.cookies);
     return res;
   } catch (err) {
     return handleError(err);

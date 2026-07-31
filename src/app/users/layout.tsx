@@ -3,8 +3,9 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { teachers } from '@/db/schema';
 import { getSession } from '@/lib/auth';
-import { hasPermission, USERS_WRITE, type SessionClaims } from '@/lib/jwt';
+import { hasPermission, sessionExpiresAt, USERS_WRITE, type SessionClaims } from '@/lib/jwt';
 import { AppShell } from '@/components/AppShell';
+import { SessionGuard } from '@/components/SessionGuard';
 import { ToastProvider } from '@/components/Toast';
 import { ConfirmProvider } from '@/components/Confirm';
 
@@ -62,6 +63,9 @@ export default async function UsersLayout({
   return (
     <ToastProvider>
       <ConfirmProvider>
+        {/* Seeded from the server so the countdown is right on first paint,
+            before any cookie has been read. */}
+        <SessionGuard expiresAt={sessionExpiresAt(session)} />
         <AppShell session={{ name: session.name ?? null, role: session.role, photoUrl, initial }}>
           {children}
         </AppShell>

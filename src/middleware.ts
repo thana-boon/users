@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifySession, hasPermission, USERS_WRITE, SESSION_COOKIE } from '@/lib/jwt';
+import {
+  verifySession,
+  hasPermission,
+  renewSession,
+  setSessionCookies,
+  USERS_WRITE,
+  SESSION_COOKIE,
+} from '@/lib/jwt';
 
 /**
  * Edge middleware - the first, fail-closed RBAC gate.
@@ -67,7 +74,16 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  const res = NextResponse.next();
+
+  // Idle timeout, activity half: every authenticated request through this
+  // module pushes the deadline back. renewSession() no-ops unless the session is
+  // past the halfway mark (so a page load's burst of requests re-signs once) and
+  // refuses to move the absolute cap. A browser left alone makes no requests, so
+  // its window simply runs out — which is the whole point.
+  const renewed = await renewSession(session);
+  if (renewed) setSessionCookies(res.cookies, renewed.token, renewed.claims);
+  return res;
 }
 
 export const config = {

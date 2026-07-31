@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { teachers } from '@/db/schema';
-import { signSession, SESSION_COOKIE, USERS_READ, USERS_WRITE, sessionCookieOptions } from '@/lib/jwt';
+import { issueSession, USERS_READ, USERS_WRITE } from '@/lib/jwt';
 import { decrypt, safeStrEqual } from '@/lib/crypto';
 import { badRequest, handleError } from '@/lib/http';
 import { checkLockout, registerFailure, clearFailures, rateLimit } from '@/lib/rate-limit';
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     // Session role is always `teacher`; a DB `teacher-admin` additionally carries
     // the `users:*` permissions this module's RBAC requires.
     const isAdmin = row.role === 'teacher-admin';
-    const token = await signSession({
+    const session = await issueSession({
       sub: row.teacherCode,
       role: 'teacher',
       name: `${row.firstName} ${row.lastName}`.trim(),
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     });
 
     const res = NextResponse.json({
-      token,
+      token: session.token,
       user: {
         id: row.id,
         role: row.role,
@@ -100,7 +100,9 @@ export async function POST(req: NextRequest) {
         name: `${row.firstName} ${row.lastName}`.trim(),
       },
     });
-    res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(60 * 60 * 8));
+    // Both the httpOnly token cookie and the readable expiry cookie the
+    // idle-timeout countdown reads (see SESSION_EXP_COOKIE).
+    session.apply(res.cookies);
     return res;
   } catch (err) {
     return handleError(err);
