@@ -1,108 +1,83 @@
 import type { NextRequest } from 'next/server';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { students } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
+import {
+  importPhotoFiles,
+  precheckNames,
+  MAX_PRECHECK_NAMES,
+  type PhotoImportSpec,
+} from '@/lib/services/photo-import';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const MAX_BYTES = 5 * 1024 * 1024;
-const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-
 /**
- * POST /api/users/students/photos   (multipart: files=<image>[, ...])
+ * POST /api/users/students/photos — bulk-attach student photos, matched by
+ * filename ("07822.jpg" -> student 07822). Two request shapes:
  *
- * Bulk-attach student photos by matching each file's name (minus extension) to
- * a student_code. e.g. "07822.jpg" -> student 07822. Reports matched / skipped
- * / unmatched. dryRun=true only reports (no writes).
+ *   application/json  { names: string[] }        precheck, no bytes, no writes
+ *   multipart         files=<image>[, ...]       the upload (dryRun optional)
+ *
+ * The client sends one precheck for the whole selection, then uploads only the
+ * matches in small batches — see components/PhotoImportDialog. Logic lives in
+ * lib/services/photo-import (shared with ครู/คนงาน).
  */
-interface PhotoIssue {
-  file: string;
-  studentCode: string;
-  reason: string;
-}
-
-/** Strip directory + extension, keep the code. Tolerates "07822 (1).jpg" etc. */
-function codeFromFilename(name: string): string {
-  const base = name.split(/[\\/]/).pop() ?? name;
-  const noExt = base.replace(/\.[^.]+$/, '');
-  return noExt.trim();
-}
+const spec: PhotoImportSpec = {
+  codeField: 'studentCode',
+  notFoundReason: 'ไม่พบรหัสนักเรียนนี้',
+  async lookup(codes) {
+    const rows = await db
+      .select({ id: students.id, code: students.studentCode })
+      .from(students)
+      .where(inArray(students.studentCode, codes));
+    return rows.map((r) => [r.code, r.id] as const);
+  },
+  async save(id, base64, mime) {
+    await db
+      .update(students)
+      .set({ photoBase64: base64, photoMime: mime })
+      .where(eq(students.id, id));
+  },
+};
 
 export async function POST(req: NextRequest) {
   const guard = await requireTeacherAdmin(req);
   if (!guard.ok) return guard.response;
   try {
+    if (req.headers.get('content-type')?.includes('application/json')) {
+      const body = (await req.json()) as { names?: unknown };
+      const names = Array.isArray(body.names)
+        ? body.names.filter((n): n is string => typeof n === 'string')
+        : [];
+      if (names.length === 0) return badRequest('กรุณาส่งรายชื่อไฟล์อย่างน้อย 1 รายการ');
+      if (names.length > MAX_PRECHECK_NAMES) {
+        return badRequest(`ตรวจได้สูงสุด ${MAX_PRECHECK_NAMES.toLocaleString()} ไฟล์ต่อครั้ง`);
+      }
+      return ok(await precheckNames(names, spec));
+    }
+
     const form = await req.formData();
     const dryRun = String(form.get('dryRun') ?? 'true').toLowerCase() === 'true';
     const files = form.getAll('files').filter((f): f is File => f instanceof File);
     if (files.length === 0) return badRequest('กรุณาแนบไฟล์รูปภาพอย่างน้อย 1 ไฟล์');
 
-    // Map each file to a student code up front.
-    const wanted = new Map<string, File>(); // code -> file (last one wins)
-    const issues: PhotoIssue[] = [];
-    for (const f of files) {
-      const code = codeFromFilename(f.name);
-      if (!code) {
-        issues.push({ file: f.name, studentCode: '-', reason: 'ชื่อไฟล์ว่าง' });
-        continue;
-      }
-      if (!ALLOWED.has(f.type)) {
-        issues.push({ file: f.name, studentCode: code, reason: 'ชนิดไฟล์ไม่รองรับ' });
-        continue;
-      }
-      if (f.size > MAX_BYTES) {
-        issues.push({ file: f.name, studentCode: code, reason: 'ไฟล์ใหญ่เกิน 5MB' });
-        continue;
-      }
-      wanted.set(code, f);
+    const report = await importPhotoFiles(files, spec, dryRun);
+    if (!dryRun) {
+      // One row per batch, not per photo — a 2000-photo import should read as a
+      // handful of entries, not bury the rest of the day's audit trail.
+      await recordAudit({
+        session: guard.session,
+        action: 'import',
+        targetType: 'student',
+        detail: `นำเข้ารูปนักเรียน ${report.committed} รูป (ข้าม ${report.skipped})`,
+        req,
+      });
     }
-
-    // Which codes exist?
-    const codes = [...wanted.keys()];
-    const found = codes.length
-      ? await db
-          .select({ id: students.id, studentCode: students.studentCode })
-          .from(students)
-          .where(inArray(students.studentCode, codes))
-      : [];
-    const codeToId = new Map(found.map((r) => [r.studentCode, r.id]));
-
-    const matched: string[] = [];
-    for (const code of codes) {
-      if (!codeToId.has(code)) {
-        issues.push({ file: wanted.get(code)!.name, studentCode: code, reason: 'ไม่พบรหัสนักเรียนนี้' });
-      } else {
-        matched.push(code);
-      }
-    }
-
-    const summary = { totalFiles: files.length, matched: matched.length, skipped: issues.length, dryRun };
-    if (dryRun) return ok({ ...summary, committed: 0, issues });
-
-    let committed = 0;
-    for (const code of matched) {
-      const f = wanted.get(code)!;
-      const buf = Buffer.from(await f.arrayBuffer());
-      await db
-        .update(students)
-        .set({ photoBase64: buf.toString('base64'), photoMime: f.type })
-        .where(inArray(students.id, [codeToId.get(code)!]));
-      committed++;
-    }
-
-    await recordAudit({
-      session: guard.session,
-      action: 'import',
-      targetType: 'student',
-      detail: `นำเข้ารูปนักเรียน ${committed} รูป (ข้าม ${issues.length})`,
-      req,
-    });
-
-    return ok({ ...summary, committed, issues });
+    return ok({ ...report, dryRun });
   } catch (err) {
     return handleError(err);
   }
