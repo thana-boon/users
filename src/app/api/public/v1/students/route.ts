@@ -19,7 +19,11 @@ export const runtime = 'nodejs';
  *
  * Deliberately excluded regardless of scope: password_encrypted (no integration
  * has a reason to read login credentials) and photo_base64 (would bloat every
- * page; fetch it per-student from the module's own photo route).
+ * page — a photo is ~100x a roster row). Photos have their own routes:
+ *   ./[id]/photo   one image, raw bytes, ETag-cached
+ *   ./photos?ids=  up to 50 at a time, base64
+ * both gated by the additive `students:photo` scope. `hasPhoto`/`photoUrl` here
+ * let a caller fetch only the students that actually have one.
  *
  * Query: ?yearId= ?grade= ?classroom= ?status= ?q= ?page= ?pageSize= (max 200)
  */
@@ -80,6 +84,9 @@ export async function GET(req: NextRequest) {
           classroom: enrollments.classroom,
           classNumber: enrollments.classNumber,
           citizenIdEncrypted: students.citizenIdEncrypted,
+          // `is not null` rather than the column itself: asking Postgres for the
+          // base64 text of a page of students is exactly the bloat this avoids.
+          hasPhoto: sql<boolean>`${students.photoBase64} is not null`,
         })
         .from(students)
         .innerJoin(enrollments, eq(enrollments.studentId, students.id))
@@ -100,6 +107,9 @@ export async function GET(req: NextRequest) {
       return {
         ...rest,
         fullName: `${r.prefix ?? ''}${r.firstName} ${r.lastName}`.trim(),
+        // Relative on purpose — the caller already knows the host it dialled,
+        // and this module can be mounted under a gateway prefix.
+        photoUrl: r.hasPhoto ? `/api/public/v1/students/${r.id}/photo` : null,
         ...(withPii ? { citizenId: tryDecrypt(citizenIdEncrypted) } : {}),
       };
     });

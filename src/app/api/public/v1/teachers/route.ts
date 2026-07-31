@@ -14,8 +14,10 @@ export const runtime = 'nodejs';
  * GET /api/public/v1/teachers — staff roster feed for other SchoolOS systems.
  *
  * Auth: `teachers:read`; เลขบัตร ปชช. needs the additive `teachers:pii`.
- * password_encrypted and photo_base64 are never returned (see the students
- * route for the reasoning).
+ * password_encrypted is never returned; photo_base64 is never returned *here*
+ * (see the students route for the reasoning) — photos come from ./[id]/photo or
+ * ./photos?ids= under the additive `teachers:photo` scope, and `hasPhoto`/
+ * `photoUrl` below say who has one.
  *
  * `role` is exposed because it is what sibling systems authorize against —
  * `teacher-admin` is the module's source of truth for who holds users:write.
@@ -74,6 +76,7 @@ export async function GET(req: NextRequest) {
           role: teachers.role,
           employmentStatus: teachers.employmentStatus,
           citizenIdEncrypted: teachers.citizenIdEncrypted,
+          hasPhoto: sql<boolean>`${teachers.photoBase64} is not null`,
         })
         .from(teachers)
         .where(where)
@@ -116,6 +119,7 @@ export async function GET(req: NextRequest) {
         ...rest,
         fullName: `${r.prefix ?? ''}${r.firstName} ${r.lastName}`.trim(),
         homerooms: homeroomsOf.get(r.id) ?? [],
+        photoUrl: r.hasPhoto ? `/api/public/v1/teachers/${r.id}/photo` : null,
         ...(withPii ? { citizenId: tryDecrypt(citizenIdEncrypted) } : {}),
       };
     });

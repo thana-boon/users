@@ -53,6 +53,16 @@ function deny(status: number, code: string, message: string): NextResponse {
 }
 
 /**
+ * The public surface's error envelope, `{ error: { code, message } }` — note
+ * this is NOT the `{ error: string }` shape that lib/http.ts returns for the
+ * admin UI's own API. Exported so routes can emit 400/404 in the same shape the
+ * guard uses.
+ */
+export function apiError(status: number, code: string, message: string): NextResponse {
+  return deny(status, code, message);
+}
+
+/**
  * Require a credential carrying `scope`.
  *
  * An API key is checked in this order — active → not revoked → not expired →
@@ -135,6 +145,15 @@ async function touchKey(id: number, ip: string | null): Promise<void> {
   } catch (err) {
     console.error('[apiauth] failed to record key usage', id, err);
   }
+}
+
+/**
+ * The standard 403 for an additive scope the actor is missing. Exported so the
+ * routes that gate on `:pii` / `:photo` *after* a successful `:read` guard all
+ * emit the same `insufficient_scope` shape callers already handle.
+ */
+export function insufficientScope(scope: ApiScope): NextResponse {
+  return deny(403, 'insufficient_scope', `API key นี้ไม่มีสิทธิ์ ${scope}`);
 }
 
 /** True if the actor may receive decrypted PII (needs the additive `:pii` scope). */

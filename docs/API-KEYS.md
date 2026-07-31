@@ -77,14 +77,17 @@ curl -H "X-API-Key: sk_live_xxxxxxxxxxxxxxxxxxxx" \
 |---|---|---|
 | `students:read` | อ่านรายชื่อนักเรียน (identity + ชั้น/ห้อง) | ไม่รวมข้อมูลอ่อนไหว |
 | `students:pii` | อ่าน **เลขบัตร ปชช.** นักเรียน | ต้องมี `students:read` ด้วย · ทุกครั้งถูก audit |
+| `students:photo` | ดึง **รูปนักเรียน** | ต้องมี `students:read` ด้วย |
 | `teachers:read` | อ่านรายชื่อครู | ไม่รวมข้อมูลอ่อนไหว |
 | `teachers:pii` | อ่าน **เลขบัตร ปชช.** ครู | ต้องมี `teachers:read` ด้วย · ทุกครั้งถูก audit |
+| `teachers:photo` | ดึง **รูปครู** | ต้องมี `teachers:read` ด้วย |
 | `auth:students` | ตรวจรหัสผ่าน**นักเรียน** (ล็อกอิน) | ผ่าน `/auth/verify` |
 | `auth:teachers` | ตรวจรหัสผ่าน**ครู** (ล็อกอิน) | ผ่าน `/auth/verify` |
 
 **หลักการสำคัญ:**
-- `:pii` เป็น **สิทธิ์เสริม (additive)** — ต้องมี `:read` คู่กันเสมอ ถึงจะได้เลขบัตร ปชช. กลับมาในผลลัพธ์
-- **รหัสผ่านและรูปภาพ (`password`, `photo_base64`) ไม่ถูกส่งกลับทุกกรณี** ไม่ว่ามี scope อะไร
+- `:pii` และ `:photo` เป็น **สิทธิ์เสริม (additive)** — ต้องมี `:read` คู่กันเสมอ
+- **รหัสผ่าน (`password`) ไม่ถูกส่งกลับทุกกรณี** ไม่ว่ามี scope อะไร
+- **รูปภาพไม่เคยติดมากับรายชื่อ** ไม่ว่ามี scope อะไร (จะทำให้ payload บวมมาก) — ต้องเรียก endpoint รูปแยกตามข้อ 5.5 / 5.6
 - `auth:students` / `auth:teachers` แยกกัน — ระบบที่ให้บริการเฉพาะนักเรียนจะทดสอบรหัสผ่านครูไม่ได้
 
 ---
@@ -158,7 +161,9 @@ curl -H "X-API-Key: sk_live_..." \
       "status": "studying",
       "gradeLevel": "ม.1",
       "classroom": "1",
-      "classNumber": 5
+      "classNumber": 5,
+      "hasPhoto": true,
+      "photoUrl": "/api/public/v1/students/123/photo"
     }
   ],
   "page": 1,
@@ -195,7 +200,10 @@ curl -H "X-API-Key: sk_live_..." \
       "subjectGroup": "คณิตศาสตร์",
       "gradeTaught": "ม.ปลาย",
       "role": "teacher-admin",
-      "employmentStatus": "active"
+      "employmentStatus": "active",
+      "homerooms": [{ "gradeLevel": "ม.1", "classroom": "1" }],
+      "hasPhoto": true,
+      "photoUrl": "/api/public/v1/teachers/7/photo"
     }
   ],
   "page": 1,
@@ -257,6 +265,84 @@ curl -X POST \
 
 **Rate limit:** ตรวจรหัสผิดของ username เดิมหลายครั้งจะถูกล็อกชั่วคราว คืนค่า `429 too_many_attempts` พร้อม header `Retry-After` (วินาที)
 
+### 5.5 รูปทีละคน — `GET /api/public/v1/students/{id}/photo`
+
+ต้องมี scope `students:read` **และ** `students:photo` (ครูใช้ `/teachers/{id}/photo` + `teachers:read` + `teachers:photo`)
+
+- `{id}` คือ **`id`** ที่ได้จากรายชื่อ (ไม่ใช่รหัสนักเรียน) — ในรายชื่อมี `photoUrl` ให้พร้อมใช้แล้ว
+- ตอบกลับเป็น **ไฟล์รูปดิบ** (`Content-Type: image/webp` ฯลฯ) ไม่ใช่ JSON — เอาไป `<img src>` หรือเซฟลงไฟล์ได้เลย
+- รูปทุกใบขนาด **480×640** (ระบบครอบตัดใบหน้าให้ตอนนำเข้า) ประมาณ 40–60 KB
+- รองรับ **ETag** — ส่ง `If-None-Match` กลับมาแล้วได้ `304 Not Modified` ถ้ารูปไม่เปลี่ยน เหมาะกับงาน sync ประจำ
+- `Cache-Control: private, max-age=300`
+
+```bash
+curl -H "X-API-Key: sk_live_..." \
+  -o 10234.webp \
+  https://schoolos.example.ac.th/api/public/v1/students/123/photo
+```
+
+| HTTP | code | ความหมาย |
+|---|---|---|
+| 404 | `not_found` | ไม่มีนักเรียน id นี้ |
+| 404 | `no_photo` | มีนักเรียน แต่ยังไม่ได้อัปโหลดรูป |
+
+> ใช้ `hasPhoto` จากรายชื่อกรองก่อน จะได้ไม่ต้องยิงเจอ 404
+
+### 5.6 รูปหลายคนพร้อมกัน — `GET /api/public/v1/students/photos?ids=1,2,3`
+
+ต้องมี scope เดียวกับข้อ 5.5 (ครูใช้ `/teachers/photos?ids=`)
+
+ใช้เมื่อต้อง **sync รูปทั้งโรงเรียน** — ยิงทีละคน 2000 ครั้งจะชน rate limit (600 req/นาที) แต่แบบนี้เหลือ ~40 ครั้ง
+
+- `ids` สูงสุด **50 รายการต่อครั้ง**
+- รูปมาในรูป **base64 data URL** (JSON บรรทุกไฟล์ดิบหลายไฟล์ไม่ได้) ใหญ่กว่าแบบดิบ ~33%
+- คนที่ไม่มีรูป / ไม่มี id นั้น จะอยู่ใน `missing`
+- **ทุกครั้งถูก audit** (1 บรรทัดต่อ 1 การเรียก)
+
+```bash
+curl -H "X-API-Key: sk_live_..." \
+  "https://schoolos.example.ac.th/api/public/v1/students/photos?ids=123,124,125"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": 123,
+      "studentCode": "10234",
+      "mime": "image/webp",
+      "etag": "\"k9Xq...\"",
+      "bytes": 48213,
+      "dataUrl": "data:image/webp;base64,UklGRi..."
+    }
+  ],
+  "missing": [124, 125],
+  "limit": 50
+}
+```
+
+**ตัวอย่าง sync ทั้งโรงเรียน (Node.js):**
+
+```js
+// 1) ดึงรายชื่อ เอาเฉพาะคนที่มีรูป
+const { data } = await getStudents('ม.1');
+const ids = data.filter((s) => s.hasPhoto).map((s) => s.id);
+
+// 2) ดึงรูปทีละ 50
+for (let i = 0; i < ids.length; i += 50) {
+  const chunk = ids.slice(i, i + 50).join(',');
+  const res = await fetch(`${BASE}/api/public/v1/students/photos?ids=${chunk}`, {
+    headers: { 'X-API-Key': API_KEY },
+  });
+  const { data: photos } = await res.json();
+  for (const p of photos) {
+    // p.etag เก็บไว้เทียบรอบหน้า จะได้ไม่ต้องโหลดซ้ำ
+    const b64 = p.dataUrl.split(',')[1];
+    fs.writeFileSync(`photos/${p.studentCode}.webp`, Buffer.from(b64, 'base64'));
+  }
+}
+```
+
 ---
 
 ## 6. รหัสข้อผิดพลาด (Error codes)
@@ -272,6 +358,9 @@ Error จะอยู่ในรูป `{ "error": { "code": "...", "message": 
 | 403 | `insufficient_scope` | key ไม่มี scope ที่ต้องใช้ | ให้แอดมินเพิ่ม scope |
 | 401 | `invalid_credentials` | (auth/verify) รหัสผู้ใช้/รหัสผ่านผิด | — |
 | 429 | `too_many_attempts` | (auth/verify) ลองบ่อยเกินไป | รอตาม `Retry-After` |
+| 400 | `invalid_id` | (รูป) id ไม่ใช่ตัวเลข | ใช้ `id` จากรายชื่อ ไม่ใช่รหัสนักเรียน |
+| 400 | `invalid_ids` | (รูปหลายคน) ไม่ได้ส่ง `ids` หรือเกิน 50 | แบ่งเป็นชุดละ 50 |
+| 404 | `not_found` / `no_photo` | (รูป) ไม่มีคนนี้ / คนนี้ยังไม่มีรูป | กรองด้วย `hasPhoto` ก่อน |
 
 ---
 
