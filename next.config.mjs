@@ -35,7 +35,7 @@ const nextConfig = {
       beforeFiles: [
         { source: `${basePath}/_next/:path*`, destination: '/_next/:path*' },
         { source: `${basePath}/api/:path*`, destination: '/api/:path*' },
-        { source: `${basePath}/icon.svg`, destination: '/icon.svg' },
+        { source: `${basePath}/icon.png`, destination: '/icon.png' },
         { source: `${basePath}/mediapipe/:path*`, destination: '/mediapipe/:path*' },
       ],
       afterFiles: loginAlias,

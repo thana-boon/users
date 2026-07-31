@@ -40,7 +40,7 @@ export async function middleware(req: NextRequest) {
     if (
       path.startsWith(`${base}/_next/`) ||
       path.startsWith(`${base}/mediapipe/`) ||
-      path === `${base}/icon.svg`
+      path === `${base}/icon.png`
     ) {
       return NextResponse.next(); // public static assets
     }

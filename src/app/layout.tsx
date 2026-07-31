@@ -11,12 +11,12 @@ const plexThai = IBM_Plex_Sans_Thai({
 });
 
 export const metadata: Metadata = {
-  title: 'SchoolOS · ข้อมูลนักเรียนและครู',
-  description: 'ระบบจัดการข้อมูลนักเรียนและครู โรงเรียนสุขนธีรวิทย์',
-  // In public/ + declared here (not the src/app/icon.svg convention, which
+  title: 'User - SchoolOS | โรงเรียนสุคนธรวิทย์',
+  description: 'ระบบจัดการข้อมูลนักเรียนและครู โรงเรียนสุคนธรวิทย์',
+  // In public/ + declared here (not the src/app/icon.png convention, which
   // hardcodes a root-relative href) so the URL can carry BASE_PATH behind the
   // gateway. See next.config.mjs.
-  icons: { icon: `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg` },
+  icons: { icon: `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.png` },
 };
 
 export const viewport = {
