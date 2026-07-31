@@ -126,12 +126,13 @@ curl -H "X-API-Key: sk_live_..." \
 |---|---|---|---|
 | 4.1 | `GET /me` | — | ตรวจว่า key ใช้ได้/มีสิทธิ์อะไร |
 | 4.2 | `GET /students` | `students:read` | ดึงรายชื่อนักเรียน |
-| 4.3 | `GET /teachers` | `teachers:read` | ดึงรายชื่อครู |
-| 4.4 | `GET /academic-years` | `years:read` | ดูปีการศึกษา + ช่วงภาคเรียน |
-| 4.5 | `GET /homerooms` | `teachers:read` | ดูครูประจำชั้นรายห้อง |
-| 4.6 | `GET /students/{id}/photo`<br>`GET /teachers/{id}/photo` | `*:read` + `*:photo` | แสดงรูปทีละคน |
-| 4.7 | `GET /students/photos?ids=`<br>`GET /teachers/photos?ids=` | `*:read` + `*:photo` | sync รูปจำนวนมาก |
-| 4.8 | `POST /auth/verify` | `auth:students` / `auth:teachers` | ให้ผู้ใช้ล็อกอินด้วยบัญชี SchoolOS |
+| 4.3 | `GET /students/{id}` | `students:read` | ดึงนักเรียน **รายคน** + ประวัติทุกปี — ไม่ผูกกับปีการศึกษา |
+| 4.4 | `GET /teachers` | `teachers:read` | ดึงรายชื่อครู |
+| 4.5 | `GET /academic-years` | `years:read` | ดูปีการศึกษา + ช่วงภาคเรียน |
+| 4.6 | `GET /homerooms` | `teachers:read` | ดูครูประจำชั้นรายห้อง |
+| 4.7 | `GET /students/{id}/photo`<br>`GET /teachers/{id}/photo` | `*:read` + `*:photo` | แสดงรูปทีละคน |
+| 4.8 | `GET /students/photos?ids=`<br>`GET /teachers/photos?ids=` | `*:read` + `*:photo` | sync รูปจำนวนมาก |
+| 4.9 | `POST /auth/verify` | `auth:students` / `auth:teachers` | ให้ผู้ใช้ล็อกอินด้วยบัญชี SchoolOS |
 
 ---
 
@@ -163,7 +164,7 @@ Endpoint เดียวที่ **ไม่ต้องมี scope** แล�
 
 | พารามิเตอร์ | ค่าเริ่มต้น | คำอธิบาย |
 |---|---|---|
-| `yearId` | ปีที่ active | id ปีการศึกษา (ได้จากข้อ 4.4) — **นี่คือตัวย้อนดูปีเก่า** |
+| `yearId` | ปีที่ active | id ปีการศึกษา (ได้จากข้อ 4.5) — **นี่คือตัวย้อนดูปีเก่า** |
 | `grade` | — | ชั้น เช่น `ม.1` (ต้องตรงเป๊ะ) |
 | `classroom` | — | ห้อง เช่น `1` |
 | `status` | `studying` | `studying` \| `withdrawn` \| `graduated` \| `all` |
@@ -227,7 +228,78 @@ Endpoint เดียวที่ **ไม่ต้องมี scope** แล�
 
 ---
 
-### 4.3 `GET /api/public/v1/teachers` — รายชื่อครู
+### 4.3 `GET /api/public/v1/students/{id}` — รายคน + ประวัติทุกปี
+
+**ใช้เมื่อคุณถือ `id` อยู่แล้ว แต่ไม่รู้ว่าเขาอยู่ปีไหน** — endpoint นี้ **ไม่ผูกกับปีการศึกษาเลย** ต่างจากข้อ 4.2 ที่ join กับ enrollment ของปีที่ถาม (นี่คือทางออกของกับดักข้อ 5.3)
+
+`{id}` คือ `id` จากข้อ 4.2 — **ไม่ใช่รหัสนักเรียน** · ไม่มี query parameter
+
+**Response**
+
+```json
+{
+  "data": {
+    "id": 123,
+    "studentCode": "10234",
+    "prefix": "เด็กชาย",
+    "firstName": "สมชาย",
+    "lastName": "ใจดี",
+    "fullName": "เด็กชายสมชาย ใจดี",
+    "nickname": "ชาย",
+    "firstNameEn": "Somchai",
+    "lastNameEn": "Jaidee",
+    "gender": "ชาย",
+    "birthDate": "01/05/2556",
+    "email": null,
+    "phone": null,
+    "status": "withdrawn",
+    "gradeLevel": null,
+    "classroom": null,
+    "classNumber": null,
+    "hasPhoto": true,
+    "photoUrl": "/api/public/v1/students/123/photo",
+    "exit": { "type": "ลาออก", "date": "12/08/2569", "yearId": 3, "year": 2569 },
+    "enrollments": [
+      { "yearId": 3, "year": 2569, "gradeLevel": "ม.1", "classroom": "1", "classNumber": "5" },
+      { "yearId": 2, "year": 2568, "gradeLevel": "ป.6", "classroom": "2", "classNumber": "11" }
+    ],
+    "academicYear": {
+      "id": 4, "year": 2570,
+      "startDate": "2027-05-16", "endDate": "2028-03-31",
+      "term1Start": "2027-05-16", "term1End": "2027-10-10",
+      "term2Start": "2027-11-01", "term2End": "2028-03-31"
+    }
+  }
+}
+```
+
+**ฟิลด์ที่ต่างจากข้อ 4.2**
+
+| ฟิลด์ | ความหมาย |
+|---|---|
+| `gradeLevel` / `classroom` / `classNumber` | ชั้น/ห้อง/เลขที่ **ของปีที่ active** (`academicYear` ด้านล่าง) — **`null` ถ้าปีนี้เขาไม่มี enrollment** ซึ่งคือกรณีของตัวอย่างข้างบน |
+| `enrollments[]` | **ประวัติครบทุกปี** เรียงปีใหม่→เก่า · `enrollments[0]` คือที่ล่าสุดที่เคยอยู่ (แม้จะไม่ใช่ปีปัจจุบัน) |
+| `exit` | ข้อมูลการออก — `null` ถ้ายังเรียนอยู่ |
+| `academicYear` | ปีที่ active ตอนนี้ — บอกว่า `gradeLevel` ด้านบนอ้างถึงปีไหน |
+
+ฟิลด์อื่นชื่อและความหมายตรงกับ row ในข้อ 4.2 ทุกตัว → **ใช้ mapper ตัวเดิมได้เลย**
+
+**สังเกตตัวอย่างข้างบน:** คนนี้ลาออกปี 2569 พอขึ้นปี 2570 เขาหายจากข้อ 4.2 ทุกแบบแม้ใส่ `status=all` แต่ที่นี่ยังเรียกได้ — และ `enrollments[0]` บอกว่าตอนออกอยู่ ม.1/1
+
+**ข้อควรรู้**
+
+| กรณี | ผลลัพธ์ |
+|---|---|
+| `id` ไม่ใช่ตัวเลข | `400 invalid_id` |
+| ไม่มีคนนี้ / **อยู่ในถังขยะ** | `404 not_found` — ถังขยะยังหายจากทุก endpoint ตามข้อ 5.4 |
+| ไม่เคยมี enrollment เลย | `enrollments: []` (ไม่ใช่ error) |
+| key มี `students:pii` | ได้ `citizenId` เพิ่ม + ถูกบันทึก audit เหมือนข้อ 4.2 |
+
+> **ไม่ส่ง `exitReason`** โดยตั้งใจ — เหตุผลการออกเป็น free text ที่อาจมีเรื่องครอบครัวเด็กอยู่ ระบบปลายทางที่ทำ reconcile ใช้แค่ `type`/`date`/`year` ก็พอ (PDPA)
+
+---
+
+### 4.4 `GET /api/public/v1/teachers` — รายชื่อครู
 
 **Query:** `yearId` (ใช้กับฟิลด์ `homerooms`), `subjectGroup`, `role` (`teacher` \| `teacher-admin`), `status` (`active` \| `resigned` \| `all`, default `active`), `q`, `page`, `pageSize` (สูงสุด 200)
 
@@ -262,7 +334,7 @@ Endpoint เดียวที่ **ไม่ต้องมี scope** แล�
 
 ---
 
-### 4.4 `GET /api/public/v1/academic-years` — ปฏิทินการศึกษา
+### 4.5 `GET /api/public/v1/academic-years` — ปฏิทินการศึกษา
 
 Scope `years:read` · ไม่มี PII · ไม่มี pagination (โรงเรียนหนึ่งมีไม่กี่ปี) · ปีที่ถูก archive ไม่ถูกส่งกลับ
 
@@ -292,7 +364,7 @@ Scope `years:read` · ไม่มี PII · ไม่มี pagination (โร�
 
 ---
 
-### 4.5 `GET /api/public/v1/homerooms` — ครูประจำชั้นรายห้อง
+### 4.6 `GET /api/public/v1/homerooms` — ครูประจำชั้นรายห้อง
 
 Scope `teachers:read` (ใช้ scope เดิม ไม่ต้องออก key ใหม่) · **Query:** `yearId`, `grade`, `classroom`
 
@@ -320,7 +392,7 @@ Scope `teachers:read` (ใช้ scope เดิม ไม่ต้องออ�
 
 ---
 
-### 4.6 รูปทีละคน — `GET /students/{id}/photo` · `GET /teachers/{id}/photo`
+### 4.7 รูปทีละคน — `GET /students/{id}/photo` · `GET /teachers/{id}/photo`
 
 Scope: `*:read` **และ** `*:photo`
 
@@ -341,9 +413,9 @@ Scope: `*:read` **และ** `*:photo`
 
 ---
 
-### 4.7 รูปหลายคนพร้อมกัน — `GET /students/photos?ids=1,2,3`
+### 4.8 รูปหลายคนพร้อมกัน — `GET /students/photos?ids=1,2,3`
 
-Scope เดียวกับ 4.6 · ครูใช้ `/teachers/photos?ids=`
+Scope เดียวกับ 4.7 · ครูใช้ `/teachers/photos?ids=`
 
 ใช้เมื่อต้อง sync รูปทั้งโรงเรียน: ยิงทีละคน 2000 ครั้งจะชน rate limit (600/นาที = รอ 4 นาทีเปล่า ๆ) แบบนี้เหลือ ~40 ครั้ง
 
@@ -365,7 +437,7 @@ Scope เดียวกับ 4.6 · ครูใช้ `/teachers/photos?ids=`
 
 ---
 
-### 4.8 `POST /api/public/v1/auth/verify` — ตรวจรหัสผ่าน (ล็อกอิน)
+### 4.9 `POST /api/public/v1/auth/verify` — ตรวจรหัสผ่าน (ล็อกอิน)
 
 Scope `auth:students` หรือ `auth:teachers` ตาม `role` ที่ส่งมา
 
@@ -454,13 +526,16 @@ if (!data.user.active) return null;  // ← ห้ามลืมบรรทั
 ```
 เด็กลาออกกลางปี 2569  → ยังมี enrollment ปี 2569 → ?status=all ยังหาเจอ ✅
 พอขึ้นปี 2570 (เขาไม่ถูกเลื่อนชั้น จึงไม่มี enrollment ปี 2570)
-                       → หายจาก API ทุกแบบ แม้ ?status=all ❌
-                       → ต้องถามย้อนด้วย ?yearId=<ปี 2569> เท่านั้น
+                       → หายจาก /students ทุกแบบ แม้ ?status=all ❌
+                       → ต้องถามย้อนด้วย ?yearId=<ปี 2569>
+                       → หรือถ้าถือ id อยู่: GET /students/{id} (ข้อ 4.3) ✅
 ```
 
-และตอนนี้ **ยังไม่มี endpoint สำหรับดูรายคนด้วย `id`** (มีแต่ `/photo`) แปลว่า ถ้าคุณถือ `id` ค้างไว้แต่ไม่รู้ว่าเขาออกปีไหน จะแปลง `id` กลับเป็นชื่อไม่ได้เลย
+**ถ้าคุณถือ `id` อยู่ เรื่องนี้จบที่ข้อ 4.3** — `GET /students/{id}` ไม่ผูกกับปีการศึกษา จึงแปลง `id` กลับเป็นชื่อได้เสมอ ไม่ต้องรู้ว่าเขาออกปีไหน และได้ `enrollments[]` ประวัติครบมาด้วย
 
-**ทางแก้ที่ควรทำในฝั่งคุณ:** เก็บ **snapshot ชื่อ + ชั้น/ห้อง + ปี** ไว้ในระบบตัวเองตอนที่ยัง sync ได้ อย่า resolve ชื่อสด ๆ ทุกครั้งสำหรับข้อมูลย้อนหลัง (คะแนนเก่า ใบเสร็จเก่า ฯลฯ)
+ที่ยัง**ไม่มี**ทางออกคือกรณี "ไม่มีทั้ง `id` และปี" เช่นถือแต่รหัสนักเรียนเก่า — `?q=` ค้นได้เฉพาะในปีที่ระบุ ต้องไล่ `yearId` ทีละปี
+
+**ยังควรทำในฝั่งคุณอยู่ดี:** เก็บ **snapshot ชื่อ + ชั้น/ห้อง + ปี** ตอนที่ sync สำหรับข้อมูลย้อนหลัง (คะแนนเก่า ใบเสร็จเก่า) — ข้อ 4.3 แก้ปัญหา "resolve ไม่ได้" แต่ไม่ได้กัน "ชื่อถูกแก้ทีหลัง" หรือ "ถูกย้ายเข้าถังขยะ" ใบเสร็จปี 2568 ควรพิมพ์ชื่อ ณ ปี 2568 ไม่ใช่ชื่อที่ resolve สดวันนี้
 
 ### 5.4 ถังขยะ (archive) — อันนี้ **หายจริง**
 
@@ -473,7 +548,7 @@ if (!data.user.active) return null;  // ← ห้ามลืมบรรทั
 
 ### 5.5 ครูลาออก
 
-ตรรกะเดียวกับนักเรียน: `employmentStatus` เปลี่ยนเป็น `resigned` แถวยังอยู่ แต่หายจาก default `status=active` — และ **ยังล็อกอินผ่านได้พร้อม `active:false`** (ดูข้อ 4.8)
+ตรรกะเดียวกับนักเรียน: `employmentStatus` เปลี่ยนเป็น `resigned` แถวยังอยู่ แต่หายจาก default `status=active` — และ **ยังล็อกอินผ่านได้พร้อม `active:false`** (ดูข้อ 4.9)
 
 ### 5.6 ตารางสรุป
 
@@ -481,7 +556,7 @@ if (!data.user.active) return null;  // ← ห้ามลืมบรรทั
 |---|---|---|---|---|
 | เลื่อนชั้น | คงเดิม | ได้ | ✅ | ปกติ (ชั้น/ห้องเปลี่ยน) |
 | ลาออก/จบ (ปีปัจจุบัน) | คงเดิม | ได้ (`active:false`) | ❌ | `?status=all` |
-| ลาออก/จบ (ข้ามปีไปแล้ว) | คงเดิม | ได้ (`active:false`) | ❌ | ต้องระบุ `?yearId=` ปีที่ออก |
+| ลาออก/จบ (ข้ามปีไปแล้ว) | คงเดิม | ได้ (`active:false`) | ❌ | `GET /students/{id}` หรือระบุ `?yearId=` ปีที่ออก |
 | ย้ายเข้าถังขยะ | คงเดิมใน DB | **ไม่ได้** | ❌ | **หาไม่เจอ** |
 | ลบถาวร | **หาย** | ไม่ได้ | ❌ | หาไม่เจอถาวร |
 
@@ -527,7 +602,25 @@ for (const local of await myStudents())
   if (!seen.has(local.schoolosId)) await markInactive(local); // ← ไม่ลบทิ้ง
 ```
 
-### 6.2 ย้อนดูว่าปีที่แล้วเด็กคนนี้อยู่ชั้นไหน ห้องไหน
+### 6.2 ย้อนดูประวัติชั้น/ห้องของเด็กคนหนึ่ง
+
+**ถ้าคุณมี `id` อยู่แล้ว — คำขอเดียวจบ ได้ครบทุกปี** (ข้อ 4.3)
+
+```js
+const { data: s } = await (await fetch(
+  `${BASE}/api/public/v1/students/${id}`, { headers: h }
+)).json();
+
+for (const e of s.enrollments)                       // เรียงปีใหม่ → เก่าให้แล้ว
+  console.log(e.year, e.gradeLevel, e.classroom, e.classNumber);
+// 2569 ม.1 1 5
+// 2568 ป.6 2 11
+
+const y2568 = s.enrollments.find((e) => e.year === 2568);   // เจาะปีเดียว
+console.log(s.fullName, y2568?.gradeLevel);                  // ← ใช้ได้แม้เขาออกไปแล้ว
+```
+
+**ถ้ามีแต่รหัสนักเรียน** (ไม่มี `id`) ต้องค้นในปีที่เขายังอยู่ เพราะ `?q=` ผูกกับปี
 
 ```js
 // 1) หา id ของปีที่ต้องการ
@@ -543,7 +636,7 @@ const hit = data.find((s) => s.studentCode === 'ST00123');
 console.log(hit?.gradeLevel, hit?.classroom, hit?.classNumber); // ม.2 / 2 / 11
 ```
 
-> อยากได้ประวัติทั้งหมดของคนเดียว ต้องวนถามทีละปี (ยังไม่มี endpoint ประวัติรายคน — ดูข้อ 8)
+> ได้ `hit.id` มาแล้วให้ **เก็บไว้** — ครั้งต่อไปใช้วิธีแรก ไม่ต้องเดาปีอีก
 
 ### 6.3 ล็อกอินผู้ใช้
 
@@ -641,9 +734,9 @@ Error ของ public API อยู่ในรูป **`{ "error": { "code": "
 
 | ยังไม่มี | ผลกระทบ | ทางเลี่ยงตอนนี้ |
 |---|---|---|
-| `GET /students/{id}` (รายคน) | แปลง `id` เป็นชื่อไม่ได้ ถ้าคนนั้นไม่มี enrollment ในปีที่ถาม | เก็บ snapshot ชื่อไว้ฝั่งคุณ |
-| ประวัติการเรียนรายคน | ต้องวนถามทีละปี | ข้อ 6.2 ทำซ้ำทุกปี |
-| Endpoint ศิษย์เก่าใน public API | คนที่ออกไปแล้วข้ามปี หาจาก API ปกติไม่เจอ | ระบุ `?yearId=` ปีที่ออก |
+| `GET /teachers/{id}` (รายคน) | ฝั่งครูยังไม่มีคู่ของข้อ 4.3 — ครูที่ลาออกแล้วต้องใช้ `?status=all` | `GET /teachers?status=all` |
+| ค้น**รายคน**ด้วยรหัสนักเรียนข้ามปี | `?q=` ผูกกับปีเสมอ ถ้ามีแต่รหัสเก่าไม่มี `id` ต้องไล่ทีละปี | ข้อ 6.2 ท่อนหลัง แล้วเก็บ `id` ไว้ |
+| Endpoint ศิษย์เก่า (list) ใน public API | ดึง "ทุกคนที่ออกไปแล้ว" เป็นชุดไม่ได้ — รายคนใช้ข้อ 4.3 ได้แล้ว | ระบุ `?yearId=` ปีที่ออก |
 | Webhook / event แจ้งเตือน | ต้อง poll เอง | ตั้ง cron sync (แนะนำวันละครั้ง + หลังเลื่อนชั้น) |
 | ข้อมูลคนงาน (workers) ใน public API | ดึงไม่ได้ | — |
 | ฟิลด์ที่อยู่ / ผู้ปกครอง / สุขภาพ | ไม่เปิดผ่าน public API โดยตั้งใจ (PDPA) | — |
@@ -657,8 +750,8 @@ Error ของ public API อยู่ในรูป **`{ "error": { "code": "
 - [ ] ขอ scope **เท่าที่ใช้** — ไม่ต้องใช้เลขบัตร ปชช. ก็อย่าขอ `:pii`
 - [ ] ผูกข้อมูลด้วย **`id`** ไม่ใช่ชื่อหรือชั้น/ห้อง
 - [ ] sync ด้วย `status=all` แล้วกรองเอง และ **mark inactive แทนการลบ**
-- [ ] เก็บ **snapshot ชื่อ/ชั้น/ห้อง + ปีการศึกษา** สำหรับข้อมูลย้อนหลัง
-- [ ] `/auth/verify` — เช็ค **`data.user.active`** ทุกครั้ง และ map สิทธิ์จาก `role`
+- [ ] เก็บ **snapshot ชื่อ/ชั้น/ห้อง + ปีการศึกษา** สำหรับข้อมูลย้อนหลัง — ถึงจะ resolve ย้อนหลังได้ด้วยข้อ 4.3 แต่ snapshot กัน "ชื่อถูกแก้ทีหลัง" ซึ่ง API กันให้ไม่ได้
+- [ ] `/auth/verify` — เช็ค **`user.active`** ทุกครั้ง และ map สิทธิ์จาก `role`
 - [ ] จัดการ `429` ด้วย backoff ตาม `Retry-After` (ทั้ง `rate_limited` และ `too_many_attempts`)
 - [ ] ตั้งชื่อ key ให้สื่อความหมาย — audit log บันทึกเป็น `apikey:<ชื่อ key>` ทุกครั้งที่อ่าน PII หรือมีการล็อกอิน
 - [ ] ถ้า key รั่ว แจ้งแอดมิน **Rotate ทันที** (key เดิมตายทันที)

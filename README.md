@@ -142,6 +142,7 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 /api/users/teachers/{export,template,import,[id],[id]/reveal}
 
 /api/public/v1/{me,students,teachers,academic-years,homerooms,auth/verify}
+/api/public/v1/students/[id]   รายคน + ประวัติทุกปี (ไม่ผูกกับปีการศึกษา)
 /api/public/v1/{students,teachers}/{[id]/photo,photos}
 ```
 
