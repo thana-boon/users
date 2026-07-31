@@ -91,6 +91,9 @@ export const IconWorker = (p: SVGProps<SVGSVGElement>) => (
 export const IconHistory = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} aria-hidden><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></svg>
 );
+export const IconDatabase = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></svg>
+);
 export const IconKey = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} aria-hidden><circle cx="7.5" cy="15.5" r="4.5" /><path d="m10.7 12.3 8.3-8.3" /><path d="m17 5 3 3" /><path d="m14 8 3 3" /></svg>
 );

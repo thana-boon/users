@@ -17,10 +17,16 @@ const ACTION_LABEL: Record<string, string> = {
   assign_homeroom: 'กำหนดครูประจำชั้น',
   create_api_key: 'สร้าง API key', reveal_api_key: 'ดู API key',
   rotate_api_key: 'สร้างรหัส API ใหม่', revoke_api_key: 'ปิดใช้งาน API key',
+  backup: 'สำรองข้อมูล', restore_backup: 'กู้คืนข้อมูลทั้งระบบ',
+  download_backup: 'ดาวน์โหลดไฟล์สำรอง', upload_backup: 'อัปโหลดไฟล์สำรอง',
+  delete_backup: 'ลบไฟล์สำรอง',
 };
 // Actions that disclosed sensitive data — highlighted amber in the table.
 const REVEAL = new Set([
   'reveal_password', 'reveal_citizen_id', 'reveal_income', 'reveal_api_key',
+  // A dump leaving the server is the largest disclosure this module allows —
+  // every record, every เลขบัตร, in one file.
+  'download_backup',
 ]);
 
 export default function AuditPage() {

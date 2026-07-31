@@ -17,6 +17,11 @@ export function notFound(message = 'ไม่พบข้อมูลที่�
   return NextResponse.json({ error: message }, { status: 404 });
 }
 
+/** The request was fine, the server just cannot do it right now (e.g. busy). */
+export function conflict(message: string) {
+  return NextResponse.json({ error: message }, { status: 409 });
+}
+
 export function serverError(message = 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง') {
   return NextResponse.json({ error: message }, { status: 500 });
 }

@@ -36,7 +36,12 @@ export type AuditAction =
   | 'create_api_key'
   | 'revoke_api_key'
   | 'rotate_api_key'
-  | 'api_read';
+  | 'api_read'
+  | 'backup'
+  | 'restore_backup'
+  | 'download_backup'
+  | 'upload_backup'
+  | 'delete_backup';
 
 export interface AuditInput {
   session: SessionClaims | null;
@@ -50,7 +55,8 @@ export interface AuditInput {
     | 'homeroom'
     | 'promotion'
     | 'auth'
-    | 'api_key';
+    | 'api_key'
+    | 'backup';
   targetId?: number | null;
   targetLabel?: string | null;
   detail?: string | null;

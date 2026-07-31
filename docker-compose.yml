@@ -22,6 +22,20 @@ services:
     container_name: schoolos-users-migrate
     environment:
       DATABASE_URL: ${DATABASE_URL_INTERNAL:?set DATABASE_URL_INTERNAL in .env}
+    # Also fixes up the backup folder's ownership on the way past. Docker creates
+    # a missing bind-mount target as root, but the app runs as uid 1001 and could
+    # not then write tonight's backup into it. This container runs as root, and
+    # `app` already gates on it, so it is the one place that can do this without
+    # adding another service to the deploy path (a lesson learned from the
+    # bootstrap service that once took the whole stack down).
+    # `|| true`: a chown failure must never block the deploy — the app reports an
+    # unwritable folder on its backups page instead.
+    volumes:
+      - ${BACKUP_DIR_HOST:-./backups}:/app/backups
+    command:
+      - sh
+      - -c
+      - "chown -R 1001:1001 /app/backups || true; npx drizzle-kit push --force"
     networks:
       - school-net
     # The DB lives outside this stack, so we cannot depends_on its health.
@@ -52,7 +66,6 @@ services:
       DATABASE_URL: ${DATABASE_URL_INTERNAL:?set DATABASE_URL_INTERNAL in .env}
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       # Secure-by-default: the session cookie gets the Secure flag unless you
       # explicitly opt out. Set COOKIE_SECURE=false in .env ONLY for plain-HTTP
       # LAN access (http://<ip>:3002) — never on an HTTPS/internet-facing deploy.
@@ -67,10 +80,32 @@ services:
       SEED_ADMIN_CODE: ${SEED_ADMIN_CODE:-}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
       SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-ผู้ดูแล ระบบ}
+      # Session: logged out after SESSION_IDLE_MINUTES of no activity, and in any
+      # case SESSION_ABSOLUTE_HOURS after logging in. Activity slides the first
+      # one forward; nothing slides the second.
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-30}
+      SESSION_ABSOLUTE_HOURS: ${SESSION_ABSOLUTE_HOURS:-8}
+      # Container clock. Drives the timestamps in backup FILENAMES and in server
+      # logs; the nightly run time is pinned separately by BACKUP_TZ so the two
+      # cannot disagree about when midnight is.
+      TZ: ${TZ:-Asia/Bangkok}
+      # Nightly database backup (src/lib/backup-schedule.ts).
+      BACKUP_DIR: /app/backups
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-on}
+      BACKUP_TIME: ${BACKUP_TIME:-00:00}
+      BACKUP_TZ: ${BACKUP_TZ:-Asia/Bangkok}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
     networks:
       - school-net
     ports:
       - "3002:3002"
+    # Backups live on the HOST, not in the container: they survive
+    # `docker compose down`, an image rebuild, and a wiped container, and the
+    # school's admin can copy them to a NAS or a USB stick without Docker.
+    # Point BACKUP_DIR_HOST at a bigger disk if ./backups is tight — 14 nightly
+    # dumps of a database with photos in it is the size to plan for.
+    volumes:
+      - ${BACKUP_DIR_HOST:-./backups}:/app/backups
 
   # One-shot bulk seed: loads .example/*.xlsx into the DB (teachers + students).
   # The Excel files are PII and live NEITHER in git NOR the image — they are

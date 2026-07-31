@@ -14,6 +14,10 @@ next-env.d.ts
 /.example/*.xlsx
 /.example/*.csv
 
+# database backups — the whole school's records, taken nightly by the app
+# (src/lib/backup.ts). Default BACKUP_DIR_HOST; these never belong in git.
+/backups
+
 # mediapipe wasm runtime — staged from node_modules by scripts/copy-mediapipe.mjs
 # (~22MB of binaries; the .tflite model beside it IS committed)
 /public/mediapipe/wasm
