@@ -109,6 +109,16 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 - Middleware (edge) verify token แบบ **fail-closed** และรับเฉพาะ `teacher-admin` บน `/users/**` และ `/api/users/**`.
 - Login API สาธารณะสำหรับนักเรียน/ครู (`/api/auth/{student,teacher}-login`) — decrypt แล้วเทียบรหัสผ่าน,
   มี rate-limit + lockout, ออก JWT ตาม role จริง. token `teacher`/`student` ผ่าน login ได้แต่ถูกโมดูลนี้ปฏิเสธ.
+- **Session timeout 2 ชั้น** (`src/lib/jwt.ts`):
+  - `SESSION_IDLE_MINUTES` (ค่าเริ่มต้น **30**) — ไม่มีการใช้งานเกินนี้ = หลุดออกจากระบบ.
+    ทุก request ที่ผ่าน middleware จะ **เลื่อนเวลาออกไปให้เอง** (re-sign เมื่อเลยครึ่งทาง)
+    ดังนั้นระหว่างที่ทำงานอยู่จริงจะไม่หลุด.
+  - `SESSION_ABSOLUTE_HOURS` (ค่าเริ่มต้น **8**) — เพดานนับจากตอน login ครั้งแรก
+    (claim `login_at`) ไม่มีอะไรต่ออายุข้ามเพดานนี้ได้.
+  - เบราว์เซอร์นับถอยหลังจาก cookie `schoolos_session_exp` (อ่านได้ด้วย JS, ไม่ใช่ credential)
+    แล้วเตือนก่อนหมดเวลา 2 นาที พร้อมปุ่ม "อยู่ต่อ" → `POST /api/auth/refresh`
+    (`src/components/SessionGuard.tsx`). ตั้งใจ**ไม่ให้ poll เซิร์ฟเวอร์เพื่อเช็กเวลา** —
+    การถามเซิร์ฟเวอร์ก็นับเป็น activity เสียเอง session จึงจะไม่มีวันหมดอายุ.
 
 ---
 
@@ -123,12 +133,20 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 /users/teachers/[id]           รายละเอียด/แก้ไข/เปลี่ยน role/reveal
 /users/academic-years          ตั้งปีปัจจุบัน / เก็บถาวร (soft-delete)
 /users/audit                   บันทึกการใช้งาน (audit log)
+/users/backups                 สำรอง/กู้คืนข้อมูลทั้งฐานข้อมูล
 
-/api/auth/{student-login,teacher-login,logout,session}
+/api/auth/{student-login,teacher-login,logout,session,refresh}
 /api/users/{students,teachers,academic-years,dashboard,meta,audit}
+/api/users/backups/{,upload,[file],[file]/restore}
 /api/users/students/{export,template,import,[id],[id]/reveal}
 /api/users/teachers/{export,template,import,[id],[id]/reveal}
+
+/api/public/v1/{me,students,teachers,academic-years,homerooms,auth/verify}
+/api/public/v1/{students,teachers}/{[id]/photo,photos}
 ```
+
+> `/api/public/v1/*` คือ public API สำหรับระบบอื่น (M2M ด้วย API Key) —
+> คู่มือฉบับเต็ม (ออก key, endpoint, วงจรชีวิตข้อมูล, ตัวอย่างโค้ด): **[docs/API.md](docs/API.md)**
 
 ---
 
@@ -140,6 +158,41 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 - ครู: `Password` ใน CSV เป็น plain text → **encrypt ตอน import**; นำเข้าใหม่เป็น `role=teacher` เสมอ
   (การเลื่อนเป็น teacher-admin ทำผ่าน UI). หมายเหตุ: สคริปต์ `npm run seed:teachers` ตั้ง
   `T00116` และ `T00241` เป็น `teacher-admin` ให้อัตโนมัติ (ที่เหลือเป็น `teacher`).
+
+---
+
+## สำรอง / กู้คืนข้อมูล (`/users/backups`)
+
+ทั้งโมดูลอยู่ในฐานข้อมูล Postgres ชุดเดียว (รวมรูปภาพ ซึ่งเก็บเป็น base64 ในตาราง)
+ดังนั้น **`pg_dump` ของฐานข้อมูลนั้น = ไฟล์สำรองทั้งระบบ** ไม่มีที่เก็บอื่นที่ต้องซิงก์ตาม
+โค้ดอยู่ที่ `src/lib/backup.ts` + `src/lib/backup-schedule.ts`
+
+- **อัตโนมัติทุกเที่ยงคืน** (`BACKUP_TIME`/`BACKUP_TZ`) ตั้งเวลาในโปรเซสของแอปเอง
+  (`src/instrumentation.ts`) — จงใจไม่แยกเป็น service/cron container เพราะ (1) ปุ่ม
+  "สำรองทันที" กับงานตอนเที่ยงคืนจะได้วิ่งโค้ดเดียวกัน (2) ไม่ต้องแจก DB credential เพิ่ม
+  (3) งานสำรองที่ล้มเหลว**ต้องไม่ทำให้ deploy ทั้ง stack ล่ม** (บทเรียนจาก `seed-admin` เดิม)
+- **เก็บ 14 ไฟล์** (`BACKUP_KEEP`) — คืนที่ 15 ลบไฟล์เก่าสุดทิ้งอัตโนมัติ
+  ไฟล์แต่ละประเภท (อัตโนมัติ / สำรองเอง / ก่อนกู้คืน) นับแยกกัน ส่วนไฟล์**ที่อัปโหลดเข้ามาไม่ถูกลบอัตโนมัติ**
+- **ไฟล์อยู่บนดิสก์ของ server** ผ่าน bind mount (`BACKUP_DIR_HOST` → `BACKUP_DIR`)
+  จึงอยู่รอดแม้ลบ/สร้าง container ใหม่ และ copy ไป NAS/USB ได้ตรง ๆ
+- **กู้คืน** ใช้ `pg_restore --clean --if-exists --single-transaction` —
+  ลงครบทั้งหมดหรือไม่ก็ **rollback กลับเป็นเหมือนเดิมทั้งหมด** ไม่มีสภาพค้างครึ่ง ๆ กลาง ๆ
+  และระบบจะ**สำรองข้อมูลชุดปัจจุบันไว้ก่อนเสมอ** (ประเภท `prerestore`) เผื่อกู้ผิดไฟล์
+- **ตรวจไฟล์ก่อนใช้** — ทั้งตอนอัปโหลดและก่อนกู้คืน จะเช็ก magic bytes `PGDMP`
+  แล้วรัน `pg_restore --list` (อ่าน TOC อย่างเดียว ไม่แตะฐานข้อมูล)
+- ทุกการสำรอง / กู้คืน / ดาวน์โหลด / อัปโหลด / ลบ ถูกบันทึกใน audit log
+  (`download_backup` ถูกไฮไลต์เหมือน reveal เพราะไฟล์เดียวมี PII ครบทั้งโรงเรียน)
+
+> **ต้องมี `pg_dump`/`pg_restore` ใน image** — Dockerfile ติดตั้ง `postgresql16-client`
+> ให้แล้ว (เวอร์ชันต้องตรงกับ server `postgres:16`) ถ้าอัปเกรดจาก image เก่าต้อง
+> `docker compose up -d --build` ไม่ใช่แค่ restart
+>
+> **สิทธิ์โฟลเดอร์** — แอปรันด้วย uid 1001 แต่ Docker สร้าง bind mount ใหม่เป็นของ root
+> compose จึงให้ service `migrate` (ซึ่งรันเป็น root และ `app` รออยู่แล้ว) `chown` ให้ก่อน
+> ถ้ายังเขียนไม่ได้ หน้าเว็บจะขึ้นคำสั่งที่ต้องรันให้เลย
+>
+> **`FIELD_ENCRYPTION_KEY`** — เลขบัตร/รหัสผ่านในไฟล์สำรองถูกเข้ารหัสด้วยคีย์นี้
+> ต้องเก็บคีย์ไว้**แยกจากไฟล์สำรอง** และต้องใช้คีย์เดิมตอนกู้คืน มิฉะนั้นข้อมูลถอดรหัสไม่ได้
 
 ---
 
