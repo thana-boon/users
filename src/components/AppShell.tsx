@@ -28,6 +28,48 @@ import {
 interface SessionInfo {
   name: string | null;
   role: string;
+  /** Photo endpoint for the signed-in user, or null when they have no photo. */
+  photoUrl: string | null;
+  /** First character of their ชื่อจริง — the fallback when there is no photo. */
+  initial: string;
+}
+
+/**
+ * The signed-in user in the navbar: their photo, or the first letter of their
+ * first name on the same gold tile as the SchoolOS mark, so the header reads as
+ * one thing whether or not a photo exists.
+ *
+ * `onError` matters because `photoUrl` is resolved when the layout renders, and
+ * the layout does NOT re-render on client-side navigation — deleting your own
+ * photo would otherwise leave a broken image in the corner until a full reload.
+ */
+function Avatar({ photoUrl, initial, name }: { photoUrl: string | null; initial: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  const showPhoto = photoUrl !== null && !failed;
+
+  return (
+    <div
+      title={name}
+      style={{
+        width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+        background: 'var(--skdw-gold)', color: 'var(--skdw-dark)',
+        display: 'grid', placeItems: 'center',
+        fontWeight: 700, fontSize: 15, lineHeight: 1,
+        border: '1.5px solid rgba(255,255,255,0.55)',
+      }}
+    >
+      {showPhoto ? (
+        <img
+          src={withBase(photoUrl)}
+          alt={name}
+          onError={() => setFailed(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : (
+        <span aria-hidden>{initial || '?'}</span>
+      )}
+    </div>
+  );
 }
 
 type Leaf = { href: string; label: string; Icon: typeof IconDashboard; exact?: boolean };
@@ -139,9 +181,18 @@ export function AppShell({
           >
             <IconShield width={13} height={13} /> ผู้ดูแล
           </span>
-          <span style={{ fontSize: 13, opacity: 0.9 }} className="hide-mobile">
-            {session.name ?? 'ผู้ดูแลระบบ'}
-          </span>
+          <div className="row" style={{ gap: 8 }}>
+            <Avatar
+              photoUrl={session.photoUrl}
+              initial={session.initial}
+              name={session.name ?? 'ผู้ดูแลระบบ'}
+            />
+            {/* The avatar stays on mobile — it is the one thing that still says
+                who is signed in once the name is hidden. */}
+            <span style={{ fontSize: 13, opacity: 0.9 }} className="hide-mobile">
+              {session.name ?? 'ผู้ดูแลระบบ'}
+            </span>
+          </div>
           <button className="btn btn-sm btn-ghost" onClick={logout} style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.4)' }}>
             <IconLogout width={16} height={16} /> <span className="hide-mobile">ออกจากระบบ</span>
           </button>
