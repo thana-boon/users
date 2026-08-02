@@ -66,7 +66,11 @@ export function SessionGuard({ expiresAt }: { expiresAt: number }) {
     fetch(withBase('/api/auth/logout'), { method: 'POST', keepalive: true })
       .catch(() => {})
       .finally(() => {
-        window.location.href = withBase('/users/login?expired=1');
+        // NOT withBase(): that is for API/asset/public-file paths, which the
+        // gateway delivers prefixed and next.config's beforeFiles rewrites strip
+        // again. PAGE routes genuinely live at /users/*, so prefixing this one
+        // would ask for /users/users/login — a 404 with no route behind it.
+        window.location.href = '/users/login?expired=1';
       });
   }, []);
 
