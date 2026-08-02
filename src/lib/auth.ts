@@ -1,34 +1,39 @@
 import { cookies, headers } from 'next/headers';
 import type { NextRequest } from 'next/server';
-import { verifySession, SESSION_COOKIE, type SessionClaims } from './jwt';
+import { readPlatformSession, type ResolvedSession, type SessionClaims } from './jwt';
 
 /**
- * Read the session two ways so both browser (cookie) and API clients
- * (Authorization: Bearer) work. Everything fails closed to null.
+ * Reading "who is signed in" from a Server Component or a Route Handler.
+ *
+ * Both are thin wrappers over readPlatformSession(), which is the single place
+ * that decides — it accepts this app's own cookie, the cross-service
+ * `sso_session` written when the user signed in through another SchoolOS
+ * service, or an `Authorization: Bearer` token for API clients. Everything fails
+ * closed to null.
+ *
+ * The `resolved*` variants additionally say WHERE the token came from; callers
+ * that only need the claims should use getSession() / getSessionFromRequest().
  */
 
-function bearer(header: string | null): string | undefined {
-  if (!header) return undefined;
-  const m = header.match(/^Bearer\s+(.+)$/i);
-  return m ? m[1] : undefined;
-}
-
 /** For Route Handlers / middleware that hold a NextRequest. */
-export async function getSessionFromRequest(
+export async function resolveSessionFromRequest(
   req: NextRequest,
-): Promise<SessionClaims | null> {
-  const token =
-    req.cookies.get(SESSION_COOKIE)?.value ??
-    bearer(req.headers.get('authorization'));
-  return verifySession(token);
+): Promise<ResolvedSession | null> {
+  return readPlatformSession(req.cookies, req.headers.get('authorization'));
 }
 
 /** For Server Components / Server Actions. */
+export async function resolveSession(): Promise<ResolvedSession | null> {
+  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+  return readPlatformSession(cookieStore, headerStore.get('authorization'));
+}
+
+export async function getSessionFromRequest(
+  req: NextRequest,
+): Promise<SessionClaims | null> {
+  return (await resolveSessionFromRequest(req))?.session ?? null;
+}
+
 export async function getSession(): Promise<SessionClaims | null> {
-  const cookieStore = await cookies();
-  const headerStore = await headers();
-  const token =
-    cookieStore.get(SESSION_COOKIE)?.value ??
-    bearer(headerStore.get('authorization'));
-  return verifySession(token);
+  return (await resolveSession())?.session ?? null;
 }

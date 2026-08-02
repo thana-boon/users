@@ -1,124 +1,62 @@
-'use client';
-
-import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { withBase } from '@/lib/client';
+import { redirect } from 'next/navigation';
+import { getSession } from '@/lib/auth';
+import { hasPermission } from '@/lib/jwt';
+import { USERS_WRITE } from '@/lib/permissions';
+import LoginForm from './LoginForm';
 
 /**
- * Login screen for this module — local login only (no external SSO).
+ * Login screen for this module — SSO-aware.
  *
- * A real credential form: รหัสครู (teacher_code) + password ->
- * /api/auth/teacher-login, which checks the DB and issues this app's own session
- * token. Only a `teacher-admin` carries `users:write`, so a plain teacher logs
- * in but is then bounced by RBAC (message shown).
+ * A Server Component so the "are you already signed in?" question is answered
+ * from the cookie BEFORE anything renders: a user who signed in through another
+ * SchoolOS service (Arena, Track, กีฬาสี — they all post to our login endpoints,
+ * which set `sso_session`) is sent straight on, and never sees a second login
+ * form or a flash of one.
+ *
+ * No probe over the network is involved: this app IS the identity provider, so
+ * the session is a same-origin cookie it can verify itself. Nothing here can
+ * hang or fail into a blank page — verifySession is fail-closed, and every path
+ * that is not "signed in with users:write" ends at the form below.
  */
 
-function LoginInner() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const denied = params.get('denied') === '1';
-  // Set by SessionGuard when the idle window (or the 8h cap) ran out, so the
-  // sudden trip back to this page reads as "your session ended", not "you were
-  // kicked out for no reason".
-  const expired = params.get('expired') === '1';
-  const next = params.get('next') || '/users';
-
-  const [teacherCode, setTeacherCode] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function signIn(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(withBase('/api/auth/teacher-login'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teacher_code: teacherCode.trim(), password }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'เข้าสู่ระบบไม่สำเร็จ');
-      // teacher-admin gets users:write; a plain teacher gets a token but no access.
-      const isAdmin = data.user?.role === 'teacher-admin';
-      if (isAdmin) router.push(next);
-      else setError('เข้าสู่ระบบสำเร็จ แต่บัญชีนี้ไม่มีสิทธิ์ users:write — โมดูลนี้เปิดให้เฉพาะผู้ดูแล (teacher-admin) เท่านั้น');
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 16, background: 'var(--skdw-bg)' }}>
-      <div className="card" style={{ maxWidth: 400, width: '100%' }}>
-        <div className="row" style={{ marginBottom: 8 }}>
-          <div aria-hidden style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--skdw-purple)', color: 'var(--skdw-gold)', display: 'grid', placeItems: 'center', fontWeight: 800, fontFamily: 'var(--font-en)' }}>S</div>
-          <div>
-            <div style={{ fontWeight: 700 }}>SchoolOS</div>
-            <div className="muted" style={{ fontSize: 13 }}>ข้อมูลนักเรียนและครู</div>
-          </div>
-        </div>
-
-        {expired && !denied && (
-          <div className="alert alert-warning" style={{ marginBottom: 16, fontSize: 13 }}>
-            หมดเวลาการใช้งาน — ระบบออกจากระบบให้อัตโนมัติเพราะไม่มีการใช้งานสักพัก
-            กรุณาเข้าสู่ระบบใหม่อีกครั้ง
-          </div>
-        )}
-
-        {denied && (
-          <div className="alert alert-error" style={{ marginBottom: 16, fontSize: 13 }}>
-            สิทธิ์ไม่เพียงพอ — โมดูลนี้ต้องมีสิทธิ์ users:write (ผู้ดูแล) เท่านั้นที่เข้าได้
-          </div>
-        )}
-
-        <form onSubmit={signIn}>
-          <label className="form-label" htmlFor="teacher_code">รหัสครู</label>
-          <input
-            id="teacher_code"
-            className="form-input"
-            style={{ width: '100%' }}
-            value={teacherCode}
-            onChange={(e) => setTeacherCode(e.target.value)}
-            placeholder="เช่น T00001"
-            autoComplete="username"
-            autoFocus
-          />
-
-          <label className="form-label" htmlFor="password" style={{ marginTop: 12 }}>รหัสผ่าน</label>
-          <input
-            id="password"
-            className="form-input"
-            style={{ width: '100%' }}
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-
-          {error && <div className="form-error" style={{ marginTop: 8 }}>{error}</div>}
-
-          <button
-            type="submit"
-            className="btn btn-primary"
-            style={{ width: '100%', marginTop: 16 }}
-            disabled={loading || !teacherCode.trim() || !password}
-          >
-            {loading ? 'กำลังเข้า…' : 'เข้าสู่ระบบ'}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
+/**
+ * Only ever redirect to a path inside this app. `next` reaches us from the query
+ * string, so without this an emailed /users/login?next=https://evil.example link
+ * would turn our own redirect into the attacker's.
+ */
+function safeNext(raw: string | string[] | undefined): string {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/users';
+  return value;
 }
 
-export default function LoginPage() {
+function flag(raw: string | string[] | undefined): boolean {
+  return (Array.isArray(raw) ? raw[0] : raw) === '1';
+}
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const next = safeNext(params.next);
+  const session = await getSession();
+
+  // Already signed in AND allowed in — the whole point of the SSO check.
+  if (hasPermission(session, USERS_WRITE)) redirect(next);
+
+  // Signed in, but this account cannot enter the module. Deliberately NOT a
+  // redirect: middleware would only bounce them right back here, and the two
+  // would ping-pong. Show the form so they can sign in as an admin instead.
+  const signedInAs = session ? (session.name ?? session.sub) : null;
+
   return (
-    <Suspense fallback={null}>
-      <LoginInner />
-    </Suspense>
+    <LoginForm
+      next={next}
+      denied={flag(params.denied) || !!session}
+      expired={flag(params.expired)}
+      signedInAs={signedInAs}
+    />
   );
 }

@@ -3,7 +3,15 @@
 import { useState } from 'react';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from './Toast';
-import { API_SCOPES, SCOPE_LABEL_TH, PII_SCOPES, AUTH_SCOPES, type ApiScope } from '@/lib/api-scopes';
+import {
+  API_SCOPES,
+  SCOPE_LABEL_TH,
+  PII_SCOPES,
+  AUTH_SCOPES,
+  AUDIENCE_PATTERN,
+  needsAudience,
+  type ApiScope,
+} from '@/lib/api-scopes';
 
 /**
  * สร้าง / แก้ไข API key.
@@ -18,6 +26,7 @@ export interface ApiKeyFormValue {
   name: string;
   description: string | null;
   scopes: string[];
+  handoffAudience: string | null;
   expiresAt: string | null;
 }
 
@@ -36,6 +45,7 @@ export function ApiKeyDialog({
   const [name, setName] = useState(existing?.name ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
   const [scopes, setScopes] = useState<string[]>(existing?.scopes ?? ['students:read']);
+  const [audience, setAudience] = useState(existing?.handoffAudience ?? '');
   // <input type="date"> wants yyyy-mm-dd; the API speaks ISO datetime.
   const [expires, setExpires] = useState(existing?.expiresAt?.slice(0, 10) ?? '');
   const [busy, setBusy] = useState(false);
@@ -44,9 +54,16 @@ export function ApiKeyDialog({
     setScopes((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
   }
 
+  // `auth:handoff` redeems codes on behalf of ONE named system, so the key has
+  // to say which — the server refuses the pair otherwise (see the create route).
+  const wantsAudience = needsAudience(scopes);
+
   async function submit() {
     if (!name.trim()) return toast('กรุณาระบุชื่อระบบที่จะมาเรียก', 'error');
     if (scopes.length === 0) return toast('กรุณาเลือกสิทธิ์อย่างน้อย 1 รายการ', 'error');
+    if (wantsAudience && !AUDIENCE_PATTERN.test(audience.trim())) {
+      return toast('กรุณาระบุชื่อระบบปลายทาง (audience) เป็น a-z 0-9 - _', 'error');
+    }
 
     setBusy(true);
     try {
@@ -54,6 +71,7 @@ export function ApiKeyDialog({
         name: name.trim(),
         description: description.trim() || null,
         scopes,
+        handoffAudience: wantsAudience ? audience.trim() : null,
         // End-of-day so a key picked for "31 ธ.ค." stays usable through that day.
         expiresAt: expires ? new Date(`${expires}T23:59:59`).toISOString() : null,
       };
@@ -155,11 +173,29 @@ export function ApiKeyDialog({
             )}
             {scopes.some((s) => AUTH_SCOPES.includes(s as ApiScope)) && (
               <div className="alert alert-info" style={{ marginTop: 10, fontSize: 13 }}>
-                สิทธิ์ AUTH ให้ระบบนั้น<strong>ตรวจรหัสผ่านได้</strong> (ใช้ทำหน้าล็อกอินของเขาเอง)
-                — ระบบจะไม่ส่งรหัสผ่านกลับไป และการตรวจทุกครั้งถูกบันทึกไว้
+                สิทธิ์ AUTH ใช้ทำ<strong>หน้าล็อกอินของระบบนั้นเอง</strong> — ตรวจรหัสผ่าน
+                (`auth:students` / `auth:teachers`) หรือรับช่วง session ที่ล็อกอินไว้แล้ว
+                (`auth:handoff`) ระบบจะไม่ส่งรหัสผ่านกลับไป และทุกครั้งถูกบันทึกไว้
               </div>
             )}
           </div>
+
+          {wantsAudience && (
+            <div>
+              <label className="form-label required" htmlFor="ak-aud">ระบบปลายทาง (audience)</label>
+              <input
+                id="ak-aud"
+                className="form-input mono"
+                placeholder="เช่น arena"
+                value={audience}
+                onChange={(e) => setAudience(e.target.value)}
+              />
+              <p className="form-hint">
+                ต้องตรงกับ <span className="mono">?audience=</span> ที่ระบบนั้นใช้ขอโค้ด —
+                key นี้จะแลกโค้ดได้เฉพาะของระบบนี้เท่านั้น ระบบอื่นแลกไม่ได้
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="form-label" htmlFor="ak-exp">วันหมดอายุ</label>

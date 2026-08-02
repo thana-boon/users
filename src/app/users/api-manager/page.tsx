@@ -22,6 +22,7 @@ interface KeyRow {
   keyPrefix: string;
   masked: string;
   scopes: string[];
+  handoffAudience: string | null;
   status: 'active' | 'revoked' | 'expired';
   isActive: boolean;
   expiresAt: string | null;
@@ -210,6 +211,15 @@ export default function ApiManagerPage() {
                           {s}
                         </span>
                       ))}
+                      {r.handoffAudience && (
+                        <span
+                          className="badge badge-navy"
+                          title="ระบบปลายทางที่ key นี้แลกโค้ด handoff ได้"
+                          style={{ fontSize: 11 }}
+                        >
+                          → {r.handoffAudience}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td><span className={`badge ${STATUS_BADGE[r.status].cls}`}>{STATUS_BADGE[r.status].label}</span></td>
@@ -227,7 +237,8 @@ export default function ApiManagerPage() {
                         className="chip"
                         onClick={() => setEditing({
                           id: r.id, name: r.name, description: r.description,
-                          scopes: r.scopes, expiresAt: r.expiresAt,
+                          scopes: r.scopes, handoffAudience: r.handoffAudience,
+                          expiresAt: r.expiresAt,
                         })}
                       >
                         แก้ไข

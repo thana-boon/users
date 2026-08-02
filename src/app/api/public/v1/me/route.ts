@@ -42,6 +42,10 @@ export async function GET(req: NextRequest) {
         name: key.name,
         keyPrefix: key.keyPrefix,
         scopes: key.scopes ?? [],
+        // Which system this key may redeem handoff codes for. Reported so an
+        // integrator can see the binding is set before hitting an
+        // `audience_mismatch` in production; null for keys without the scope.
+        handoffAudience: key.handoffAudience,
         status,
         expiresAt: key.expiresAt?.toISOString() ?? null,
         lastUsedAt: key.lastUsedAt?.toISOString() ?? null,

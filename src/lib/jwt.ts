@@ -1,10 +1,12 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 
 /**
- * SchoolOS session token (local login only — no external SSO).
+ * SchoolOS session token. Minted here and nowhere else — this app is the
+ * platform's identity provider, not a consumer of an external one.
  *
  * On login (teacher-login / student-login) this app signs a JWT and drops it in
- * the `schoolos_token` cookie; middleware and routes only *verify* it. HS256
+ * the `schoolos_token` cookie (and, for other services to probe, the identical
+ * `sso_session`); middleware and routes only *verify* it. HS256
  * with the app's own `JWT_SECRET`. `jose` is used so the same verify runs in
  * edge middleware and node routes. Business logic only ever reads the claims
  * below.
@@ -36,6 +38,23 @@ export const SESSION_COOKIE = 'schoolos_token';
 export const SESSION_EXP_COOKIE = 'schoolos_session_exp';
 
 /**
+ * Cross-service SSO cookie: the SAME token as SESSION_COOKIE, under the name the
+ * rest of the platform (Arena, Grad, Timetable, Track, กีฬาสี) probes for at
+ * GET /api/auth/session before showing its own login screen.
+ *
+ * A second name rather than telling everyone to read `schoolos_token`, because
+ * this one is the published cross-service contract and the other is this app's
+ * private detail — but it is written and cleared HERE, beside its twin, so the
+ * two can never disagree. Set it anywhere else and logout would drop one while
+ * leaving the other behind, and every other service would go on believing the
+ * user is signed in.
+ *
+ * Nobody outside this app can verify the token themselves (that would mean
+ * handing out JWT_SECRET — see api/public/v1/auth/verify); they ask us.
+ */
+export const SSO_COOKIE = 'sso_session';
+
+/**
  * Idle window. The token's `exp` is set this far ahead and slides forward on
  * activity (middleware renews it, SessionGuard renews it while you type), so a
  * workstation left unattended logs itself out. Default 30 minutes.
@@ -65,9 +84,13 @@ export function sessionExpiresAt(session: SessionClaims): number {
   return Math.min(idleEnd, absoluteEnd);
 }
 
-/** Permission that grants access to this (admin-only) Records module. */
-export const USERS_READ = 'users:read';
-export const USERS_WRITE = 'users:write';
+/**
+ * Permissions that grant access to this (admin-only) Records module. Defined in
+ * lib/permissions.ts — which imports nothing — and re-exported here so the many
+ * server-side callers that already import them from '@/lib/jwt' keep working,
+ * while a Client Component can import the constant without pulling in `jose`.
+ */
+export { USERS_READ, USERS_WRITE } from './permissions';
 
 function secret(): Uint8Array {
   const s = process.env.JWT_SECRET;
@@ -123,6 +146,7 @@ export function setSessionCookies(jar: CookieJar, token: string, claims: Session
   const expiresAt = sessionExpiresAt(claims);
   const maxAge = Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
   jar.set(SESSION_COOKIE, token, sessionCookieOptions(maxAge));
+  jar.set(SSO_COOKIE, token, sessionCookieOptions(maxAge)); // same token, cross-service name
   jar.set(SESSION_EXP_COOKIE, String(expiresAt), {
     ...sessionCookieOptions(maxAge),
     httpOnly: false, // read by SessionGuard — see SESSION_EXP_COOKIE
@@ -134,7 +158,61 @@ export function setSessionCookies(jar: CookieJar, token: string, claims: Session
 export function clearSessionCookies(jar: CookieJar): void {
   const dead = { ...sessionCookieOptions(0), maxAge: 0 };
   jar.set(SESSION_COOKIE, '', dead);
+  jar.set(SSO_COOKIE, '', dead);
   jar.set(SESSION_EXP_COOKIE, '', { ...dead, httpOnly: false });
+}
+
+/** Minimal cookie reader — the shape NextRequest.cookies and cookies() share. */
+type CookieReader = {
+  get(name: string): { value: string } | undefined;
+};
+
+/**
+ * Where a verified token was found. `sso` is the interesting one: it means this
+ * browser signed in through ANOTHER SchoolOS service, which posted to our login
+ * endpoint and got `sso_session` back — so the user is already authenticated and
+ * must not be shown a login form again.
+ */
+export type SessionSource = 'local' | 'sso' | 'bearer';
+
+export interface ResolvedSession {
+  session: SessionClaims;
+  /** The wire token it was read from — re-issuable as-is, no re-signing. */
+  token: string;
+  source: SessionSource;
+}
+
+/**
+ * The one place this app decides "is this browser signed in, and as whom".
+ *
+ * Both cookies carry the same JWT and are written/cleared together
+ * (setSessionCookies / clearSessionCookies), so the order below only matters if
+ * something outside this app wrote one of them — in which case our own cookie is
+ * the more specific answer and wins. Whatever verifies first is used;
+ * verifySession is fail-closed, so a rotted token simply falls through to the
+ * next candidate and ultimately to null.
+ *
+ * Same-origin cookie read, deliberately: this app IS the identity provider, so
+ * there is no probe to fire, nothing to cache, and no network call that could
+ * fail and leave a page blank. Consumer services (Arena, Track, กีฬาสี) are the
+ * ones that must go over the wire to GET /api/auth/session.
+ */
+export async function readPlatformSession(
+  cookies: CookieReader,
+  authHeader?: string | null,
+): Promise<ResolvedSession | null> {
+  const candidates: Array<[SessionSource, string | undefined]> = [
+    ['local', cookies.get(SESSION_COOKIE)?.value],
+    ['sso', cookies.get(SSO_COOKIE)?.value],
+    ['bearer', authHeader?.match(/^Bearer\s+(.+)$/i)?.[1]],
+  ];
+
+  for (const [source, token] of candidates) {
+    if (!token) continue;
+    const session = await verifySession(token);
+    if (session) return { session, token, source };
+  }
+  return null;
 }
 
 /** A freshly signed session: the wire token plus the claims that are inside it. */

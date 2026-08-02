@@ -17,10 +17,16 @@
 
 | สภาพแวดล้อม | ตัวอย่าง |
 |---|---|
-| Docker / production | `http://<host>:3002` |
+| Docker / production (ยิงตรงพอร์ต) | `http://<host>:3002` |
+| ผ่าน gateway ของโรงเรียน | `https://<gateway>/users` ← **มี `/users` นำหน้าทุก path** |
 | Dev (`npm run dev`) | `http://localhost:3000` |
 
 > ตัวอย่างทั้งเอกสารใช้ `https://schoolos.example.ac.th` แทน base URL จริง
+
+**เรื่อง `/users` นำหน้า** — gateway ส่งเฉพาะ `/users/*` มาที่แอปนี้ ดังนั้นเมื่อเรียกผ่าน gateway
+ทุก path ต้องมี `/users` นำหน้า (`…/users/api/public/v1/students`) แอปจะถอด prefix ออกให้เอง
+ส่วนการยิงตรงพอร์ต 3002 ใช้ path ตามเอกสารได้เลยไม่ต้องเติมอะไร — **ทั้งสองแบบใช้ได้พร้อมกัน**
+เลือกตามว่าระบบของคุณเข้าถึงเซิร์ฟเวอร์ทางไหน
 
 ---
 
@@ -111,6 +117,7 @@ curl -H "X-API-Key: sk_live_..." \
 | `years:read` | อ่านปีการศึกษา + ช่วงภาคเรียน | ไม่มี PII — ระบบตารางสอน/เช็คชื่อควรได้แค่อันนี้ |
 | `auth:students` | ตรวจรหัสผ่าน**นักเรียน** | ผ่าน `/auth/verify` |
 | `auth:teachers` | ตรวจรหัสผ่าน**ครู** | แยกจากนักเรียน เพื่อไม่ให้ระบบของเด็กเดารหัสครูได้ |
+| `auth:handoff` | แลกโค้ดสานต่อ session ที่ล็อกอินไว้แล้ว | ผ่าน `/auth/handoff/redeem` (ข้อ 4.11) · key ต้องระบุ **ระบบปลายทาง (audience)** ด้วย |
 
 **กฎที่บังคับในโค้ด ไม่ว่ามี scope อะไรก็ตาม:**
 
@@ -133,6 +140,14 @@ curl -H "X-API-Key: sk_live_..." \
 | 4.7 | `GET /students/{id}/photo`<br>`GET /teachers/{id}/photo` | `*:read` + `*:photo` | แสดงรูปทีละคน |
 | 4.8 | `GET /students/photos?ids=`<br>`GET /teachers/photos?ids=` | `*:read` + `*:photo` | sync รูปจำนวนมาก |
 | 4.9 | `POST /auth/verify` | `auth:students` / `auth:teachers` | ให้ผู้ใช้ล็อกอินด้วยบัญชี SchoolOS |
+| 4.10 | `GET /api/auth/session` | — (cookie) | เช็คว่า **เบราว์เซอร์นี้ล็อกอินอยู่แล้วหรือยัง** ก่อนโชว์หน้า login ของตัวเอง |
+| | `POST /api/auth/refresh` | — (cookie) | ต่ออายุ session เมื่อผู้ใช้ยังทำงานอยู่ในระบบคุณ |
+| | `GET`/`POST /api/auth/logout` | — (cookie) | ออกจากระบบทั้งแพลตฟอร์ม |
+| 4.11 | `GET /api/auth/handoff` | — (cookie) | ขอโค้ดครั้งเดียว เพื่อส่ง session ต่อให้ **เซิร์ฟเวอร์** ของระบบคุณรู้ด้วย |
+| | `POST /auth/handoff/redeem` | `auth:handoff` | เซิร์ฟเวอร์ระบบคุณแลกโค้ดนั้นเป็นตัวตนของผู้ใช้ |
+
+> ข้อ 4.10 และสองบรรทัดใต้มัน **ไม่ได้อยู่ใต้ `/api/public/v1`** และไม่ใช้ API key — เป็นคนละกลไกกัน ดูรายละเอียดในข้อ 4.10
+> ข้อ 4.11 ใช้**ทั้งสองอย่างคนละครึ่ง**: เบราว์เซอร์ขอโค้ดด้วย cookie แล้วเซิร์ฟเวอร์คุณแลกโค้ดด้วย API key
 
 ---
 
@@ -488,6 +503,207 @@ if (!data.user.active) return null;  // ← ห้ามลืมบรรทั
 คนเดียวที่ถูกปฏิเสธตั้งแต่ต้นทางคือคนที่ถูก **ย้ายเข้าถังขยะ** (ดูข้อ 5.4)
 
 **Rate limit เฉพาะทาง:** รหัสผิด **5 ครั้งใน 15 นาที** ของ username เดิม → ล็อก 15 นาที คืน `429 too_many_attempts` + header `Retry-After` (นับแยกตาม username ไม่ใช่ตาม key — ต่อให้เปลี่ยน key ก็ยังโดนล็อก)
+
+---
+
+### 4.10 `GET /api/auth/session` — SSO: ล็อกอินอยู่แล้วหรือยัง?
+
+**ไม่ใช้ API key** — ใช้ **cookie ของผู้ใช้** แทน ต่างจากข้อ 4.9 ตรงนี้:
+
+| | 4.9 `POST /auth/verify` | 4.10 `GET /api/auth/session` |
+|---|---|---|
+| ใครเรียก | **server** ของคุณ | **เบราว์เซอร์** ของผู้ใช้ |
+| ยืนยันตัวตนด้วย | API key | cookie `sso_session` ที่ผู้ใช้มีอยู่แล้ว |
+| ตอบอะไร | "รหัสผ่านนี้ถูกไหม" | "คนนี้ล็อกอิน SchoolOS อยู่แล้วไหม เป็นใคร" |
+| ใช้ตอน | ผู้ใช้กรอกรหัสในระบบคุณ | **ก่อน**จะโชว์หน้า login ของระบบคุณ |
+
+**หลักการ:** เมื่อผู้ใช้ล็อกอินที่ Users แล้ว แอปจะเซ็ต cookie `sso_session` (HttpOnly, `Path=/`, `SameSite=Lax`) ระบบอื่นเช็ค session ได้โดย**ถาม** endpoint นี้ — จงใจไม่ให้ระบบอื่น verify JWT เอง เพราะนั่นแปลว่าต้องแจก `JWT_SECRET` (เหตุผลเดียวกับข้อ 4.9)
+
+**เรียกยังไง** — ต้องมี `credentials: 'include'` ไม่งั้นเบราว์เซอร์ไม่ส่ง cookie ข้ามพอร์ตมาให้
+
+```js
+const res  = await fetch('http://localhost:3002/api/auth/session', {
+  credentials: 'include',           // ← ขาดบรรทัดนี้ = ได้ valid:false ตลอด
+});
+const data = await res.json();
+
+if (data.valid) {
+  // ล็อกอินอยู่แล้ว — ข้ามหน้า login ไปเลย
+  showApp(data.user);
+} else {
+  showLoginPage();
+}
+```
+
+**ล็อกอินอยู่ (200)**
+
+```json
+{
+  "valid": true,
+  "user": {
+    "sub": "T00116",
+    "role": "teacher",
+    "name": "นายอาทิตย์ แสงทอง",
+    "code": "T00116",
+    "permissions": ["users:read", "users:write"]
+  },
+  "expiresAt": 1785312000000
+}
+```
+
+**ยังไม่ได้ล็อกอิน (ก็ยัง 200)**
+
+```json
+{ "valid": false, "user": null }
+```
+
+> ตอบ **200 ทั้งสองกรณี** — "ยังไม่ล็อกอิน" เป็นคำตอบ ไม่ใช่ error ให้เช็คที่ฟิลด์ `valid` ไม่ใช่ status code
+
+**ฟิลด์ที่ต้องรู้**
+
+- `role` — `teacher` \| `student` (ระดับ session) ส่วน `teacher-admin` สะท้อนมาเป็น `permissions` ที่มี `users:*`
+- `permissions` — สิทธิ์ในโมดูล Users เท่านั้น **ไม่ใช่**สิทธิ์ในระบบคุณ ระบบคุณตัดสินใจเอง
+- `expiresAt` — เวลาที่ session นี้จะตาย (epoch ms) แคชคำตอบได้ถึงเวลานี้ ไม่ต้องยิงทุกหน้า
+- ไม่มี `active`/`status` แบบข้อ 4.9 — ถ้าต้องรู้ว่าคนนี้ยังเรียน/ยังทำงานอยู่ไหม ให้ถาม `GET /students` / `GET /teachers` ด้วย key ของคุณ
+
+**ตั้งค่าฝั่ง SchoolOS ก่อนใช้** — origin ของระบบคุณต้องถูกใส่ใน `SSO_ALLOWED_ORIGINS` ของ Users service (แจ้งแอดมิน) ไม่งั้นเบราว์เซอร์จะบล็อกเพราะไม่มี CORS header กลับมา ต้องเป็น origin เป๊ะ ๆ (scheme + host + port) เช่น `http://localhost:3017` — ใช้ `*` ไม่ได้เพราะเป็น request ที่พก cookie
+
+**ล็อกอินจากระบบคุณ** — `POST /api/auth/teacher-login` (body `{teacher_code, password}`) และ `POST /api/auth/student-login` (body `{identifier, password}`) เปิด CORS ด้วยเหมือนกัน สำเร็จแล้วจะเซ็ต `sso_session` ให้เอง
+
+**ต่ออายุ session** — `POST /api/auth/refresh` (`credentials: 'include'`, ไม่ต้องมี body)
+
+การใช้งานในระบบคุณ **ไม่**นับเป็น activity ของ session โดยอัตโนมัติ — ตัวที่เลื่อน idle window ออกไปทำงานเฉพาะกับหน้าและ API ของโมดูล Users เท่านั้น ถ้าผู้ใช้ทำงานในระบบคุณ 30 นาทีโดยไม่แตะ Users เลย session จะหมดอายุกลางคัน ระบบคุณจึงต้องเรียก endpoint นี้เองเมื่อเห็นว่าผู้ใช้ยังใช้งานอยู่จริง
+
+```js
+const res = await fetch('http://localhost:3002/api/auth/refresh', {
+  method: 'POST',
+  credentials: 'include',
+});
+if (res.status === 401) return showLoginPage();   // หมดเวลาไปแล้ว
+const { expiresAt, absoluteEndsAt } = await res.json();
+```
+
+- `expiresAt` — deadline ใหม่ (epoch ms) เอาไปแทนค่าที่แคชไว้
+- `absoluteEndsAt` — เพดาน 8 ชั่วโมงนับจากตอนล็อกอินครั้งแรก **ไม่ขยับ** ไม่ว่าจะ refresh กี่ครั้ง พอถึงเวลานี้คือจบ
+- `GET /api/auth/session` **ไม่**ต่ออายุให้ (จงใจ — ถ้าต่อ แท็บที่เปิดค้างไว้แล้ว poll เรื่อย ๆ จะทำให้ session ไม่มีวันหมดอายุ ซึ่งทำลายจุดประสงค์ของ idle timeout) การต่ออายุต้องเป็นสิ่งที่ระบบคุณขอเองเมื่อเห็น activity จริง
+
+**ล็อกเอาต์** — ออกจากระบบทั้งแพลตฟอร์มพร้อมกัน (cookie ทั้งชุดถูกลบ ทุกบริการจะเห็น `valid:false` ทันที) เลือกได้สองแบบ
+
+| แบบ | ใช้ตอน |
+|---|---|
+| `GET /api/auth/logout?next=<url>` | ทำเป็น**ลิงก์**ธรรมดา — พาผู้ใช้ออกแล้ว redirect กลับมาที่ `next` |
+| `POST /api/auth/logout` (`credentials: 'include'`) | อยากล้าง state ของระบบคุณเองแล้วอยู่หน้าเดิม ไม่ต้อง navigate |
+
+`next` รับได้เฉพาะ path ในโดเมน Users หรือ URL ที่ origin อยู่ใน `SSO_ALLOWED_ORIGINS` เท่านั้น (กัน open redirect) — ถ้าไม่ผ่านจะพาไปหน้า login ของ Users แทน ไม่ใส่ `next` ก็ได้
+
+> ⚠️ ล้าง state ฝั่งคุณอย่างเดียวไม่พอ — ถ้าไม่เรียก endpoint นี้ `sso_session` จะยังอยู่ พอผู้ใช้กลับเข้าหน้าคุณอีกครั้ง probe จะตอบ `valid:true` แล้วล็อกอินกลับเข้าไปเอง เรื่องนี้สำคัญมากกับเครื่องที่ใช้ร่วมกัน
+
+**ข้อควรรู้เรื่อง cookie**
+
+- `SameSite=Lax` ดูที่ *site* ไม่สนพอร์ต — `localhost:3002` กับ `localhost:3017` จึงถือเป็น site เดียวกัน cookie ส่งถึงกันได้ แต่ถ้าย้ายไปคนละโดเมนจริง ๆ ต้องเปลี่ยนเป็น `SameSite=None; Secure` (ต้อง HTTPS ทั้งคู่)
+- cookie นี้ถูกลบพร้อม session ปกติตอน logout และหมดอายุตามกติกา idle 30 นาที / เพดาน 8 ชั่วโมงเดียวกัน
+
+---
+
+### 4.11 SSO handoff — เมื่อ**เซิร์ฟเวอร์**ของคุณต้องรู้ด้วยว่าใครล็อกอินอยู่
+
+ข้อ 4.10 ตอบไปที่**เบราว์เซอร์** ซึ่งพอสำหรับแอปที่ตัดสินใจในฝั่ง client แต่ถ้าระบบคุณกันหน้าเว็บด้วย **middleware / server component** (เช่น Next.js App Router) คำตอบนั้นอยู่ผิดฝั่ง — และ `sso_session` เป็น HttpOnly หน้าเว็บจึงส่งต่อให้เซิร์ฟเวอร์ตัวเองก็ไม่ได้
+
+วิธีที่ถูกต้องคือ **ให้เบราว์เซอร์มาขอโค้ดใช้ครั้งเดียว** แล้วส่งโค้ดนั้นให้เซิร์ฟเวอร์ของคุณเอาไปแลกกับเราผ่าน API key
+
+```
+เบราว์เซอร์ผู้ใช้                     เซิร์ฟเวอร์ของคุณ              SchoolOS Users
+   │
+   ├─ GET /api/auth/session ─────────────────────────────────────▶ valid:true
+   ├─ GET /api/auth/handoff?audience=arena ─────────────────────▶ code (60 วิ, ครั้งเดียว)
+   ├─ POST /your/sso {code} ──────▶
+   │                               ├─ POST /auth/handoff/redeem ─▶ user
+   │                               ├─ ออก session cookie ของคุณเอง
+   │◀──────────────────────────────┤
+```
+
+> **ทำไมไม่ให้ระบบอื่นอ่าน token ตรง ๆ:** ถ้าเปิดให้ JS หยิบ session token ไปได้ ก็เท่ากับทิ้ง HttpOnly ที่ป้องกัน XSS มาตลอด โค้ดนี้จึงถูกออกแบบให้เป็นของที่**อ่อนที่สุด**เท่าที่จะเป็นได้ — อายุ 60 วินาที ใช้ได้ครั้งเดียว และ**ไร้ค่าถ้าไม่มี API key** ของระบบปลายทาง
+
+#### `GET /api/auth/handoff?audience=<ชื่อระบบ>` — เบราว์เซอร์เรียก (cookie)
+
+```js
+const res = await fetch('http://localhost:3002/api/auth/handoff?audience=arena', {
+  credentials: 'include',          // ← ขาดบรรทัดนี้ = valid:false ตลอด
+});
+const { valid, code } = await res.json();
+if (!valid) return showLoginPage();
+
+await fetch('/your/sso', { method: 'POST', body: JSON.stringify({ code }) });
+```
+
+**ล็อกอินอยู่ (200)**
+
+```json
+{ "valid": true, "code": "hc_kZ8…", "expiresIn": 60, "audience": "arena" }
+```
+
+**ยังไม่ได้ล็อกอิน (ก็ยัง 200)** — เหมือนข้อ 4.10 ให้ดูที่ `valid`
+
+```json
+{ "valid": false, "code": null }
+```
+
+| สถานะอื่น | เมื่อไหร่ |
+|---|---|
+| `400 invalid_audience` | ไม่ได้ใส่ `?audience=` หรือใส่อักขระนอก `a-z 0-9 - _` |
+| `403 forbidden_origin` | origin ของคุณไม่อยู่ใน `SSO_ALLOWED_ORIGINS` |
+| `429 rate_limited` | ขอเกิน **10 ครั้ง/นาที** ต่อ 1 session (มี `Retry-After`) |
+
+- **ไม่ต่ออายุ session ให้** เจตนาเดียวกับข้อ 4.10 — ถ้าผู้ใช้ยังทำงานอยู่จริงให้เรียก `POST /api/auth/refresh`
+- `audience` ต้องตรงกับที่แอดมินตั้งไว้ในหน้า API Manager ของ key คุณ **เป๊ะ ๆ**
+
+#### `POST /api/public/v1/auth/handoff/redeem` — เซิร์ฟเวอร์คุณเรียก (API key)
+
+```bash
+curl -X POST -H "X-API-Key: sk_live_..." -H "Content-Type: application/json" \
+  -d '{"code":"hc_kZ8…"}' \
+  https://schoolos.example.ac.th/api/public/v1/auth/handoff/redeem
+```
+
+**สำเร็จ (200)**
+
+```json
+{
+  "valid": true,
+  "user": {
+    "sub": "T00116", "role": "teacher", "name": "นายอาทิตย์ แสงทอง",
+    "code": "T00116", "permissions": ["users:read", "users:write"]
+  },
+  "audience": "arena",
+  "expiresAt": 1785678052000,
+  "absoluteEndsAt": 1785700000000
+}
+```
+
+`user` เป็น **โครงเดียวกันเป๊ะกับข้อ 4.10** — mapper ตัวเดียวใช้ได้ทั้งสองทาง และกติกาเรื่อง `role` ก็เหมือนกัน: มีแค่ `teacher` \| `student` ส่วน `teacher-admin` สะท้อนมาเป็น `permissions` **ถ้าระบบคุณต้องรู้ role ในฐานข้อมูลจริง ๆ ให้ถาม `GET /teachers` ด้วย key ของคุณ** (ข้อ 4.4)
+
+**ล้มเหลว** — แยก error ของ *โค้ด* (400/403) ออกจาก error ของ *key* (401/403 จากตัว guard) เพื่อให้ระบบคุณแยกออกว่า "โค้ดเก่าไปแล้ว ขอใหม่" กับ "ตั้งค่า key ผิด ตามแอดมิน"
+
+| HTTP | `error.code` | แปลว่า |
+|---|---|---|
+| 400 | `invalid_code` | ไม่มีโค้ดนี้ในระบบ |
+| 400 | `expired_code` | เกิน 60 วินาที (หรือ session ตายไปก่อนแล้ว) |
+| 400 | `used_code` | โค้ดนี้ถูกแลกไปแล้ว — มัก = ระบบคุณยิงซ้ำสองครั้ง |
+| 403 | `audience_mismatch` | โค้ดนี้ออกให้ระบบอื่น ไม่ใช่ของ key นี้ |
+| 403 | `key_audience_unset` | key มี scope แล้วแต่แอดมินยังไม่ได้ระบุ audience |
+| 401/403 | `invalid_key` / `insufficient_scope` / `key_revoked` | ปัญหาที่ตัว key เอง (เหมือนทุก endpoint) |
+
+#### สิ่งที่ต้องให้แอดมิน SchoolOS ตั้งก่อนใช้
+
+1. เพิ่ม origin ของคุณใน `SSO_ALLOWED_ORIGINS` (เหมือนข้อ 4.10)
+2. ติ๊ก scope `auth:handoff` ให้ key ของคุณ **และกรอกช่อง "ระบบปลายทาง (audience)"** — key ที่มี scope แต่ไม่มี audience จะแลกโค้ดไม่ได้เลย (`key_audience_unset`) และ key ของระบบ A จะแลกโค้ดของระบบ B ไม่ได้
+
+#### ข้อจำกัดที่ต้องรู้ (จงใจให้เป็นแบบนี้)
+
+- **โค้ดเก็บในหน่วยความจำของ process** เหมือน rate limit / login lockout ถ้าวันหนึ่ง Users รันหลาย instance ต้องย้ายไปเก็บที่ Redis พร้อมกันทั้งชุด — ตอนนี้รัน instance เดียว การ "ใช้ได้ครั้งเดียว" จึงเป็น atomic จริง
+- **restart แล้วโค้ดที่ยังไม่ถูกแลกจะหาย** — ไม่เป็นไร เบราว์เซอร์ขอใหม่ได้ทันที
+- **logout ระหว่าง 60 วินาทีนั้นไม่เพิกถอนโค้ด** ระบบนี้ไม่มี blocklist ของ token (logout = ลบ cookie) โค้ดจึงยังแลกได้จนกว่าจะหมดอายุ ถ้ามันสำคัญกับระบบคุณ ให้เช็ค `GET /api/auth/session` ซ้ำอีกทีตอนผู้ใช้กลับมา
+- ทุกครั้งที่มีการแลก (สำเร็จหรือไม่สำเร็จ) จะถูกบันทึกใน **บันทึกการใช้งาน** พร้อมชื่อ key และ audience
 
 ---
 

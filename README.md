@@ -85,6 +85,7 @@ seed จะตั้ง `T00116` + `T00241` เป็น `teacher-admin` ให�
 | `JWT_SECRET` | secret สำหรับเซ็น session token ของแอป (HS256) |
 | `JWT_EXPIRES_IN` | อายุ token (ดีฟอลต์ `8h`) |
 | `STUDENT_EMAIL_DOMAIN` | โดเมนอีเมลนักเรียน (ดีฟอลต์ `sukhon.ac.th`) |
+| `SSO_ALLOWED_ORIGINS` | origin ของ service อื่นที่เรียก `GET /api/auth/session` ได้ (คั่นด้วย `,` เช่น `http://localhost:3017`) — ว่าง = ไม่มีใครเรียกได้ |
 
 ---
 
@@ -105,7 +106,17 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 - List/detail API ไม่เคยส่ง ciphertext ออก — เลขบัตรถูก mask, รหัสผ่านไม่ส่ง, รายได้เป็น flag.
 
 ### Auth & RBAC
-- **Local login เท่านั้น** (ไม่มี SSO ภายนอก) — แอปเซ็น session JWT ของตัวเอง (jose/HS256) ตอนล็อกอิน.
+- **ไม่มี identity provider ภายนอก** — แอปนี้ *เป็น* ตัวออก session ให้ทั้งแพลตฟอร์ม เซ็น JWT ของตัวเอง (jose/HS256) ตอนล็อกอิน.
+- **SSO ข้าม service**: ตอนล็อกอินสำเร็จจะเซ็ต cookie `sso_session` (JWT ตัวเดียวกับ `schoolos_token`)
+  ให้ service อื่น (Arena, Grad, Timetable, Track, กีฬาสี) เรียก `GET /api/auth/session`
+  ด้วย `credentials: 'include'` เพื่อเช็คก่อนว่าล็อกอินอยู่แล้วไหม — คืน `{ valid, user }`
+  โดยไม่ต้องแตะ DB และ **ไม่ต้องแชร์ `JWT_SECRET`** ออกไป (ดู `docs/API.md` ข้อ 4.10).
+  origin ที่เรียกได้ต้องอยู่ใน `SSO_ALLOWED_ORIGINS`.
+- **SSO handoff** สำหรับ service ที่กันหน้าเว็บด้วย middleware/server component (คำตอบของ
+  `/api/auth/session` ไปถึงแค่เบราว์เซอร์ และ `sso_session` เป็น HttpOnly จึงส่งต่อเองไม่ได้):
+  เบราว์เซอร์ขอโค้ดใช้ครั้งเดียวจาก `GET /api/auth/handoff?audience=` (60 วินาที) แล้ว **เซิร์ฟเวอร์**
+  ของ service นั้นเอาไปแลกตัวตนที่ `POST /api/public/v1/auth/handoff/redeem` ด้วย API key
+  ที่มี scope `auth:handoff` + ระบุ audience ตรงกัน (`src/lib/handoff.ts`, `docs/API.md` ข้อ 4.11).
 - Middleware (edge) verify token แบบ **fail-closed** และรับเฉพาะ `teacher-admin` บน `/users/**` และ `/api/users/**`.
 - Login API สาธารณะสำหรับนักเรียน/ครู (`/api/auth/{student,teacher}-login`) — decrypt แล้วเทียบรหัสผ่าน,
   มี rate-limit + lockout, ออก JWT ตาม role จริง. token `teacher`/`student` ผ่าน login ได้แต่ถูกโมดูลนี้ปฏิเสธ.

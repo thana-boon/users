@@ -8,6 +8,7 @@ import {
   sessionExpiresAt,
   setSessionCookies,
 } from '@/lib/jwt';
+import { corsPreflight, withCors } from '@/lib/cors';
 
 export const runtime = 'nodejs';
 
@@ -21,11 +22,20 @@ export const runtime = 'nodejs';
  * session without `users:write`: a student session has to be able to stay alive
  * too, and this endpoint grants nothing the caller does not already hold.
  *
+ * Cross-origin too, for the same reason it exists at all. The middleware that
+ * slides the window on activity only matches /users/* and /api/users/*, so work
+ * done in ANOTHER SchoolOS service is invisible to it — an hour of marking in
+ * Track would otherwise time the user out mid-sentence. GET /api/auth/session
+ * deliberately does not renew (a consumer polling it would keep a walked-away
+ * session alive forever, which is exactly what the idle window exists to
+ * prevent); renewal has to be something a consumer asks for when it has seen
+ * real user activity, which is this.
+ *
  * `login_at` carries over unchanged, so this extends a session up to the
  * absolute cap and not one second past it — at the cap the new `exp` equals the
  * old one and the countdown keeps running down to zero.
  */
-export async function POST(req: NextRequest) {
+async function handler(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) {
     // Already over. Clear the stale cookies and tell the client to stop
@@ -45,3 +55,9 @@ export async function POST(req: NextRequest) {
   setSessionCookies(res.cookies, token, claims);
   return res;
 }
+
+// Wrapped so the 401 carries the headers too — otherwise a cross-origin caller
+// sees an opaque failure and cannot tell "session is over, go to login" from
+// "the network is down, try again".
+export const POST = withCors(handler);
+export const OPTIONS = corsPreflight;

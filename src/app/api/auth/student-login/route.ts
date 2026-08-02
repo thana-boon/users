@@ -10,6 +10,7 @@ import { badRequest, handleError } from '@/lib/http';
 import { checkLockout, registerFailure, clearFailures, rateLimit } from '@/lib/rate-limit';
 import { clientIp } from '@/lib/ip';
 import { recordAudit } from '@/lib/audit';
+import { corsPreflight, withCors } from '@/lib/cors';
 
 export const runtime = 'nodejs';
 
@@ -29,7 +30,7 @@ const bodySchema = z.object({
 
 const INVALID = 'รหัส/อีเมล หรือรหัสผ่านไม่ถูกต้อง';
 
-export async function POST(req: NextRequest) {
+async function handler(req: NextRequest) {
   try {
     // Per-IP throttle FIRST — blunts password-spraying across many identifiers,
     // which the per-identifier lockout below cannot see. 30 attempts / 5 min / IP.
@@ -103,3 +104,8 @@ export async function POST(req: NextRequest) {
     return handleError(err);
   }
 }
+
+// Wrapped so the 400/429 replies carry the CORS headers too — otherwise a
+// cross-origin caller gets an opaque failure instead of the reason.
+export const POST = withCors(handler);
+export const OPTIONS = corsPreflight;

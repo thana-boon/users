@@ -70,6 +70,11 @@ services:
       # explicitly opt out. Set COOKIE_SECURE=false in .env ONLY for plain-HTTP
       # LAN access (http://<ip>:3002) — never on an HTTPS/internet-facing deploy.
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      # Origins of the OTHER SchoolOS services allowed to ask "is this user
+      # logged in?" at GET /api/auth/session (comma-separated, exact scheme +
+      # host + port). Each service runs on its own port, so the call is
+      # cross-origin and credentialed. Empty = nobody may ask. See .env.example.
+      SSO_ALLOWED_ORIGINS: ${SSO_ALLOWED_ORIGINS:-}
       # Trusted reverse-proxy hops in front of the app (see .env.example). Drives
       # real-client-IP extraction for audit logs and per-IP rate limiting.
       TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-1}

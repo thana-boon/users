@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import {
-  verifySession,
+  readPlatformSession,
   hasPermission,
   renewSession,
   setSessionCookies,
   USERS_WRITE,
-  SESSION_COOKIE,
 } from '@/lib/jwt';
 
 /**
@@ -53,16 +52,18 @@ export async function middleware(req: NextRequest) {
   const isProtectedApi = path.startsWith('/api/users');
   if (!isProtectedUi && !isProtectedApi) return NextResponse.next();
 
-  const token =
-    req.cookies.get(SESSION_COOKIE)?.value ??
-    req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  // Either cookie counts, so a user who signed in through another SchoolOS
+  // service arrives here already authenticated instead of meeting a second
+  // login form. See readPlatformSession().
+  const resolved = await readPlatformSession(
+    req.cookies,
+    req.headers.get('authorization'),
+  );
 
-  const session = await verifySession(token);
-
-  if (!session || !hasPermission(session, USERS_WRITE)) {
+  if (!resolved || !hasPermission(resolved.session, USERS_WRITE)) {
     if (isProtectedApi) {
-      const status = !session ? 401 : 403;
-      const msg = !session
+      const status = !resolved ? 401 : 403;
+      const msg = !resolved
         ? 'ต้องเข้าสู่ระบบก่อนใช้งาน'
         : 'ไม่มีสิทธิ์เข้าถึงโมดูลนี้ (ต้องมีสิทธิ์ users:write)';
       return NextResponse.json({ error: msg }, { status });
@@ -70,11 +71,20 @@ export async function middleware(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = '/users/login';
     url.searchParams.set('next', pathname);
-    if (session) url.searchParams.set('denied', '1');
+    if (resolved) url.searchParams.set('denied', '1');
     return NextResponse.redirect(url);
   }
 
+  const { session, token, source } = resolved;
+
   const res = NextResponse.next();
+
+  // Signed in elsewhere on the platform: `sso_session` is here but this app's
+  // own pair is not. Write all three back from the SAME token — no re-signing,
+  // so the deadline does not move — which both stops the two names from drifting
+  // apart and hands SessionGuard the readable expiry cookie it counts down
+  // against. Only for 'sso': a Bearer API client has no use for cookies.
+  if (source === 'sso') setSessionCookies(res.cookies, token, session);
 
   // Idle timeout, activity half: every authenticated request through this
   // module pushes the deadline back. renewSession() no-ops unless the session is

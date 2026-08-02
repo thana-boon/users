@@ -10,6 +10,7 @@ import { badRequest, handleError } from '@/lib/http';
 import { checkLockout, registerFailure, clearFailures, rateLimit } from '@/lib/rate-limit';
 import { clientIp } from '@/lib/ip';
 import { recordAudit } from '@/lib/audit';
+import { corsPreflight, withCors } from '@/lib/cors';
 
 export const runtime = 'nodejs';
 
@@ -18,6 +19,10 @@ export const runtime = 'nodejs';
  * no email fallback (teachers remember their code). A DB `teacher-admin` is
  * issued a session carrying `users:read`/`users:write`; a plain `teacher` gets a
  * valid session but is rejected by this module's RBAC.
+ *
+ * A successful login sets the platform session cookies, `sso_session` among them
+ * (see lib/jwt.ts) — which is what makes this the SSO sign-in for every other
+ * SchoolOS service, not just for this module.
  */
 
 const bodySchema = z.object({
@@ -27,7 +32,7 @@ const bodySchema = z.object({
 
 const INVALID = 'รหัสครู หรือรหัสผ่านไม่ถูกต้อง';
 
-export async function POST(req: NextRequest) {
+async function handler(req: NextRequest) {
   try {
     // Per-IP throttle FIRST — blunts password-spraying across many usernames,
     // which the per-username lockout below cannot see. 30 attempts / 5 min / IP.
@@ -108,3 +113,8 @@ export async function POST(req: NextRequest) {
     return handleError(err);
   }
 }
+
+// Wrapped so the 400/429 replies carry the CORS headers too — otherwise a
+// cross-origin caller gets an opaque failure instead of the reason.
+export const POST = withCors(handler);
+export const OPTIONS = corsPreflight;

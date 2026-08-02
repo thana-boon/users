@@ -23,6 +23,8 @@ export interface ApiKeySummary {
   keyPrefix: string;
   masked: string;
   scopes: string[];
+  /** Which consumer this key acts for — only used by `auth:handoff`. */
+  handoffAudience: string | null;
   status: KeyStatus;
   isActive: boolean;
   expiresAt: string | null;
@@ -50,6 +52,7 @@ export function toSummary(k: ApiKey): ApiKeySummary {
     keyPrefix: k.keyPrefix,
     masked: maskApiKey(k.keyPrefix),
     scopes: k.scopes ?? [],
+    handoffAudience: k.handoffAudience,
     status: keyStatus(k),
     isActive: k.isActive,
     expiresAt: k.expiresAt?.toISOString() ?? null,
@@ -86,6 +89,7 @@ export async function createApiKey(input: {
   name: string;
   description?: string | null;
   scopes: ApiScope[];
+  handoffAudience?: string | null;
   expiresAt?: Date | null;
   createdByLabel?: string | null;
 }): Promise<{ summary: ApiKeySummary; plain: string }> {
@@ -99,6 +103,7 @@ export async function createApiKey(input: {
       keyHash: gen.hash,
       keyEncrypted: encrypt(gen.plain)!, // non-null: gen.plain is never empty
       scopes: input.scopes,
+      handoffAudience: input.handoffAudience ?? null,
       expiresAt: input.expiresAt ?? null,
       createdByLabel: input.createdByLabel ?? null,
     })
@@ -113,6 +118,7 @@ export async function updateApiKey(
     name?: string;
     description?: string | null;
     scopes?: ApiScope[];
+    handoffAudience?: string | null;
     isActive?: boolean;
     expiresAt?: Date | null;
   },
@@ -121,6 +127,7 @@ export async function updateApiKey(
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.description !== undefined) set.description = patch.description;
   if (patch.scopes !== undefined) set.scopes = patch.scopes;
+  if (patch.handoffAudience !== undefined) set.handoffAudience = patch.handoffAudience;
   if (patch.expiresAt !== undefined) set.expiresAt = patch.expiresAt;
   if (patch.isActive !== undefined) {
     set.isActive = patch.isActive;

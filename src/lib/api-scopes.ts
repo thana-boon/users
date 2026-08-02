@@ -17,6 +17,13 @@
  * The `auth:*` scopes gate credential verification (POST /auth/verify) and are
  * split per audience for the same reason: a system that only serves students
  * must not be able to test passwords against staff accounts.
+ *
+ * `auth:handoff` is the odd one out: it tests no password at all. It lets a
+ * consumer's SERVER redeem a one-time code the user's browser already collected
+ * from us, turning "this browser has a SchoolOS session" into something a
+ * server-rendered app can act on. It is the strongest of the three — the code
+ * arrives already authenticated — so a key carrying it must also name the
+ * `handoff_audience` it is allowed to redeem for.
  */
 
 export const API_SCOPES = [
@@ -32,6 +39,7 @@ export const API_SCOPES = [
   'years:read',
   'auth:students',
   'auth:teachers',
+  'auth:handoff',
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -47,6 +55,7 @@ export const SCOPE_LABEL_TH: Record<ApiScope, string> = {
   'years:read': 'อ่านปีการศึกษาและช่วงภาคเรียน',
   'auth:students': 'ตรวจรหัสผ่านนักเรียน (ล็อกอิน)',
   'auth:teachers': 'ตรวจรหัสผ่านครู (ล็อกอิน)',
+  'auth:handoff': 'แลกโค้ดสานต่อ session (SSO handoff)',
 };
 
 /**
@@ -64,7 +73,30 @@ export const PII_SCOPES: ApiScope[] = [
  * Scopes that let a key test passwords. Not PII (nothing secret is returned),
  * but sensitive enough to warrant their own flag in the manager UI.
  */
-export const AUTH_SCOPES: ApiScope[] = ['auth:students', 'auth:teachers'];
+export const AUTH_SCOPES: ApiScope[] = ['auth:students', 'auth:teachers', 'auth:handoff'];
+
+/** Scopes whose key must also name the system it acts for (`handoffAudience`). */
+export const AUDIENCE_BOUND_SCOPES: ApiScope[] = ['auth:handoff'];
+
+/**
+ * Shape of an audience name — a service's short name, e.g. `arena`. Lives here
+ * so the key form, the create/patch routes and the handoff endpoints all agree
+ * on what is accepted; a name that round-trips differently anywhere would break
+ * the exact-match compare that the whole binding rests on.
+ */
+export const AUDIENCE_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+export function isValidAudience(v: string | null | undefined): v is string {
+  return !!v && AUDIENCE_PATTERN.test(v);
+}
+
+/** True if this set of scopes requires an audience to be set on the key. */
+export function needsAudience(scopes: string[] | null | undefined): boolean {
+  return (
+    Array.isArray(scopes) &&
+    AUDIENCE_BOUND_SCOPES.some((s) => scopes.includes(s))
+  );
+}
 
 export function isApiScope(v: string): v is ApiScope {
   return (API_SCOPES as readonly string[]).includes(v);

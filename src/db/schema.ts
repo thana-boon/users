@@ -455,6 +455,13 @@ export const apiKeys = pgTable(
     // then re-propose the default on every run, hanging the migrate service.)
     scopes: text('scopes').array().notNull(),
 
+    // Which system this key acts FOR, e.g. 'arena'. Only meaningful to the
+    // audience-bound scopes (`auth:handoff`): a one-time handoff code is minted
+    // for one named consumer, and only a key carrying that same name may redeem
+    // it — otherwise any key with the scope could spend a code the user's
+    // browser collected on another service's behalf. Null for every other key.
+    handoffAudience: varchar('handoff_audience', { length: 64 }),
+
     isActive: boolean('is_active').notNull().default(true),
     expiresAt: timestamp('expires_at'), // null = ไม่มีวันหมดอายุ
     revokedAt: timestamp('revoked_at'),
