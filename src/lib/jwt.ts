@@ -57,11 +57,13 @@ export const SSO_COOKIE = 'sso_session';
 /**
  * Idle window. The token's `exp` is set this far ahead and slides forward on
  * activity (middleware renews it, SessionGuard renews it while you type), so a
- * workstation left unattended logs itself out. Default 30 minutes.
+ * workstation left unattended logs itself out. Default 15 minutes — these are
+ * shared staffroom machines holding the whole school's PII, so the unattended
+ * window is kept short; someone actually working never feels it.
  */
 export function idleTimeoutMs(): number {
   const m = Number(process.env.SESSION_IDLE_MINUTES);
-  return (Number.isFinite(m) && m > 0 ? m : 30) * 60_000;
+  return (Number.isFinite(m) && m > 0 ? m : 15) * 60_000;
 }
 
 /**

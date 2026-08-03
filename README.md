@@ -83,7 +83,8 @@ seed จะตั้ง `T00116` + `T00241` เป็น `teacher-admin` ให�
 | `SEED_ADMIN_CODE` / `SEED_ADMIN_PASSWORD` / `SEED_ADMIN_NAME` | บัญชี teacher-admin แรกที่แอปสร้างให้ตอนบูต **เฉพาะเมื่อยังไม่มีแอดมินใน DB** (NAME ไม่บังคับ) |
 | `FIELD_ENCRYPTION_KEY` | คีย์ AES-256-GCM (base64 32 ไบต์) — **อยู่นอก DB**. gen: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
 | `JWT_SECRET` | secret สำหรับเซ็น session token ของแอป (HS256) |
-| `JWT_EXPIRES_IN` | อายุ token (ดีฟอลต์ `8h`) |
+| `SESSION_IDLE_MINUTES` | ไม่มีการใช้งานนานเท่านี้ = หลุดออกจากระบบ (ดีฟอลต์ `15`) — ทุก request เลื่อนเวลาออกไปให้เอง |
+| `SESSION_ABSOLUTE_HOURS` | เพดานนับจาก login ครั้งแรก ไม่มีอะไรต่ออายุข้ามได้ (ดีฟอลต์ `8`) |
 | `STUDENT_EMAIL_DOMAIN` | โดเมนอีเมลนักเรียน (ดีฟอลต์ `sukhon.ac.th`) |
 | `SSO_ALLOWED_ORIGINS` | origin ของ service อื่นที่เรียก `GET /api/auth/session` ได้ (คั่นด้วย `,` เช่น `http://localhost:3017`) — ว่าง = ไม่มีใครเรียกได้ |
 
@@ -121,7 +122,7 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 - Login API สาธารณะสำหรับนักเรียน/ครู (`/api/auth/{student,teacher}-login`) — decrypt แล้วเทียบรหัสผ่าน,
   มี rate-limit + lockout, ออก JWT ตาม role จริง. token `teacher`/`student` ผ่าน login ได้แต่ถูกโมดูลนี้ปฏิเสธ.
 - **Session timeout 2 ชั้น** (`src/lib/jwt.ts`):
-  - `SESSION_IDLE_MINUTES` (ค่าเริ่มต้น **30**) — ไม่มีการใช้งานเกินนี้ = หลุดออกจากระบบ.
+  - `SESSION_IDLE_MINUTES` (ค่าเริ่มต้น **15**) — ไม่มีการใช้งานเกินนี้ = หลุดออกจากระบบ.
     ทุก request ที่ผ่าน middleware จะ **เลื่อนเวลาออกไปให้เอง** (re-sign เมื่อเลยครึ่งทาง)
     ดังนั้นระหว่างที่ทำงานอยู่จริงจะไม่หลุด.
   - `SESSION_ABSOLUTE_HOURS` (ค่าเริ่มต้น **8**) — เพดานนับจากตอน login ครั้งแรก

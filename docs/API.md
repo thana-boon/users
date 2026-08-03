@@ -572,7 +572,7 @@ if (data.valid) {
 
 **ต่ออายุ session** — `POST /api/auth/refresh` (`credentials: 'include'`, ไม่ต้องมี body)
 
-การใช้งานในระบบคุณ **ไม่**นับเป็น activity ของ session โดยอัตโนมัติ — ตัวที่เลื่อน idle window ออกไปทำงานเฉพาะกับหน้าและ API ของโมดูล Users เท่านั้น ถ้าผู้ใช้ทำงานในระบบคุณ 30 นาทีโดยไม่แตะ Users เลย session จะหมดอายุกลางคัน ระบบคุณจึงต้องเรียก endpoint นี้เองเมื่อเห็นว่าผู้ใช้ยังใช้งานอยู่จริง
+การใช้งานในระบบคุณ **ไม่**นับเป็น activity ของ session โดยอัตโนมัติ — ตัวที่เลื่อน idle window ออกไปทำงานเฉพาะกับหน้าและ API ของโมดูล Users เท่านั้น ถ้าผู้ใช้ทำงานในระบบคุณ 15 นาทีโดยไม่แตะ Users เลย session จะหมดอายุกลางคัน ระบบคุณจึงต้องเรียก endpoint นี้เองเมื่อเห็นว่าผู้ใช้ยังใช้งานอยู่จริง
 
 ```js
 const res = await fetch('http://localhost:3002/api/auth/refresh', {
@@ -601,7 +601,7 @@ const { expiresAt, absoluteEndsAt } = await res.json();
 **ข้อควรรู้เรื่อง cookie**
 
 - `SameSite=Lax` ดูที่ *site* ไม่สนพอร์ต — `localhost:3002` กับ `localhost:3017` จึงถือเป็น site เดียวกัน cookie ส่งถึงกันได้ แต่ถ้าย้ายไปคนละโดเมนจริง ๆ ต้องเปลี่ยนเป็น `SameSite=None; Secure` (ต้อง HTTPS ทั้งคู่)
-- cookie นี้ถูกลบพร้อม session ปกติตอน logout และหมดอายุตามกติกา idle 30 นาที / เพดาน 8 ชั่วโมงเดียวกัน
+- cookie นี้ถูกลบพร้อม session ปกติตอน logout และหมดอายุตามกติกา idle 15 นาที / เพดาน 8 ชั่วโมงเดียวกัน
 
 ---
 

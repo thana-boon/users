@@ -88,7 +88,7 @@ services:
       # Session: logged out after SESSION_IDLE_MINUTES of no activity, and in any
       # case SESSION_ABSOLUTE_HOURS after logging in. Activity slides the first
       # one forward; nothing slides the second.
-      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-30}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-15}
       SESSION_ABSOLUTE_HOURS: ${SESSION_ABSOLUTE_HOURS:-8}
       # Container clock. Drives the timestamps in backup FILENAMES and in server
       # logs; the nightly run time is pinned separately by BACKUP_TZ so the two
