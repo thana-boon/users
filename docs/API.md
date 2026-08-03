@@ -594,7 +594,7 @@ const { expiresAt, absoluteEndsAt } = await res.json();
 | `GET /api/auth/logout?next=<url>` | ทำเป็น**ลิงก์**ธรรมดา — พาผู้ใช้ออกแล้ว redirect กลับมาที่ `next` |
 | `POST /api/auth/logout` (`credentials: 'include'`) | อยากล้าง state ของระบบคุณเองแล้วอยู่หน้าเดิม ไม่ต้อง navigate |
 
-`next` รับได้เฉพาะ path ในโดเมน Users หรือ URL ที่ origin อยู่ใน `SSO_ALLOWED_ORIGINS` เท่านั้น (กัน open redirect) — ถ้าไม่ผ่านจะพาไปหน้า login ของ Users แทน ไม่ใส่ `next` ก็ได้
+`next` รับได้เฉพาะ path ในโดเมน Users หรือ URL ที่ origin อยู่ใน `SSO_ALLOWED_ORIGINS` เท่านั้น (กัน open redirect) — ถ้าไม่ผ่าน หรือไม่ใส่ `next` มาเลย จะพาไปที่หน้าแรกของแพลตฟอร์ม (`https://schoolos.sukhon.ac.th/`)
 
 > ⚠️ ล้าง state ฝั่งคุณอย่างเดียวไม่พอ — ถ้าไม่เรียก endpoint นี้ `sso_session` จะยังอยู่ พอผู้ใช้กลับเข้าหน้าคุณอีกครั้ง probe จะตอบ `valid:true` แล้วล็อกอินกลับเข้าไปเอง เรื่องนี้สำคัญมากกับเครื่องที่ใช้ร่วมกัน
 
@@ -602,6 +602,7 @@ const { expiresAt, absoluteEndsAt } = await res.json();
 
 - `SameSite=Lax` ดูที่ *site* ไม่สนพอร์ต — `localhost:3002` กับ `localhost:3017` จึงถือเป็น site เดียวกัน cookie ส่งถึงกันได้ แต่ถ้าย้ายไปคนละโดเมนจริง ๆ ต้องเปลี่ยนเป็น `SameSite=None; Secure` (ต้อง HTTPS ทั้งคู่)
 - cookie นี้ถูกลบพร้อม session ปกติตอน logout และหมดอายุตามกติกา idle 15 นาที / เพดาน 8 ชั่วโมงเดียวกัน
+- **`sso_session` เป็น session cookie** — ไม่มี `Max-Age`/`Expires` เบราว์เซอร์จึงลบทิ้งเองตอนปิดโปรแกรม **ปิดเบราว์เซอร์ = หลุดทั้งแพลตฟอร์ม** ต่อให้เพิ่งใช้งานไปเมื่อนาทีที่แล้ว (ตั้งใจ — เครื่องส่วนกลางในโรงเรียนต้องไม่มีบัญชีคนก่อนค้างไว้ให้คนถัดไป) ระบบคุณจึงต้องรับมือกับ `valid:false` ที่โผล่มาตอนเปิดเบราว์เซอร์ใหม่เสมอ อย่าแคชคำตอบข้ามการปิดเบราว์เซอร์ (เก็บใน `sessionStorage` ได้ อย่าเก็บใน `localStorage`)
 
 ---
 

@@ -122,43 +122,69 @@ export function cookieSecure(): boolean {
   return (process.env.COOKIE_SECURE ?? 'true').toLowerCase() !== 'false';
 }
 
-/** Shared cookie options for the session cookie (set on login, cleared on logout). */
-export function sessionCookieOptions(maxAgeSec: number) {
+export interface SessionCookieOptions {
+  httpOnly: boolean;
+  sameSite: 'lax';
+  secure: boolean;
+  path: string;
+  /** Only ever set to 0, to delete. See sessionCookieOptions(). */
+  maxAge?: number;
+}
+
+/**
+ * Shared cookie options for the session cookie (set on login, cleared on logout).
+ *
+ * Note what is NOT here: no `maxAge`, no `expires`. That makes all three
+ * *session cookies* in the browser's sense — closing the browser deletes them,
+ * so on a shared staffroom machine "I closed the window" really does mean signed
+ * out, with no window in which the next person to open it inherits the last
+ * one's account.
+ *
+ * This costs nothing in enforcement. The idle window and the absolute cap live
+ * in the token's own claims and are re-checked by verifySession() on every
+ * request, so they hold whatever the browser chooses to keep — a cookie that
+ * outlives its token buys the holder nothing but a redirect to the portal. The
+ * old maxAge was only ever tidiness.
+ *
+ * The price is that a browser restart signs you out even one minute later. That
+ * is the intended trade on machines full of the whole school's PII.
+ */
+export function sessionCookieOptions(): SessionCookieOptions {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
     secure: cookieSecure(),
     path: '/',
-    maxAge: maxAgeSec,
   };
 }
 
 /** Minimal cookie writer — the shape `NextResponse.cookies.set` accepts. */
 type CookieJar = {
-  set(name: string, value: string, options: ReturnType<typeof sessionCookieOptions>): unknown;
+  set(name: string, value: string, options: SessionCookieOptions): unknown;
 };
 
 /**
- * Write both session cookies from one token, sized to the same deadline.
- *
- * Both get maxAge = time left, so an unattended browser drops them by itself
- * rather than keeping a dead token around to be replayed.
+ * Write all three session cookies from one token. Returns the deadline the
+ * caller should show, since the countdown is seeded from it server-side.
  */
 export function setSessionCookies(jar: CookieJar, token: string, claims: SessionClaims): number {
   const expiresAt = sessionExpiresAt(claims);
-  const maxAge = Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
-  jar.set(SESSION_COOKIE, token, sessionCookieOptions(maxAge));
-  jar.set(SSO_COOKIE, token, sessionCookieOptions(maxAge)); // same token, cross-service name
+  jar.set(SESSION_COOKIE, token, sessionCookieOptions());
+  jar.set(SSO_COOKIE, token, sessionCookieOptions()); // same token, cross-service name
   jar.set(SESSION_EXP_COOKIE, String(expiresAt), {
-    ...sessionCookieOptions(maxAge),
+    ...sessionCookieOptions(),
     httpOnly: false, // read by SessionGuard — see SESSION_EXP_COOKIE
   });
   return expiresAt;
 }
 
-/** Drop both cookies (logout, or a session the server has decided is over). */
+/**
+ * Drop all three cookies (logout, or a session the server has decided is over).
+ * `maxAge: 0` is the one place a max-age belongs — it is how a cookie is deleted,
+ * not how long one lives.
+ */
 export function clearSessionCookies(jar: CookieJar): void {
-  const dead = { ...sessionCookieOptions(0), maxAge: 0 };
+  const dead = { ...sessionCookieOptions(), maxAge: 0 };
   jar.set(SESSION_COOKIE, '', dead);
   jar.set(SSO_COOKIE, '', dead);
   jar.set(SESSION_EXP_COOKIE, '', { ...dead, httpOnly: false });

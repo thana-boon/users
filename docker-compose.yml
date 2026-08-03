@@ -90,6 +90,10 @@ services:
       # one forward; nothing slides the second.
       SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-15}
       SESSION_ABSOLUTE_HOURS: ${SESSION_ABSOLUTE_HOURS:-8}
+      # Where a signed-out or timed-out browser is sent. Middleware gets this
+      # value from the default baked into src/lib/platform.ts, not from here —
+      # the edge runtime inlines process.env at build time (same as BASE_PATH).
+      PLATFORM_HOME_URL: ${PLATFORM_HOME_URL:-https://schoolos.sukhon.ac.th/}
       # Container clock. Drives the timestamps in backup FILENAMES and in server
       # logs; the nightly run time is pinned separately by BACKUP_TZ so the two
       # cannot disagree about when midnight is.

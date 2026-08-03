@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { clearSessionCookies } from '@/lib/jwt';
+import { platformHomeUrl } from '@/lib/platform';
 import { corsPreflight, isAllowedOrigin, withCors } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -26,10 +27,14 @@ export const runtime = 'nodejs';
  * which is the far worse bargain on shared classroom machines.
  */
 
-/** Where to send the browser once the cookies are gone. */
+/**
+ * Where to send the browser once the cookies are gone. Without a `next` that is
+ * the platform portal, not this module's login form: signing out of Users signs
+ * you out of everything, so the front door is the honest place to land.
+ */
 function returnTo(req: NextRequest): URL {
   const raw = req.nextUrl.searchParams.get('next');
-  const fallback = new URL('/users/login', req.nextUrl.origin);
+  const fallback = new URL(platformHomeUrl());
   if (!raw) return fallback;
 
   // A path inside this app.

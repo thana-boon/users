@@ -85,6 +85,7 @@ seed จะตั้ง `T00116` + `T00241` เป็น `teacher-admin` ให�
 | `JWT_SECRET` | secret สำหรับเซ็น session token ของแอป (HS256) |
 | `SESSION_IDLE_MINUTES` | ไม่มีการใช้งานนานเท่านี้ = หลุดออกจากระบบ (ดีฟอลต์ `15`) — ทุก request เลื่อนเวลาออกไปให้เอง |
 | `SESSION_ABSOLUTE_HOURS` | เพดานนับจาก login ครั้งแรก ไม่มีอะไรต่ออายุข้ามได้ (ดีฟอลต์ `8`) |
+| `PLATFORM_HOME_URL` | ปลายทางเมื่อ logout / หมด session (ดีฟอลต์ `https://schoolos.sukhon.ac.th/`) — middleware ใช้ค่า default ในโค้ด ไม่ได้อ่านจาก .env (edge runtime inline ตอน build) |
 | `STUDENT_EMAIL_DOMAIN` | โดเมนอีเมลนักเรียน (ดีฟอลต์ `sukhon.ac.th`) |
 | `SSO_ALLOWED_ORIGINS` | origin ของ service อื่นที่เรียก `GET /api/auth/session` ได้ (คั่นด้วย `,` เช่น `http://localhost:3017`) — ว่าง = ไม่มีใครเรียกได้ |
 
@@ -127,10 +128,19 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
     ดังนั้นระหว่างที่ทำงานอยู่จริงจะไม่หลุด.
   - `SESSION_ABSOLUTE_HOURS` (ค่าเริ่มต้น **8**) — เพดานนับจากตอน login ครั้งแรก
     (claim `login_at`) ไม่มีอะไรต่ออายุข้ามเพดานนี้ได้.
+  - **ปิดเบราว์เซอร์ = หลุดทันที** ไม่ว่าจะผ่านไปกี่นาที — cookie ทั้งสามตัว**ไม่มี** `max-age`
+    จึงเป็น session cookie ที่เบราว์เซอร์ลบเองตอนปิดโปรแกรม (`sessionCookieOptions()`).
+    เครื่องส่วนกลางในห้องพักครูจึงไม่มีจังหวะที่คนถัดไปเปิดเบราว์เซอร์แล้วได้บัญชีคนก่อนติดมาด้วย.
+    timeout สองชั้นข้างบนไม่ได้พึ่ง cookie อยู่แล้ว — `verifySession()` เช็ค `exp`/`login_at`
+    จาก claim ในโทเคนเองทุก request.
   - เบราว์เซอร์นับถอยหลังจาก cookie `schoolos_session_exp` (อ่านได้ด้วย JS, ไม่ใช่ credential)
     แล้วเตือนก่อนหมดเวลา 2 นาที พร้อมปุ่ม "อยู่ต่อ" → `POST /api/auth/refresh`
     (`src/components/SessionGuard.tsx`). ตั้งใจ**ไม่ให้ poll เซิร์ฟเวอร์เพื่อเช็กเวลา** —
     การถามเซิร์ฟเวอร์ก็นับเป็น activity เสียเอง session จึงจะไม่มีวันหมดอายุ.
+  - หมดเวลาแล้ว/กด logout → เด้งออกไปที่ **portal** (`PLATFORM_HOME_URL`) ไม่ใช่หน้า login
+    ของโมดูลนี้ เพราะ logout ที่นี่คือ logout ทั้งแพลตฟอร์ม. ยกเว้นกรณี "ล็อกอินอยู่แต่ไม่มีสิทธิ์
+    `users:write`" ที่ยังส่งไป `/users/login?denied=1` เพราะหน้านั้นบอกได้ว่าตอนนี้เป็นใครอยู่
+    และให้สลับไปล็อกอินด้วยบัญชีแอดมินได้.
 
 ---
 

@@ -20,11 +20,27 @@ import { withBase } from '@/lib/client';
  * refreshes itself every few seconds can never idle out at all.
  */
 
-/** How long before the deadline the warning appears. */
-const WARN_BEFORE_MS = 2 * 60_000;
+/**
+ * The two thresholds below are derived from the configured idle window rather
+ * than fixed, so that "someone who is still working never gets logged out" holds
+ * at ANY value of SESSION_IDLE_MINUTES. Hard-coded minutes only happen to work
+ * while the window is comfortably larger than they are: at a short window a
+ * fixed 2-minute warning can cover the whole renewal band, and then the guard
+ * would sit there showing a dialog to somebody who is typing.
+ */
+
+/** How long before the deadline the warning appears — at most 2 minutes. */
+function warnBeforeMs(idleMs: number): number {
+  return Math.min(2 * 60_000, idleMs / 4);
+}
 
 /** Refresh silently once activity is seen and less than this much time is left. */
-const RENEW_UNDER_MS = 10 * 60_000;
+function renewUnderMs(idleMs: number): number {
+  return (idleMs * 2) / 3;
+}
+
+/** How recently input must have happened to count as "still here". */
+const ACTIVE_WITHIN_MS = 60_000;
 
 /** Floor between two silent refreshes, so a busy mouse is not a request storm. */
 const RENEW_COOLDOWN_MS = 60_000;
@@ -45,7 +61,23 @@ function mmss(ms: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
-export function SessionGuard({ expiresAt }: { expiresAt: number }) {
+export function SessionGuard({
+  expiresAt,
+  expiredUrl,
+  idleMs,
+}: {
+  expiresAt: number;
+  /** Where a finished session lands — the portal, carrying `expired=1` so it can
+   *  say why if it knows how. Built server-side in the layout, because
+   *  lib/platform reads an env var a client bundle cannot see. */
+  expiredUrl: string;
+  /** The configured idle window (SESSION_IDLE_MINUTES), passed in for the same
+   *  reason: the server is the only side that can read it. */
+  idleMs: number;
+}) {
+  const warnBefore = warnBeforeMs(idleMs);
+  const renewUnder = renewUnderMs(idleMs);
+
   // Server-rendered deadline is the starting point; the cookie takes over as
   // soon as anything renews it. Both are absolute epoch ms, so the later of the
   // two always wins. Held in a ref, not state, so updating it does not tear down
@@ -57,7 +89,7 @@ export function SessionGuard({ expiresAt }: { expiresAt: number }) {
   const lastRenew = useRef(0);
   const endedRef = useRef(false);
 
-  /** Session is over: bin the page and send them to a login that says why. */
+  /** Session is over: bin the page and send them out to the portal. */
   const end = useCallback(() => {
     if (endedRef.current) return;
     endedRef.current = true;
@@ -66,13 +98,12 @@ export function SessionGuard({ expiresAt }: { expiresAt: number }) {
     fetch(withBase('/api/auth/logout'), { method: 'POST', keepalive: true })
       .catch(() => {})
       .finally(() => {
-        // NOT withBase(): that is for API/asset/public-file paths, which the
-        // gateway delivers prefixed and next.config's beforeFiles rewrites strip
-        // again. PAGE routes genuinely live at /users/*, so prefixing this one
-        // would ask for /users/users/login — a 404 with no route behind it.
-        window.location.href = '/users/login?expired=1';
+        // An absolute URL from the server (see the prop above), so withBase()
+        // has nothing to do with it — that one prefixes root-relative API/asset
+        // paths for the gateway.
+        window.location.href = expiredUrl;
       });
-  }, []);
+  }, [expiredUrl]);
 
   const renew = useCallback(async () => {
     if (endedRef.current) return;
@@ -118,9 +149,17 @@ export function SessionGuard({ expiresAt }: { expiresAt: number }) {
 
       // Someone is clearly still working, and the window is getting short:
       // extend it quietly rather than interrupting them with the dialog.
-      const activeRecently = Date.now() - lastActivity.current < RENEW_COOLDOWN_MS;
+      //
+      // Note there is no lower bound here. Renewal used to stop once the warning
+      // was due, on the reasoning that the dialog takes over from there — but the
+      // dialog asks a question the keyboard has already answered. Somebody typing
+      // steadily into a long form would watch it appear and, if they never
+      // reached for the mouse, be signed out mid-sentence with their work on
+      // screen. Activity keeps the session alive right down to the last second,
+      // and a dialog that is already up simply disappears again on the next tick.
+      const activeRecently = Date.now() - lastActivity.current < ACTIVE_WITHIN_MS;
       const cooledDown = Date.now() - lastRenew.current > RENEW_COOLDOWN_MS;
-      if (left > WARN_BEFORE_MS && left < RENEW_UNDER_MS && activeRecently && cooledDown) {
+      if (left < renewUnder && activeRecently && cooledDown) {
         void renew();
       }
     };
@@ -128,9 +167,9 @@ export function SessionGuard({ expiresAt }: { expiresAt: number }) {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [end, renew]);
+  }, [end, renew, renewUnder]);
 
-  if (remaining > WARN_BEFORE_MS) return null;
+  if (remaining > warnBefore) return null;
 
   return (
     <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby="session-warn-title">

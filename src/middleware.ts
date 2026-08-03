@@ -7,6 +7,7 @@ import {
   setSessionCookies,
   USERS_WRITE,
 } from '@/lib/jwt';
+import { platformHomeUrl } from '@/lib/platform';
 
 /**
  * Edge middleware - the first, fail-closed RBAC gate.
@@ -22,8 +23,10 @@ import {
  *   static/next assets
  *
  * A request with no token, an invalid token, or one lacking `users:write` is
- * rejected here before any handler runs. UI -> redirect to /login; API ->
- * 401/403 JSON.
+ * rejected here before any handler runs. API -> 401/403 JSON. UI -> the portal
+ * when there is no session to speak of, this module's login page when there is
+ * one that simply is not allowed in (see below — the two are different problems
+ * and want different answers).
  */
 
 export async function middleware(req: NextRequest) {
@@ -68,10 +71,23 @@ export async function middleware(req: NextRequest) {
         : 'ไม่มีสิทธิ์เข้าถึงโมดูลนี้ (ต้องมีสิทธิ์ users:write)';
       return NextResponse.json({ error: msg }, { status });
     }
+
+    // No session at all — signed out, or the idle window ran out while the
+    // browser was closed. Out to the portal, which is where a sign-in that works
+    // for the whole platform lives; `next` rides along so it can send them back
+    // here afterwards if it knows how.
+    if (!resolved) {
+      return NextResponse.redirect(platformHomeUrl({ next: pathname }));
+    }
+
+    // Signed in, but this account cannot enter the module. NOT the portal: that
+    // answers a question they have already answered, and would leave them
+    // clicking back and forth with nothing telling them why. The login page says
+    // who they are signed in as and offers an admin sign-in instead.
     const url = req.nextUrl.clone();
     url.pathname = '/users/login';
     url.searchParams.set('next', pathname);
-    if (resolved) url.searchParams.set('denied', '1');
+    url.searchParams.set('denied', '1');
     return NextResponse.redirect(url);
   }
 

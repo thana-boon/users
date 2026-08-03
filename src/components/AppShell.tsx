@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { withBase } from '@/lib/client';
 import {
@@ -127,17 +127,23 @@ function groupActive(pathname: string, g: Group) {
 
 export function AppShell({
   session,
+  signedOutUrl,
   children,
 }: {
   session: SessionInfo;
+  /** Where signing out lands — the platform portal. Built server-side in the
+   *  layout, because lib/platform reads an env var a client bundle cannot see. */
+  signedOutUrl: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
 
   async function logout() {
     await fetch(withBase('/api/auth/logout'), { method: 'POST' });
-    router.push('/users/login');
+    // A full navigation, not router.push(): the portal is its own origin in dev
+    // and the Next router cannot leave the app. It also guarantees every page
+    // rendered behind the session that just died is thrown away.
+    window.location.href = signedOutUrl;
   }
 
   return (

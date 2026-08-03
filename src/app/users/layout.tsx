@@ -3,7 +3,14 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { teachers } from '@/db/schema';
 import { getSession } from '@/lib/auth';
-import { hasPermission, sessionExpiresAt, USERS_WRITE, type SessionClaims } from '@/lib/jwt';
+import {
+  hasPermission,
+  idleTimeoutMs,
+  sessionExpiresAt,
+  USERS_WRITE,
+  type SessionClaims,
+} from '@/lib/jwt';
+import { platformHomeUrl } from '@/lib/platform';
 import { AppShell } from '@/components/AppShell';
 import { SessionGuard } from '@/components/SessionGuard';
 import { ToastProvider } from '@/components/Toast';
@@ -52,10 +59,13 @@ export default async function UsersLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Middleware already gates this, but re-check for defence in depth.
+  // Middleware already gates this, but re-check for defence in depth. Same split
+  // it makes: no session goes out to the portal, a session without the
+  // permission gets the login page, which can actually explain itself.
   const session = await getSession();
-  if (!session || !hasPermission(session, USERS_WRITE)) {
-    redirect('/users/login?next=/users');
+  if (!session) redirect(platformHomeUrl({ next: '/users' }));
+  if (!hasPermission(session, USERS_WRITE)) {
+    redirect('/users/login?next=/users&denied=1');
   }
 
   const { photoUrl, initial } = await avatarOf(session);
@@ -65,8 +75,15 @@ export default async function UsersLayout({
       <ConfirmProvider>
         {/* Seeded from the server so the countdown is right on first paint,
             before any cookie has been read. */}
-        <SessionGuard expiresAt={sessionExpiresAt(session)} />
-        <AppShell session={{ name: session.name ?? null, role: session.role, photoUrl, initial }}>
+        <SessionGuard
+          expiresAt={sessionExpiresAt(session)}
+          expiredUrl={platformHomeUrl({ expired: '1' })}
+          idleMs={idleTimeoutMs()}
+        />
+        <AppShell
+          session={{ name: session.name ?? null, role: session.role, photoUrl, initial }}
+          signedOutUrl={platformHomeUrl()}
+        >
           {children}
         </AppShell>
       </ConfirmProvider>
