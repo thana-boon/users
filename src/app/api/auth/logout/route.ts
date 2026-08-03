@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { clearSessionCookies } from '@/lib/jwt';
-import { platformHomeUrl } from '@/lib/platform';
+import { platformHomeUrl, safeNextPath } from '@/lib/platform';
 import { corsPreflight, isAllowedOrigin, withCors } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -32,15 +32,20 @@ export const runtime = 'nodejs';
  * the platform portal, not this module's login form: signing out of Users signs
  * you out of everything, so the front door is the honest place to land.
  */
-function returnTo(req: NextRequest): URL {
+function returnTo(req: NextRequest): string {
   const raw = req.nextUrl.searchParams.get('next');
-  const fallback = new URL(platformHomeUrl());
+  const fallback = platformHomeUrl();
   if (!raw) return fallback;
 
-  // A path inside this app.
-  if (raw.startsWith('/') && !raw.startsWith('//')) {
-    return new URL(raw, req.nextUrl.origin);
-  }
+  // A path inside this app, answered AS a path: a relative Location is legal
+  // (RFC 7231 §7.1.2) and the browser resolves it against the address it
+  // actually typed. Resolving it here instead would need this app's public URL,
+  // which the container does not have — it binds 0.0.0.0:3002 behind the
+  // gateway, and that is precisely what used to come back out, so anyone signing
+  // out with `next=/…` got ERR_ADDRESS_INVALID. A relative answer depends on no
+  // setting being right, and cannot leave the domain.
+  const path = safeNextPath(raw);
+  if (path) return path;
 
   // Back to the service that sent the user here — but only one already trusted
   // enough to read a logged-in user's identity. Without this check the logout
@@ -48,7 +53,7 @@ function returnTo(req: NextRequest): URL {
   // the thing a phishing page wants to borrow.
   try {
     const url = new URL(raw);
-    if (isAllowedOrigin(url.origin)) return url;
+    if (isAllowedOrigin(url.origin)) return url.toString();
   } catch {
     // not a URL at all — fall through
   }
@@ -56,7 +61,12 @@ function returnTo(req: NextRequest): URL {
 }
 
 export async function GET(req: NextRequest) {
-  const res = NextResponse.redirect(returnTo(req));
+  // Built by hand rather than with NextResponse.redirect(), which insists on an
+  // absolute URL and so cannot express the relative answer above.
+  const res = new NextResponse(null, {
+    status: 307,
+    headers: { Location: returnTo(req) },
+  });
   clearSessionCookies(res.cookies);
   // A cached logout is a logout that stops working the second time.
   res.headers.set('Cache-Control', 'no-store');

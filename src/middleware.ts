@@ -7,7 +7,7 @@ import {
   setSessionCookies,
   USERS_WRITE,
 } from '@/lib/jwt';
-import { platformHomeUrl } from '@/lib/platform';
+import { platformHomeUrl, publicOrigin } from '@/lib/platform';
 
 /**
  * Edge middleware - the first, fail-closed RBAC gate.
@@ -84,8 +84,13 @@ export async function middleware(req: NextRequest) {
     // answers a question they have already answered, and would leave them
     // clicking back and forth with nothing telling them why. The login page says
     // who they are signed in as and offers an admin sign-in instead.
-    const url = req.nextUrl.clone();
-    url.pathname = '/users/login';
+    //
+    // Absolute, and NOT off req.nextUrl: behind the gateway this app thinks it
+    // lives at https://0.0.0.0:3002 (its bind address), which is what broke the
+    // logout redirect — see publicOrigin(). Middleware cannot answer with a bare
+    // path the way that route now does; Next re-parses the Location header with
+    // no base and throws on a relative one.
+    const url = new URL('/users/login', publicOrigin(req.headers, req.nextUrl.origin));
     url.searchParams.set('next', pathname);
     url.searchParams.set('denied', '1');
     return NextResponse.redirect(url);

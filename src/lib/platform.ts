@@ -37,8 +37,70 @@ export function platformHomeUrl(
   const url = new URL(process.env.PLATFORM_HOME_URL?.trim() || DEFAULT_PLATFORM_HOME);
   for (const [key, value] of Object.entries(params ?? {})) {
     if (!value) continue;
-    if (key === 'next' && (!value.startsWith('/') || value.startsWith('//'))) continue;
+    if (key === 'next') {
+      // Hand the portal the cleaned-up path, not the spelling it arrived in.
+      const path = safeNextPath(value);
+      if (!path) continue;
+      url.searchParams.set(key, path);
+      continue;
+    }
     url.searchParams.set(key, value);
   }
   return url.toString();
+}
+
+/** Origin that exists only to be compared against — see safeNextPath(). */
+const NOWHERE = 'https://next.invalid';
+
+/**
+ * A `next=` value reduced to a path inside this app — query and fragment kept,
+ * any authority refused — or null when it is not one.
+ *
+ * `startsWith('/')` is not the whole test. The URL parser folds `\` into `/` for
+ * http(s), so `/\evil.com` is really `//evil.com`: an authority wearing a path's
+ * clothes, and browsers read it the same way. Resolving against a throwaway
+ * origin and insisting we landed back on it catches every spelling of that,
+ * including the ones nobody has thought of yet.
+ */
+export function safeNextPath(raw: string | null | undefined): string | null {
+  if (!raw || !raw.startsWith('/')) return null;
+  let url: URL;
+  try {
+    url = new URL(raw, NOWHERE);
+  } catch {
+    return null;
+  }
+  if (url.origin !== NOWHERE) return null;
+  return url.pathname + url.search + url.hash;
+}
+
+/**
+ * The origin the BROWSER used, read off the request instead of a setting.
+ *
+ * Behind the gateway this app's own idea of where it lives is
+ * `https://0.0.0.0:3002` — HOSTNAME/PORT from the Dockerfile, a bind address no
+ * browser can dial, on a port only the gateway can reach. Anything built on it
+ * lands the user on ERR_ADDRESS_INVALID, so redirects that must be absolute ask
+ * the forwarded headers instead and fall back to `fallback` when running with no
+ * proxy in front (dev on :3002, where the app's own origin IS the right one).
+ *
+ * The headers are attacker-controllable for anyone who can reach the container
+ * directly, which is worth knowing but not worth defending here: the only thing
+ * it buys is bouncing yourself to your own host. Nothing signed, mailed or
+ * cached is built from this.
+ */
+export function publicOrigin(headers: Headers, fallback: string): string {
+  // X-Forwarded-* may be a comma-separated chain; the first entry is the client.
+  const first = (v: string | null) => v?.split(',')[0]?.trim() || null;
+  const host = first(headers.get('x-forwarded-host')) ?? first(headers.get('host'));
+  if (!host) return fallback;
+  try {
+    // No X-Forwarded-Proto means nothing terminated TLS in front of us, so the
+    // scheme we are already being served over is the honest one.
+    const proto =
+      first(headers.get('x-forwarded-proto')) ?? new URL(fallback).protocol.replace(':', '');
+    return new URL(`${proto}://${host}`).origin;
+  } catch {
+    return fallback;
+  }
 }
