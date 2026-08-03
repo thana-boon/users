@@ -4,6 +4,7 @@ import { getSessionFromRequest } from '@/lib/auth';
 import { SSO_COOKIE, verifySession } from '@/lib/jwt';
 import { corsPreflight, withCors, isAllowedOrigin } from '@/lib/cors';
 import { issueHandoffCode, isValidAudience } from '@/lib/handoff';
+import { withNoStore } from '@/lib/http';
 import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -76,5 +77,5 @@ async function handler(req: NextRequest) {
   return NextResponse.json({ valid: true, code, expiresIn, audience });
 }
 
-export const GET = withCors(handler);
+export const GET = withCors(withNoStore(handler));
 export const OPTIONS = corsPreflight;

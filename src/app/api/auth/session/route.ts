@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
 import { SSO_COOKIE, sessionExpiresAt, verifySession } from '@/lib/jwt';
 import { corsPreflight, withCors } from '@/lib/cors';
+import { withNoStore } from '@/lib/http';
 
 export const runtime = 'nodejs';
 
@@ -55,5 +56,5 @@ async function handler(req: NextRequest) {
   });
 }
 
-export const GET = withCors(handler);
+export const GET = withCors(withNoStore(handler));
 export const OPTIONS = corsPreflight;
