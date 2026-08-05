@@ -7,20 +7,37 @@ import { getSessionFromRequest } from './auth';
 import { hasPermission, USERS_WRITE, type SessionClaims } from './jwt';
 import { extractApiKey, hashApiKey, hasScope, type ApiScope } from './apikey';
 import { clientIp } from './ip';
-import { rateLimit } from './rate-limit';
+import { checkBudget, rateLimit } from './rate-limit';
 import type { ApiKey } from '@/db/schema';
 
 /** Per-credential request budget for the public API (fixed window). */
 const API_RATE_LIMIT = 600;
 const API_RATE_WINDOW_MS = 60_000;
 
-function throttled(bucketKey: string): NextResponse | null {
-  const r = rateLimit(bucketKey, API_RATE_LIMIT, API_RATE_WINDOW_MS);
-  if (r.allowed) return null;
+/**
+ * Per-IP budget for requests that fail to authenticate. Charged only on a
+ * denial, never on a call that presented a working credential.
+ *
+ * WHY not per request: every other SchoolOS service reaches us server-side over
+ * the docker bridge, so they all arrive as ONE address (172.18.0.1). A budget
+ * that counted successful calls too would have the whole platform share a
+ * single bucket and throttle each other — and one of the things behind it is
+ * /api/public/v1/auth/verify, so the symptom would be users being told their
+ * password is wrong. Same failure the login routes just had; same fix.
+ */
+const API_FAIL_LIMIT = 100;
+const API_FAIL_WINDOW_MS = 60_000;
+
+function rateLimited(retryAfterSec: number): NextResponse {
   return NextResponse.json(
     { error: { code: 'rate_limited', message: 'คำขอถี่เกินไป ลองใหม่อีกครั้งภายหลัง' } },
-    { status: 429, headers: { 'Retry-After': String(r.retryAfterSec) } },
+    { status: 429, headers: { 'Retry-After': String(retryAfterSec) } },
   );
+}
+
+function throttled(bucketKey: string): NextResponse | null {
+  const r = rateLimit(bucketKey, API_RATE_LIMIT, API_RATE_WINDOW_MS);
+  return r.allowed ? null : rateLimited(r.retryAfterSec);
 }
 
 /**
@@ -74,9 +91,20 @@ export async function requireApiScope(
   scope: ApiScope,
 ): Promise<ApiGuard> {
   // Per-IP budget guards the pre-auth work (a DB lookup per presented key), so
-  // an unauthenticated flood of bogus keys can't hammer the database.
-  const ipLimited = throttled(`api-ip:${clientIp(req) ?? 'unknown'}`);
-  if (ipLimited) return { ok: false, response: ipLimited };
+  // an unauthenticated flood of bogus keys can't hammer the database. Checked
+  // here, charged only when the credential turns out to be bad — see
+  // API_FAIL_LIMIT for why counting good calls too was the wrong shape.
+  const failKey = `api-fail-ip:${clientIp(req) ?? 'unknown'}`;
+  const ipGate = checkBudget(failKey, API_FAIL_LIMIT);
+  if (!ipGate.allowed) {
+    return { ok: false, response: rateLimited(ipGate.retryAfterSec) };
+  }
+
+  /** Deny, and charge this address for having presented a bad credential. */
+  const denyAuth = (status: number, code: string, message: string): ApiGuard => {
+    rateLimit(failKey, API_FAIL_LIMIT, API_FAIL_WINDOW_MS);
+    return { ok: false, response: deny(status, code, message) };
+  };
 
   const presented = extractApiKey(req.headers);
 
@@ -85,18 +113,15 @@ export async function requireApiScope(
     const hash = hashApiKey(presented);
     const key = await db.query.apiKeys.findFirst({ where: eq(apiKeys.keyHash, hash) });
 
-    if (!key) return { ok: false, response: deny(401, 'invalid_key', 'API key ไม่ถูกต้อง') };
+    if (!key) return denyAuth(401, 'invalid_key', 'API key ไม่ถูกต้อง');
     if (!key.isActive || key.revokedAt) {
-      return { ok: false, response: deny(403, 'key_revoked', 'API key นี้ถูกปิดใช้งานแล้ว') };
+      return denyAuth(403, 'key_revoked', 'API key นี้ถูกปิดใช้งานแล้ว');
     }
     if (key.expiresAt && key.expiresAt.getTime() <= Date.now()) {
-      return { ok: false, response: deny(403, 'key_expired', 'API key นี้หมดอายุแล้ว') };
+      return denyAuth(403, 'key_expired', 'API key นี้หมดอายุแล้ว');
     }
     if (!hasScope(key.scopes, scope)) {
-      return {
-        ok: false,
-        response: deny(403, 'insufficient_scope', `API key นี้ไม่มีสิทธิ์ ${scope}`),
-      };
+      return denyAuth(403, 'insufficient_scope', `API key นี้ไม่มีสิทธิ์ ${scope}`);
     }
 
     // Per-key budget so one integration cannot exhaust the DB pool / CPU.
@@ -110,16 +135,10 @@ export async function requireApiScope(
   // Fall back to an admin browser session.
   const session = await getSessionFromRequest(req);
   if (!session) {
-    return {
-      ok: false,
-      response: deny(401, 'unauthorized', 'ต้องส่ง API key (X-API-Key) หรือเข้าสู่ระบบก่อน'),
-    };
+    return denyAuth(401, 'unauthorized', 'ต้องส่ง API key (X-API-Key) หรือเข้าสู่ระบบก่อน');
   }
   if (!hasPermission(session, USERS_WRITE)) {
-    return {
-      ok: false,
-      response: deny(403, 'forbidden', 'ไม่มีสิทธิ์เข้าถึง API นี้'),
-    };
+    return denyAuth(403, 'forbidden', 'ไม่มีสิทธิ์เข้าถึง API นี้');
   }
   return {
     ok: true,

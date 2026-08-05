@@ -7,9 +7,15 @@ import { students } from '@/db/schema';
 import { issueSession } from '@/lib/jwt';
 import { decrypt, safeStrEqual } from '@/lib/crypto';
 import { badRequest, handleError } from '@/lib/http';
-import { checkLockout, registerFailure, clearFailures, rateLimit } from '@/lib/rate-limit';
+import {
+  checkLockout,
+  registerFailure,
+  clearFailures,
+  loginIpGate,
+  loginLimits,
+} from '@/lib/rate-limit';
 import { clientIp } from '@/lib/ip';
-import { recordAudit } from '@/lib/audit';
+import { recordAudit, recordFailedLogin } from '@/lib/audit';
 import { corsPreflight, withCors } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -32,13 +38,22 @@ const INVALID = 'รหัส/อีเมล หรือรหัสผ่า�
 
 async function handler(req: NextRequest) {
   try {
-    // Per-IP throttle FIRST — blunts password-spraying across many identifiers,
-    // which the per-identifier lockout below cannot see. 30 attempts / 5 min / IP.
-    const ip = clientIp(req) ?? 'unknown';
-    const ipGate = rateLimit(`login-ip:${ip}`, 30, 5 * 60_000);
+    // Per-IP gate FIRST — blunts password-spraying across many identifiers,
+    // which the per-identifier lockout below cannot see. Shares its bucket with
+    // the teacher route on purpose: a sprayer working both audiences from one
+    // address is one attacker, not two.
+    //
+    // Only FAILED attempts are charged to it (see the failure branch); this
+    // check does not consume. This route is where that mattered most — the
+    // portal tries teacher-login first and falls back to here, so every student
+    // signing in cost the old shared budget two units, halving it to ~15 student
+    // logins per 5 minutes for an entire NATted site. See loginIpGate().
+    const limits = loginLimits();
+    const gate = loginIpGate(clientIp(req) ?? 'unknown', limits);
+    const ipGate = gate.check();
     if (!ipGate.allowed) {
       return NextResponse.json(
-        { error: `พยายามเข้าสู่ระบบบ่อยเกินไป ลองใหม่ใน ${ipGate.retryAfterSec} วินาที` },
+        { error: `เข้าสู่ระบบผิดพลาดบ่อยเกินไป ลองใหม่ใน ${ipGate.retryAfterSec} วินาที` },
         { status: 429, headers: { 'Retry-After': String(ipGate.retryAfterSec) } },
       );
     }
@@ -70,7 +85,24 @@ async function handler(req: NextRequest) {
     }
 
     if (!row || !valid) {
-      registerFailure(`student:${id.toLowerCase()}`);
+      // Charge the IP budget here and only here, then leave a row saying what
+      // actually happened — the reply itself stays uniform on purpose.
+      const exhausted = gate.charge(Boolean(row));
+      const locked = registerFailure(
+        `student:${id.toLowerCase()}`,
+        limits.lockMaxFails,
+        limits.lockWindowMs,
+        limits.lockMs,
+      );
+      await recordFailedLogin({
+        req,
+        audience: 'student',
+        identifier: id,
+        targetId: row?.id ?? null,
+        reason: failureReason(row),
+        locked,
+        ipExhausted: exhausted,
+      });
       return badRequest(INVALID);
     }
 
@@ -103,6 +135,18 @@ async function handler(req: NextRequest) {
   } catch (err) {
     return handleError(err);
   }
+}
+
+/**
+ * Why the attempt failed — for the audit row ONLY. The caller is always told
+ * the same thing (INVALID), so the endpoint still cannot be used to work out
+ * which student codes exist.
+ */
+function failureReason(row: typeof students.$inferSelect | undefined): string {
+  if (!row) return 'ไม่พบรหัส/อีเมลนี้';
+  if (row.isArchived) return 'บัญชีถูกเก็บถาวรแล้ว';
+  if (!row.passwordEncrypted) return 'บัญชีนี้ยังไม่ได้ตั้งรหัสผ่าน';
+  return 'รหัสผ่านไม่ถูกต้อง';
 }
 
 // Wrapped so the 400/429 replies carry the CORS headers too — otherwise a

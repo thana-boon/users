@@ -7,9 +7,15 @@ import { teachers } from '@/db/schema';
 import { issueSession, USERS_READ, USERS_WRITE } from '@/lib/jwt';
 import { decrypt, safeStrEqual } from '@/lib/crypto';
 import { badRequest, handleError } from '@/lib/http';
-import { checkLockout, registerFailure, clearFailures, rateLimit } from '@/lib/rate-limit';
+import {
+  checkLockout,
+  registerFailure,
+  clearFailures,
+  loginIpGate,
+  loginLimits,
+} from '@/lib/rate-limit';
 import { clientIp } from '@/lib/ip';
-import { recordAudit } from '@/lib/audit';
+import { recordAudit, recordFailedLogin } from '@/lib/audit';
 import { corsPreflight, withCors } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -34,13 +40,22 @@ const INVALID = 'รหัสครู หรือรหัสผ่านไ�
 
 async function handler(req: NextRequest) {
   try {
-    // Per-IP throttle FIRST — blunts password-spraying across many usernames,
-    // which the per-username lockout below cannot see. 30 attempts / 5 min / IP.
-    const ip = clientIp(req) ?? 'unknown';
-    const ipGate = rateLimit(`login-ip:${ip}`, 30, 5 * 60_000);
+    // Per-IP gate FIRST — blunts password-spraying across many usernames, which
+    // the per-username lockout below cannot see.
+    //
+    // Only FAILED attempts are charged to it (see the failure branch); this
+    // check does not consume. The budget used to be spent by every request,
+    // successes included, and behind NAT that is the same as no budget at all:
+    // the site reaches us as one address, so a class signing in together spent
+    // the whole school's quota and everyone after them was told — by a portal
+    // that renders any non-200 the same way — that their password was wrong.
+    // See loginIpGate() for the full reasoning.
+    const limits = loginLimits();
+    const gate = loginIpGate(clientIp(req) ?? 'unknown', limits);
+    const ipGate = gate.check();
     if (!ipGate.allowed) {
       return NextResponse.json(
-        { error: `พยายามเข้าสู่ระบบบ่อยเกินไป ลองใหม่ใน ${ipGate.retryAfterSec} วินาที` },
+        { error: `เข้าสู่ระบบผิดพลาดบ่อยเกินไป ลองใหม่ใน ${ipGate.retryAfterSec} วินาที` },
         { status: 429, headers: { 'Retry-After': String(ipGate.retryAfterSec) } },
       );
     }
@@ -71,7 +86,24 @@ async function handler(req: NextRequest) {
     }
 
     if (!row || !valid) {
-      registerFailure(`teacher:${code.toLowerCase()}`);
+      // Charge the IP budget here and only here, then leave a row saying what
+      // actually happened — the reply itself stays uniform on purpose.
+      const exhausted = gate.charge(Boolean(row));
+      const locked = registerFailure(
+        `teacher:${code.toLowerCase()}`,
+        limits.lockMaxFails,
+        limits.lockWindowMs,
+        limits.lockMs,
+      );
+      await recordFailedLogin({
+        req,
+        audience: 'teacher',
+        identifier: code,
+        targetId: row?.id ?? null,
+        reason: failureReason(row),
+        locked,
+        ipExhausted: exhausted,
+      });
       return badRequest(INVALID);
     }
 
@@ -112,6 +144,18 @@ async function handler(req: NextRequest) {
   } catch (err) {
     return handleError(err);
   }
+}
+
+/**
+ * Why the attempt failed — for the audit row ONLY. The caller is always told
+ * the same thing (INVALID), so the endpoint still cannot be used to work out
+ * which teacher codes exist.
+ */
+function failureReason(row: typeof teachers.$inferSelect | undefined): string {
+  if (!row) return 'ไม่พบรหัสครูนี้';
+  if (row.isArchived) return 'บัญชีถูกเก็บถาวรแล้ว';
+  if (!row.passwordEncrypted) return 'บัญชีนี้ยังไม่ได้ตั้งรหัสผ่าน';
+  return 'รหัสผ่านไม่ถูกต้อง';
 }
 
 // Wrapped so the 400/429 replies carry the CORS headers too — otherwise a

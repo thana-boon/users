@@ -93,3 +93,77 @@ export async function recordAudit(input: AuditInput): Promise<void> {
     console.error('[audit] failed to record', input.action, err);
   }
 }
+
+export interface FailedLoginInput {
+  req: NextRequest;
+  /** Which login form was used — the two have separate identifier spaces. */
+  audience: 'teacher' | 'student';
+  /** teacher_code / student_code / email, exactly as it was typed. */
+  identifier: string;
+  /** The row it matched, when it matched one at all. */
+  targetId?: number | null;
+  /** Why it failed, for the admin reading the trail — never sent to the caller. */
+  reason: string;
+  /** This failure is the one that locked the account. */
+  locked?: boolean;
+  /** This failure is the one that spent the calling IP's failure budget. */
+  ipExhausted?: boolean;
+}
+
+/**
+ * Record a login attempt that did NOT succeed.
+ *
+ * WHY: successes were audited and failures were not, which left the one
+ * question worth asking during an outage — "are these people getting their
+ * password wrong, or are we the ones turning them away?" — unanswerable from
+ * the trail. It had to be reconstructed from the gateway's access log, by
+ * whoever had shell on the server.
+ *
+ * Safe to write on every failure because the per-IP failure budget bounds how
+ * many one address can produce in a window: once it is spent the route answers
+ * 429 without reaching here. The two 429 paths deliberately write nothing of
+ * their own — the cause is already on the row that exhausted the budget or
+ * locked the account, and a row per rejection would hand a flood the ability to
+ * write our audit table for us.
+ *
+ * The REASON is recorded even though the HTTP reply stays deliberately uniform
+ * ("code or password is wrong"). The uniformity is there so a stranger cannot
+ * enumerate who exists; this table is readable only by `users:write` admins,
+ * who can already list every account, so spelling it out costs nothing and is
+ * exactly what a support question needs.
+ *
+ * NOT EVERY FAILURE WRITES A ROW. An attempt on an identifier that matches no
+ * account is dropped unless it locked something or spent the caller's budget.
+ * Not thrift — signal: the portal tries teacher-login before student-login, so
+ * every student who signs in correctly manufactures one "no such teacher" miss
+ * on the way past. Keeping those would put a noise row beside every real one
+ * and make the trail useless for the exact question it was added to answer.
+ * A miss also tells an attacker nothing (the reply is identical either way), so
+ * what remains worth recording about them is the flood, which the budget-spent
+ * row captures.
+ */
+export async function recordFailedLogin(i: FailedLoginInput): Promise<void> {
+  const known = i.targetId != null;
+  if (!known && !i.locked && !i.ipExhausted) return;
+
+  const detail = [
+    i.audience === 'teacher' ? 'เข้าสู่ระบบครู' : 'เข้าสู่ระบบนักเรียน',
+    i.reason,
+    i.locked ? 'บัญชีถูกล็อกชั่วคราว' : null,
+    i.ipExhausted ? 'IP นี้ใช้โควตาความพยายามที่ล้มเหลวหมดแล้ว' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  await recordAudit({
+    session: null,
+    actorLabel: i.identifier.slice(0, 128),
+    actorRole: 'anonymous',
+    action: 'login',
+    targetType: 'auth',
+    targetId: i.targetId ?? null,
+    targetLabel: `${i.identifier.slice(0, 100)} · ล้มเหลว`,
+    detail,
+    req: i.req,
+  });
+}
