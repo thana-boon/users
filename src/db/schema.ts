@@ -195,6 +195,53 @@ export const completions = pgTable(
   }),
 );
 
+// -- student_leaves (พักการเรียน) -----------------------------------
+// A LEAVE IS NOT AN EXIT. A suspended student is still on the school roll:
+// `students.status` stays 'studying', the enrollment row stays, and year-end
+// promotion carries them forward like anyone else (school policy — a leave
+// never costs a year). So this is modelled as an episode beside the student,
+// not as a lifecycle status: everything that filters on status === 'studying'
+// (20+ call sites, plus the public API's 3-value contract) keeps working
+// untouched, and repeat episodes each keep their own dates.
+//
+// "on leave right now" = a row with returned_date IS NULL. Recording the
+// return fills that column instead of deleting the row, so the register can
+// still answer "พักตั้งแต่เมื่อไหร่ ถึงเมื่อไหร่ กี่ครั้ง".
+export const LEAVE_TYPES = [
+  'พักการเรียน',
+  'ลาพักรักษาตัว',
+  'ถูกสั่งพักการเรียน',
+  'ลาไปต่างประเทศ',
+  'อื่น ๆ',
+] as const;
+
+export const studentLeaves = pgTable(
+  'student_leaves',
+  {
+    id: serial('id').primaryKey(),
+    studentId: integer('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    // The academic year the leave started in — anchors the history filters.
+    academicYearId: integer('academic_year_id').references(() => academicYears.id),
+    leaveType: varchar('leave_type', { length: 32 }).notNull().default('พักการเรียน'),
+    startDate: varchar('start_date', { length: 20 }), // raw Thai dd/mm/BBBB
+    expectedReturnDate: varchar('expected_return_date', { length: 20 }),
+    // NULL = still on leave. Set when the student comes back.
+    returnedDate: varchar('returned_date', { length: 20 }),
+    reason: text('reason'),
+    // เลขที่คำสั่ง — only meaningful for ถูกสั่งพักการเรียน (disciplinary).
+    orderNo: varchar('order_no', { length: 64 }),
+    note: text('note'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow().$onUpdate(now),
+  },
+  (t) => ({
+    studentIdx: index('student_leaves_student_idx').on(t.studentId),
+    openIdx: index('student_leaves_open_idx').on(t.returnedDate),
+  }),
+);
+
 // -- student_addresses (4 types per student) ------------------------
 export const studentAddresses = pgTable(
   'student_addresses',
@@ -338,6 +385,14 @@ export const teachers = pgTable(
     subjectGroup: varchar('subject_group', { length: 191 }), // กลุ่มสาระที่สอน
     gradeTaught: varchar('grade_taught', { length: 128 }), // ชั้นที่สอน
     passwordEncrypted: text('password_encrypted'),
+
+    // Demographics — same picklists as students (see src/lib/options.ts).
+    // Nullable: the teachers.xlsx source does not carry them, so they are
+    // filled in from the teacher detail form.
+    gender: varchar('gender', { length: 16 }),
+    religion: varchar('religion', { length: 48 }),
+    nationality: varchar('nationality', { length: 48 }),
+    ethnicity: varchar('ethnicity', { length: 48 }),
 
     // Employment lifecycle (ยังทำงานอยู่ / ลาออก). Exit fields recorded on resign.
     employmentStatus: employmentStatusEnum('employment_status').notNull().default('active'),
@@ -513,6 +568,18 @@ export const studentsRelations = relations(students, ({ many, one }) => ({
   guardians: many(guardians),
   health: one(studentHealth),
   completions: many(completions),
+  leaves: many(studentLeaves),
+}));
+
+export const studentLeavesRelations = relations(studentLeaves, ({ one }) => ({
+  student: one(students, {
+    fields: [studentLeaves.studentId],
+    references: [students.id],
+  }),
+  academicYear: one(academicYears, {
+    fields: [studentLeaves.academicYearId],
+    references: [academicYears.id],
+  }),
 }));
 
 export const completionsRelations = relations(completions, ({ one }) => ({
@@ -589,5 +656,8 @@ export type HomeroomTeacher = typeof homeroomTeachers.$inferSelect;
 export type NewHomeroomTeacher = typeof homeroomTeachers.$inferInsert;
 export type Completion = typeof completions.$inferSelect;
 export type NewCompletion = typeof completions.$inferInsert;
+export type StudentLeave = typeof studentLeaves.$inferSelect;
+export type NewStudentLeave = typeof studentLeaves.$inferInsert;
+export type LeaveType = (typeof LEAVE_TYPES)[number];
 export type StudentStatus = (typeof STUDENT_STATUSES)[number];
 export type KeyStage = (typeof KEY_STAGES)[number];

@@ -8,6 +8,11 @@ import { IconSearch, IconPlus, IconDownload, IconUpload, IconImage } from '@/com
 import { ImportDialog } from '@/components/ImportDialog';
 import { PhotoImportDialog } from '@/components/PhotoImportDialog';
 import { PhotoThumb, PhotoLightbox } from '@/components/PhotoThumb';
+import { Combo } from '@/components/Combo';
+import {
+  GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
+  STAFF_PREFIX_OPTIONS,
+} from '@/lib/options';
 
 interface Row {
   id: number; teacherCode: string; prefix: string | null;
@@ -165,9 +170,11 @@ function NewTeacher({ onClose, onCreated }: { onClose: () => void; onCreated: ()
   const [f, setF] = useState({
     teacherCode: '', prefix: 'นาย', firstName: '', lastName: '', email: '',
     subjectGroup: '', gradeTaught: '', role: 'teacher', password: '',
+    gender: '', religion: 'พุทธ', nationality: 'ไทย', ethnicity: 'ไทย',
   });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF((s) => ({ ...s, [k]: e.target.value }));
+  const setV = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
 
   async function submit() {
     if (!f.teacherCode || !f.firstName || !f.lastName) { toast('กรุณากรอกรหัส/ชื่อ/นามสกุล', 'error'); return; }
@@ -184,11 +191,17 @@ function NewTeacher({ onClose, onCreated }: { onClose: () => void; onCreated: ()
         <div className="card-pad stack" style={{ gap: 12 }}>
           <div className="grid-2">
             <div><label className="form-label required">รหัสครู</label><input className="form-input" value={f.teacherCode} onChange={set('teacherCode')} placeholder="T00123" /></div>
-            <div><label className="form-label">คำนำหน้า</label><input className="form-input" value={f.prefix} onChange={set('prefix')} /></div>
+            <Combo label="คำนำหน้า" value={f.prefix} onChange={setV('prefix')} options={STAFF_PREFIX_OPTIONS} />
           </div>
           <div className="grid-2">
             <div><label className="form-label required">ชื่อ</label><input className="form-input" value={f.firstName} onChange={set('firstName')} /></div>
             <div><label className="form-label required">นามสกุล</label><input className="form-input" value={f.lastName} onChange={set('lastName')} /></div>
+          </div>
+          <div className="grid-2">
+            <Combo label="เพศ" value={f.gender} onChange={setV('gender')} options={GENDER_OPTIONS} />
+            <Combo label="ศาสนา" value={f.religion} onChange={setV('religion')} options={RELIGION_OPTIONS} />
+            <Combo label="สัญชาติ" value={f.nationality} onChange={setV('nationality')} options={NATIONALITY_OPTIONS} />
+            <Combo label="เชื้อชาติ" value={f.ethnicity} onChange={setV('ethnicity')} options={ETHNICITY_OPTIONS} />
           </div>
           <div><label className="form-label">กลุ่มสาระที่สอน</label><input className="form-input" value={f.subjectGroup} onChange={set('subjectGroup')} /></div>
           <div className="grid-2">

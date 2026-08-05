@@ -12,6 +12,11 @@ import { IconBack, IconEdit, IconTrash } from '@/components/Icons';
 import { formatThaiDate, ageFromThaiDate } from '@/lib/thai';
 import { StatusDialog } from '@/components/StatusDialog';
 import { ReinstateDialog } from '@/components/ReinstateDialog';
+import { Combo } from '@/components/Combo';
+import {
+  GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
+  STUDENT_PREFIX_OPTIONS,
+} from '@/lib/options';
 
 type Dict = Record<string, string | null | undefined>;
 
@@ -30,6 +35,13 @@ interface Detail {
   siblingsTotal: number | null; siblingOrder: number | null; hasSiblingInSchool: string | null;
   status: 'studying' | 'withdrawn' | 'graduated';
   exitType: string | null; exitReason: string | null; exitDate: string | null;
+  /** พักการเรียน episodes, oldest first. An open one (returnedDate === null)
+   *  does NOT change `status` — the student is still on the roll. */
+  leaves: {
+    id: number; leaveType: string; startDate: string | null;
+    expectedReturnDate: string | null; returnedDate: string | null;
+    reason: string | null; orderNo: string | null; year: number | null;
+  }[];
   citizenIdMasked: string | null; hasCitizenId: boolean; hasPassword: boolean; hasPhoto: boolean;
   enrollments: { id: number; academicYearId: number; gradeLevel: string | null; classroom: string | null; classNumber: string | null; academicYear: { id: number; year: number; isActive: boolean } }[];
   addresses: (Dict & { addressType: string })[];
@@ -156,6 +168,8 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   if (!d) return <div className="skeleton" style={{ height: 200 }} />;
 
   const activeEnrollment = d.enrollments.find((e) => e.academicYear.isActive) ?? d.enrollments[0];
+  // The one open พักการเรียน episode, if any (the service keeps it to at most one).
+  const openLeave = d.leaves.find((l) => !l.returnedDate) ?? null;
   // Room the student left from (latest-year enrollment) — default for reinstate.
   const lastEnrollment = d.enrollments.slice().sort((a, b) => b.academicYear.year - a.academicYear.year)[0];
   const addrByType = Object.fromEntries(d.addresses.map((a) => [a.addressType, a]));
@@ -324,18 +338,18 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
               </div>
             ) : (
               <div className="grid-3" style={{ gap: 12 }}>
-                <TInput label="คำนำหน้า" value={core.prefix} onChange={setC('prefix')} />
+                <Combo label="คำนำหน้า" value={core.prefix} onChange={setC('prefix')} options={STUDENT_PREFIX_OPTIONS} />
                 <TInput label="ชื่อ" value={core.firstName} onChange={setC('firstName')} />
                 <TInput label="นามสกุล" value={core.lastName} onChange={setC('lastName')} />
                 <TInput label="ชื่อเล่น" value={core.nickname} onChange={setC('nickname')} />
                 <TInput label="ชื่อ (EN)" value={core.firstNameEn} onChange={setC('firstNameEn')} />
                 <TInput label="นามสกุล (EN)" value={core.lastNameEn} onChange={setC('lastNameEn')} />
                 <TInput label="ชื่อเล่น (EN)" value={core.nicknameEn} onChange={setC('nicknameEn')} />
-                <TInput label="เพศ" value={core.gender} onChange={setC('gender')} />
+                <Combo label="เพศ" value={core.gender} onChange={setC('gender')} options={GENDER_OPTIONS} />
                 <TInput label="วันเกิด (ว/ด/ปพ.)" value={core.birthDate} onChange={setC('birthDate')} />
-                <TInput label="ศาสนา" value={core.religion} onChange={setC('religion')} />
-                <TInput label="สัญชาติ" value={core.nationality} onChange={setC('nationality')} />
-                <TInput label="เชื้อชาติ" value={core.ethnicity} onChange={setC('ethnicity')} />
+                <Combo label="ศาสนา" value={core.religion} onChange={setC('religion')} options={RELIGION_OPTIONS} />
+                <Combo label="สัญชาติ" value={core.nationality} onChange={setC('nationality')} options={NATIONALITY_OPTIONS} />
+                <Combo label="เชื้อชาติ" value={core.ethnicity} onChange={setC('ethnicity')} options={ETHNICITY_OPTIONS} />
                 <TInput label="เบอร์โทร" value={core.phone} onChange={setC('phone')} />
                 <TInput label="อีเมล" value={core.email} onChange={setC('email')} />
                 <TInput label="วันที่เข้าเรียน" value={core.admissionDate} onChange={setC('admissionDate')} />
@@ -373,6 +387,41 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
               )}
             </div>
           </div>
+
+          {/* พักการเรียน — an episode, not a status: the badge above still reads
+              กำลังศึกษา because a leave never takes the student off the roll. */}
+          {(openLeave || d.leaves.length > 0) && (
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '0.5px solid var(--skdw-border)' }}>
+              <div className="row-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+                <h2 className="section-title" style={{ marginBottom: 8 }}>การพักการเรียน</h2>
+                <Link href="/users/leaves" className="chip">จัดการที่หน้าพักการเรียน</Link>
+              </div>
+              {openLeave && (
+                <div className="stack" style={{ gap: 4, marginBottom: 10 }}>
+                  <span className="badge badge-warning">
+                    กำลัง{openLeave.leaveType}อยู่
+                    {openLeave.orderNo ? ` (คำสั่งที่ ${openLeave.orderNo})` : ''}
+                  </span>
+                  <div className="muted" style={{ fontSize: 13 }}>
+                    ตั้งแต่ {formatThaiDate(openLeave.startDate) || '-'}
+                    {openLeave.expectedReturnDate ? ` • กำหนดกลับ ${formatThaiDate(openLeave.expectedReturnDate)}` : ''}
+                    {openLeave.reason ? ` • ${openLeave.reason}` : ''}
+                  </div>
+                </div>
+              )}
+              {d.leaves.length > 0 && (
+                <ul className="muted" style={{ fontSize: 13, margin: 0, paddingLeft: 18 }}>
+                  {d.leaves.map((l) => (
+                    <li key={l.id}>
+                      {l.leaveType} · {formatThaiDate(l.startDate) || '-'} →{' '}
+                      {l.returnedDate ? formatThaiDate(l.returnedDate) : 'ยังไม่กลับ'}
+                      {l.reason ? ` · ${l.reason}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -5,6 +5,7 @@ import { students, enrollments, teachers, academicYears } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, handleError } from '@/lib/http';
 import { resolveActiveYearId } from '@/lib/services/students';
+import { countOnLeave } from '@/lib/services/leaves';
 
 export const runtime = 'nodejs';
 
@@ -28,8 +29,9 @@ export async function GET(req: NextRequest) {
       eq(students.isArchived, false),
     );
 
-    const [totalRes, byGradeRoomGender, byGender, newest, teacherBySubject, teacherTotal] =
-      await Promise.all([
+    const [
+      totalRes, byGradeRoomGender, byGender, newest, teacherBySubject, teacherTotal, onLeave,
+    ] = await Promise.all([
         db
           .select({ n: sql<number>`count(*)` })
           .from(students)
@@ -77,6 +79,9 @@ export async function GET(req: NextRequest) {
           .select({ n: sql<number>`count(*)` })
           .from(teachers)
           .where(eq(teachers.isArchived, false)),
+        // Counted separately from totalStudents on purpose: a student on leave is
+        // still enrolled, so they are inside that total, not beside it.
+        countOnLeave(),
       ]);
 
     // Classify a raw gender string into male / female / other buckets.
@@ -135,6 +140,7 @@ export async function GET(req: NextRequest) {
         : null,
       totalStudents: Number(totalRes[0]?.n ?? 0),
       totalTeachers: Number(teacherTotal[0]?.n ?? 0),
+      studentsOnLeave: onLeave,
       byGrade,
       byGender: byGender.map((r) => ({ gender: r.gender ?? 'ไม่ระบุ', count: Number(r.n) })),
       newestStudents: newest,

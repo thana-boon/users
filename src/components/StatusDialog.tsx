@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from './Toast';
 import { keyStageOf, KEY_STAGE_LABEL_TH } from '@/lib/grades';
+import { Combo } from './Combo';
+import { EXIT_TYPE_OPTIONS, EXIT_REASON_OPTIONS } from '@/lib/options';
 
 interface YearOpt { id: number; year: number; isActive: boolean }
 
@@ -37,8 +39,6 @@ export function StatusDialog({
   useEffect(() => {
     api<{ years: YearOpt[] }>('/api/users/meta').then((m) => setYears(m.years)).catch(() => {});
   }, []);
-
-  const WITHDRAW_TYPES = ['ลาออก', 'พักการเรียน', 'เสียชีวิต', 'ย้ายสถานศึกษา', 'นักเรียนไปโครงการ', 'จำหน่าย', 'อื่น ๆ'];
 
   async function submit() {
     if (!exitDate.trim()) return toast('กรุณาระบุวันที่ออก', 'error');
@@ -76,24 +76,26 @@ export function StatusDialog({
               {years.map((y) => <option key={y.id} value={y.id}>{y.year}{y.isActive ? ' (ปัจจุบัน)' : ''}</option>)}
             </select>
           </div>
-          <div>
-            <label className="form-label">ประเภท</label>
-            {graduate ? (
+          {graduate ? (
+            <div>
+              <label className="form-label">ประเภท</label>
               <input className="form-input" value={exitType} onChange={(e) => setExitType(e.target.value)} />
-            ) : (
-              <select className="form-select" value={exitType} onChange={(e) => setExitType(e.target.value)}>
-                {WITHDRAW_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            )}
-          </div>
+            </div>
+          ) : (
+            <Combo label="ประเภท" value={exitType} onChange={setExitType} options={EXIT_TYPE_OPTIONS} normalize={false} />
+          )}
           <div>
             <label className="form-label">วันที่ออก (ว/ด/ปพ.ศ.)</label>
             <input className="form-input" placeholder="เช่น 31/03/2569" value={exitDate} onChange={(e) => setExitDate(e.target.value)} />
           </div>
-          <div>
-            <label className="form-label">เหตุผล</label>
-            <textarea className="form-input" rows={2} value={exitReason} onChange={(e) => setExitReason(e.target.value)} />
-          </div>
+          <Combo
+            label="เหตุผล"
+            value={exitReason}
+            onChange={setExitReason}
+            options={EXIT_REASON_OPTIONS}
+            normalize={false}
+            placeholder="เลือกจากรายการหรือพิมพ์เอง"
+          />
           {stage && (
             <label className="row" style={{ gap: 8, cursor: 'pointer' }}>
               <input type="checkbox" checked={recordCompletion} onChange={(e) => setRecordCompletion(e.target.checked)} />

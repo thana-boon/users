@@ -39,6 +39,10 @@ const patchSchema = z.object({
   email: z.string().nullable().optional(),
   subjectGroup: z.string().nullable().optional(),
   gradeTaught: z.string().nullable().optional(),
+  gender: z.string().nullable().optional(),
+  religion: z.string().nullable().optional(),
+  nationality: z.string().nullable().optional(),
+  ethnicity: z.string().nullable().optional(),
   role: z.enum(['teacher', 'teacher-admin']).optional(),
   password: z.string().min(1).optional(), // set new password (re-encrypted)
   citizenId: z.string().optional(), // set new เลขบัตร ปชช. (blank = keep, per student convention)

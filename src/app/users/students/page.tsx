@@ -16,6 +16,8 @@ interface Row {
   gender: string | null; status: string;
   gradeLevel: string | null; classroom: string | null; classNumber: string | null;
   hasPhoto: boolean;
+  /** Leave type when the student is พักการเรียน right now; status stays 'studying'. */
+  onLeave: string | null;
 }
 interface Meta { grades: string[]; classrooms: string[]; }
 
@@ -157,6 +159,9 @@ export default function StudentsPage() {
                       <span className="badge" style={{ marginLeft: 8, background: 'var(--skdw-bg)', fontSize: 11 }}>
                         {STATUS_LABEL[r.status] ?? r.status}
                       </span>
+                    )}
+                    {r.onLeave && (
+                      <span className="badge badge-warning" style={{ marginLeft: 8, fontSize: 11 }}>{r.onLeave}</span>
                     )}
                   </td>
                   <td>{r.nickname ?? '-'}</td>

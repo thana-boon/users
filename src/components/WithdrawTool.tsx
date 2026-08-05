@@ -6,6 +6,8 @@ import { useToast } from './Toast';
 import { useConfirm } from './Confirm';
 import { ReinstateDialog } from './ReinstateDialog';
 import { IconSearch, IconPlus, IconRestore } from './Icons';
+import { Combo } from './Combo';
+import { EXIT_TYPE_OPTIONS, EXIT_REASON_OPTIONS } from '@/lib/options';
 
 /**
  * จำหน่าย / ลาออก — individual workflow. Search for a still-studying student,
@@ -32,8 +34,6 @@ interface HistoryRow {
   exitType: string | null; exitReason: string | null; exitDate: string | null;
   exitYear: number | null; gradeLevel: string | null; classroom: string | null;
 }
-
-const WITHDRAW_TYPES = ['ลาออก', 'พักการเรียน', 'เสียชีวิต', 'ย้ายสถานศึกษา', 'นักเรียนไปโครงการ', 'จำหน่าย', 'อื่น ๆ'];
 
 const fullName = (r: { prefix: string | null; firstName: string; lastName: string }) =>
   `${r.prefix ?? ''}${r.firstName} ${r.lastName}`.trim();
@@ -273,21 +273,28 @@ export function WithdrawTool() {
                 {years.map((y) => <option key={y.id} value={y.id}>{y.year}{y.isActive ? ' (ปัจจุบัน)' : ''}</option>)}
               </select>
             </div>
-            <div>
-              <label className="form-label">ประเภท</label>
-              <select className="form-select" style={{ width: 160 }} value={exitType} onChange={(e) => setExitType(e.target.value)}>
-                {WITHDRAW_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+            <Combo
+              label="ประเภท"
+              value={exitType}
+              onChange={setExitType}
+              options={EXIT_TYPE_OPTIONS}
+              normalize={false}
+              style={{ width: 190 }}
+            />
             <div>
               <label className="form-label">วันที่ (ว/ด/ปพ.ศ.)</label>
               <input className="form-input" style={{ width: 160 }} placeholder="เช่น 31/03/2569"
                 value={exitDate} onChange={(e) => setExitDate(e.target.value)} />
             </div>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <label className="form-label">เหตุผล</label>
-              <input className="form-input" value={exitReason} onChange={(e) => setExitReason(e.target.value)} />
-            </div>
+            <Combo
+              label="เหตุผล"
+              value={exitReason}
+              onChange={setExitReason}
+              options={EXIT_REASON_OPTIONS}
+              normalize={false}
+              placeholder="เลือกจากรายการหรือพิมพ์เอง"
+              style={{ flex: 1, minWidth: 240 }}
+            />
           </div>
           <div className="row-between" style={{ marginTop: 14 }}>
             <div className="spacer" />

@@ -10,11 +10,18 @@ import { RevealButton } from '@/components/RevealButton';
 import { EmploymentStatusDialog } from '@/components/EmploymentStatusDialog';
 import { PhotoCard } from '@/components/PhotoCard';
 import { IconBack, IconTrash } from '@/components/Icons';
+import { Combo } from '@/components/Combo';
+import {
+  GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
+  STAFF_PREFIX_OPTIONS,
+} from '@/lib/options';
 
 interface Detail {
   id: number; teacherCode: string; prefix: string | null;
   firstName: string; lastName: string; email: string | null;
   subjectGroup: string | null; gradeTaught: string | null; role: string;
+  gender: string | null; religion: string | null;
+  nationality: string | null; ethnicity: string | null;
   citizenIdMasked: string | null; hasCitizenId: boolean; hasPassword: boolean;
   hasPhoto: boolean;
   employmentStatus: 'active' | 'resigned';
@@ -42,6 +49,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((s) => ({ ...s, [k]: e.target.value }));
+  const setV = (k: string) => (v: string) => setForm((s) => ({ ...s, [k]: v }));
 
   const initials = `${d.firstName?.[0] ?? ''}${d.lastName?.[0] ?? ''}`.trim();
   const resigned = d.employmentStatus === 'resigned';
@@ -52,6 +60,8 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
       const payload: Record<string, unknown> = {
         prefix: form.prefix, firstName: form.firstName, lastName: form.lastName,
         email: form.email, subjectGroup: form.subjectGroup, gradeTaught: form.gradeTaught,
+        gender: form.gender, religion: form.religion,
+        nationality: form.nationality, ethnicity: form.ethnicity,
         role: form.role,
       };
       if (form.password) payload.password = form.password;
@@ -135,10 +145,14 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
         <hr style={{ border: 'none', borderTop: '0.5px solid var(--skdw-border)', margin: '16px 0' }} />
 
         <div className="grid-2" style={{ gap: 12 }}>
-          <div><label className="form-label">คำนำหน้า</label><input className="form-input" value={form.prefix ?? ''} onChange={set('prefix')} /></div>
+          <Combo label="คำนำหน้า" value={form.prefix} onChange={setV('prefix')} options={STAFF_PREFIX_OPTIONS} />
           <div><label className="form-label">อีเมล</label><input className="form-input" value={form.email ?? ''} onChange={set('email')} /></div>
           <div><label className="form-label">ชื่อ</label><input className="form-input" value={form.firstName ?? ''} onChange={set('firstName')} /></div>
           <div><label className="form-label">นามสกุล</label><input className="form-input" value={form.lastName ?? ''} onChange={set('lastName')} /></div>
+          <Combo label="เพศ" value={form.gender} onChange={setV('gender')} options={GENDER_OPTIONS} />
+          <Combo label="ศาสนา" value={form.religion} onChange={setV('religion')} options={RELIGION_OPTIONS} />
+          <Combo label="สัญชาติ" value={form.nationality} onChange={setV('nationality')} options={NATIONALITY_OPTIONS} />
+          <Combo label="เชื้อชาติ" value={form.ethnicity} onChange={setV('ethnicity')} options={ETHNICITY_OPTIONS} />
           <div style={{ gridColumn: '1 / -1' }}><label className="form-label">กลุ่มสาระที่สอน</label><input className="form-input" value={form.subjectGroup ?? ''} onChange={set('subjectGroup')} /></div>
           <div>
             <label className="form-label">สิทธิ์ (role)</label>

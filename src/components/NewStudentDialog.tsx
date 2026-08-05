@@ -3,6 +3,11 @@
 import { useState } from 'react';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from './Toast';
+import { Combo } from './Combo';
+import {
+  GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
+  STUDENT_PREFIX_OPTIONS,
+} from '@/lib/options';
 
 /** Minimal create form. Full profile (addresses/guardians/health) is populated via import. */
 export function NewStudentDialog({
@@ -19,11 +24,13 @@ export function NewStudentDialog({
   const [f, setF] = useState({
     studentCode: '', prefix: 'เด็กชาย', firstName: '', lastName: '', nickname: '',
     gender: 'ชาย', gradeLevel: grades[0] ?? '', classroom: '', classNumber: '',
+    religion: 'พุทธ', nationality: 'ไทย', ethnicity: 'ไทย',
     email: '', password: '', citizenId: '',
   });
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF((s) => ({ ...s, [k]: e.target.value }));
+  const setV = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
 
   async function submit() {
     if (!f.studentCode || !f.firstName || !f.lastName) {
@@ -51,12 +58,7 @@ export function NewStudentDialog({
               <label className="form-label required">รหัสนักเรียน</label>
               <input className="form-input" value={f.studentCode} onChange={set('studentCode')} placeholder="เช่น 07822" />
             </div>
-            <div>
-              <label className="form-label">คำนำหน้า</label>
-              <select className="form-select" value={f.prefix} onChange={set('prefix')}>
-                <option>เด็กชาย</option><option>เด็กหญิง</option><option>นาย</option><option>นางสาว</option><option>นาง</option>
-              </select>
-            </div>
+            <Combo label="คำนำหน้า" value={f.prefix} onChange={setV('prefix')} options={STUDENT_PREFIX_OPTIONS} />
           </div>
           <div className="grid-2">
             <div><label className="form-label required">ชื่อ</label><input className="form-input" value={f.firstName} onChange={set('firstName')} /></div>
@@ -64,10 +66,7 @@ export function NewStudentDialog({
           </div>
           <div className="grid-3">
             <div><label className="form-label">ชื่อเล่น</label><input className="form-input" value={f.nickname} onChange={set('nickname')} /></div>
-            <div>
-              <label className="form-label">เพศ</label>
-              <select className="form-select" value={f.gender} onChange={set('gender')}><option>ชาย</option><option>หญิง</option></select>
-            </div>
+            <Combo label="เพศ" value={f.gender} onChange={setV('gender')} options={GENDER_OPTIONS} />
             <div>
               <label className="form-label">ชั้น</label>
               <select className="form-select" value={f.gradeLevel} onChange={set('gradeLevel')}>
@@ -80,6 +79,11 @@ export function NewStudentDialog({
             <div><label className="form-label">ห้อง</label><input className="form-input" value={f.classroom} onChange={set('classroom')} /></div>
             <div><label className="form-label">เลขที่</label><input className="form-input" value={f.classNumber} onChange={set('classNumber')} /></div>
             <div><label className="form-label">เลขบัตร ปชช.</label><input className="form-input" value={f.citizenId} onChange={set('citizenId')} /></div>
+          </div>
+          <div className="grid-3">
+            <Combo label="ศาสนา" value={f.religion} onChange={setV('religion')} options={RELIGION_OPTIONS} />
+            <Combo label="สัญชาติ" value={f.nationality} onChange={setV('nationality')} options={NATIONALITY_OPTIONS} />
+            <Combo label="เชื้อชาติ" value={f.ethnicity} onChange={setV('ethnicity')} options={ETHNICITY_OPTIONS} />
           </div>
           <div className="grid-2">
             <div><label className="form-label">อีเมล</label><input className="form-input" value={f.email} onChange={set('email')} placeholder="07822@sukhon.ac.th" /></div>

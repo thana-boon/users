@@ -1,4 +1,8 @@
 import { clean, cleanStr, toInt } from './thai';
+import {
+  normalizeChoice, GENDER_OPTIONS, RELIGION_OPTIONS,
+  NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
+} from './options';
 
 /**
  * Canonical column layout of the source spreadsheets, and the transform from a
@@ -130,9 +134,9 @@ export function parseStudentRow(r: unknown[]): ParsedStudent | null {
     firstNameEn: g(r, 76),
     lastNameEn: g(r, 77),
     birthDate: g(r, 78),
-    religion: g(r, 79),
-    nationality: g(r, 80),
-    ethnicity: g(r, 81),
+    religion: normalizeChoice(g(r, 79), RELIGION_OPTIONS),
+    nationality: normalizeChoice(g(r, 80), NATIONALITY_OPTIONS),
+    ethnicity: normalizeChoice(g(r, 81), ETHNICITY_OPTIONS),
     houseNo: g(r, 82),
     moo: g(r, 83),
     soi: g(r, 84),
@@ -159,9 +163,9 @@ export function parseStudentRow(r: unknown[]): ParsedStudent | null {
     firstNameEn: g(r, 102),
     lastNameEn: g(r, 103),
     birthDate: g(r, 104),
-    religion: g(r, 105),
-    nationality: g(r, 106),
-    ethnicity: g(r, 107),
+    religion: normalizeChoice(g(r, 105), RELIGION_OPTIONS),
+    nationality: normalizeChoice(g(r, 106), NATIONALITY_OPTIONS),
+    ethnicity: normalizeChoice(g(r, 107), ETHNICITY_OPTIONS),
     houseNo: g(r, 108),
     moo: g(r, 109),
     soi: g(r, 110),
@@ -187,9 +191,9 @@ export function parseStudentRow(r: unknown[]): ParsedStudent | null {
     firstNameEn: g(r, 127),
     lastNameEn: g(r, 128),
     birthDate: g(r, 129),
-    religion: g(r, 130),
-    nationality: g(r, 131),
-    ethnicity: g(r, 132),
+    religion: normalizeChoice(g(r, 130), RELIGION_OPTIONS),
+    nationality: normalizeChoice(g(r, 131), NATIONALITY_OPTIONS),
+    ethnicity: normalizeChoice(g(r, 132), ETHNICITY_OPTIONS),
     houseNo: g(r, 133),
     moo: g(r, 134),
     soi: g(r, 135),
@@ -235,7 +239,9 @@ export function parseStudentRow(r: unknown[]): ParsedStudent | null {
       plainPassword: g(r, 5),
       citizenId: g(r, 6),
       admissionDate: g(r, 8),
-      gender: g(r, 9),
+      // Snap the demographic picklist columns onto canonical spellings — the
+      // source sheets carry variants like "พุทธิ" / "ศาสนาพุทธ" / "เมียนมาร์".
+      gender: normalizeChoice(g(r, 9), GENDER_OPTIONS),
       prefix: g(r, 10),
       firstName,
       lastName,
@@ -244,9 +250,9 @@ export function parseStudentRow(r: unknown[]): ParsedStudent | null {
       lastNameEn: g(r, 15),
       nicknameEn: g(r, 16),
       birthDate: g(r, 17),
-      religion: g(r, 18),
-      nationality: g(r, 19),
-      ethnicity: g(r, 20),
+      religion: normalizeChoice(g(r, 18), RELIGION_OPTIONS),
+      nationality: normalizeChoice(g(r, 19), NATIONALITY_OPTIONS),
+      ethnicity: normalizeChoice(g(r, 20), ETHNICITY_OPTIONS),
       siblingsTotal: toInt(r[21]),
       siblingOrder: toInt(r[22]),
       hasSiblingInSchool: g(r, 23),

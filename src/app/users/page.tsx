@@ -13,6 +13,8 @@ interface Dashboard {
   activeYear: { id: number; year: number } | null;
   totalStudents: number;
   totalTeachers: number;
+  /** Students พักการเรียน right now — a subset of totalStudents, not extra. */
+  studentsOnLeave: number;
   byGrade: GradeBucket[];
   byGender: { gender: string; count: number }[];
   newestStudents: {
@@ -160,6 +162,14 @@ export default function DashboardPage() {
           <span className="stat-value">{data.totalTeachers.toLocaleString('th-TH')}</span>
           <span className="stat-sub">คน</span>
         </div>
+        {/* Only when it applies — the usual case keeps the row at four tiles. */}
+        {data.studentsOnLeave > 0 && (
+          <Link href="/users/leaves" className="stat">
+            <span className="stat-label">พักการเรียน</span>
+            <span className="stat-value">{data.studentsOnLeave.toLocaleString('th-TH')}</span>
+            <span className="stat-sub">คน (นับรวมในยอดนักเรียนแล้ว)</span>
+          </Link>
+        )}
         {data.byGender.map((g) => (
           <div className="stat" key={g.gender}>
             <span className="stat-label">เพศ{g.gender}</span>

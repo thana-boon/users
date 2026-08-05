@@ -8,6 +8,7 @@ import { ok, notFound, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { maskCitizenId, tryDecrypt } from '@/lib/crypto';
 import { updateStudentAggregate } from '@/lib/services/students';
+import { listLeavesForStudent } from '@/lib/services/leaves';
 
 export const runtime = 'nodejs';
 
@@ -53,6 +54,9 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       };
     });
 
+    // พักการเรียน episodes — separate from `status`, which a leave never changes.
+    const leaves = await listLeavesForStudent(id);
+
     return ok({
       ...core,
       citizenIdMasked: maskCitizenId(tryDecrypt(citizenIdEncrypted)),
@@ -60,6 +64,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       hasPassword: !!passwordEncrypted,
       hasPhoto: !!photoBase64,
       guardians: guardiansSafe,
+      leaves,
     });
   } catch (err) {
     return handleError(err);

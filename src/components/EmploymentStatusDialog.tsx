@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from './Toast';
+import { Combo } from './Combo';
+import { STAFF_EXIT_REASON_OPTIONS } from '@/lib/options';
 
 interface YearOpt { id: number; year: number; isActive: boolean }
 
@@ -72,10 +74,14 @@ export function EmploymentStatusDialog({
             <label className="form-label">วันที่ออก (ว/ด/ปพ.ศ.)</label>
             <input className="form-input" placeholder="เช่น 31/03/2569" value={exitDate} onChange={(e) => setExitDate(e.target.value)} />
           </div>
-          <div>
-            <label className="form-label">เหตุผล (ถ้ามี)</label>
-            <textarea className="form-input" rows={2} value={exitReason} onChange={(e) => setExitReason(e.target.value)} />
-          </div>
+          <Combo
+            label="เหตุผล (ถ้ามี)"
+            value={exitReason}
+            onChange={setExitReason}
+            options={STAFF_EXIT_REASON_OPTIONS}
+            normalize={false}
+            placeholder="เลือกจากรายการหรือพิมพ์เอง"
+          />
           <div className="row-between">
             <button className="btn btn-ghost btn-sm" onClick={onClose} disabled={busy}>ยกเลิก</button>
             <button className="btn btn-danger btn-sm" onClick={submit} disabled={busy}>

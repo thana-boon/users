@@ -31,6 +31,9 @@ export const IconHomeroom = (p: SVGProps<SVGSVGElement>) => (
 export const IconAudit = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} aria-hidden><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6M9 15l2 2 4-4" /></svg>
 );
+export const IconPause = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><circle cx="12" cy="12" r="9" /><path d="M10 9v6M14 9v6" /></svg>
+);
 export const IconSearch = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} aria-hidden><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
 );

@@ -7,6 +7,7 @@ import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, created, handleError, badRequest } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { resolveActiveYearId, upsertStudentFull } from '@/lib/services/students';
+import { openLeavesFor } from '@/lib/services/leaves';
 import type { ParsedStudent } from '@/lib/excel-map';
 
 export const runtime = 'nodejs';
@@ -84,8 +85,12 @@ export async function GET(req: NextRequest) {
         .where(where),
     ]);
 
+    // พักการเรียน is an episode beside the student, not a status — so the roll
+    // still lists them as กำลังศึกษา and this flag is what the badge reads.
+    const onLeave = await openLeavesFor(rows.map((r) => r.id));
+
     return ok({
-      data: rows,
+      data: rows.map((r) => ({ ...r, onLeave: onLeave.get(r.id) ?? null })),
       page,
       pageSize,
       total: Number(countRes[0]?.n ?? 0),
