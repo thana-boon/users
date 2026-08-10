@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from './Toast';
+import { IsoDateField } from './DateField';
 import {
   API_SCOPES,
   SCOPE_LABEL_TH,
@@ -197,17 +198,12 @@ export function ApiKeyDialog({
             </div>
           )}
 
-          <div>
-            <label className="form-label" htmlFor="ak-exp">วันหมดอายุ</label>
-            <input
-              id="ak-exp"
-              type="date"
-              className="form-input"
-              value={expires}
-              onChange={(e) => setExpires(e.target.value)}
-            />
-            <p className="form-hint">เว้นว่าง = ไม่มีวันหมดอายุ</p>
-          </div>
+          <IsoDateField
+            label="วันหมดอายุ"
+            value={expires}
+            onChange={setExpires}
+            hint="เว้นว่าง = ไม่มีวันหมดอายุ"
+          />
 
           <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={onClose} disabled={busy}>ยกเลิก</button>

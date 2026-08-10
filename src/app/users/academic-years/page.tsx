@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { IconPlus, IconEdit } from '@/components/Icons';
+import { IsoDateField } from '@/components/DateField';
+import { formatThaiDate, isoToThai } from '@/lib/thai';
 
 interface Year {
   id: number; year: number; startDate: string | null; endDate: string | null;
@@ -12,12 +14,14 @@ interface Year {
   isActive: boolean; isArchived: boolean; studentCount: number;
 }
 
-/** "2569-05-16" → "16 พ.ค. 69" (already-Buddhist input stays as-is per <input type=date>). */
+/**
+ * "2026-05-16" → "16 พ.ค. 2569". Rows saved through the old Gregorian picker
+ * hold the พ.ศ. year outright ("2569-05-16"); `isoToThai` reads those as they
+ * were meant rather than adding another 543.
+ */
 function fmtDate(iso: string | null): string {
   if (!iso) return '-';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+  return formatThaiDate(isoToThai(iso)) || iso;
 }
 
 function fmtRange(start: string | null, end: string | null): string {
@@ -163,22 +167,22 @@ function YearDialog({ existing, onClose, onDone }: { existing?: Year; onClose: (
           <div>
             <div className="form-label" style={{ marginBottom: 6 }}>ทั้งปีการศึกษา</div>
             <div className="grid-2">
-              <div><label className="form-label">เปิดเทอม</label><input className="form-input" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></div>
-              <div><label className="form-label">สิ้นสุด</label><input className="form-input" type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
+              <IsoDateField label="เปิดเทอม" value={start} onChange={setStart} inputStyle={{ width: '100%' }} />
+              <IsoDateField label="สิ้นสุด" value={end} onChange={setEnd} inputStyle={{ width: '100%' }} />
             </div>
           </div>
           <div>
             <div className="form-label" style={{ marginBottom: 6 }}>ภาคเรียนที่ 1</div>
             <div className="grid-2">
-              <div><label className="form-label">วันเริ่ม</label><input className="form-input" type="date" value={t1Start} onChange={(e) => setT1Start(e.target.value)} /></div>
-              <div><label className="form-label">วันสิ้นสุด</label><input className="form-input" type="date" value={t1End} onChange={(e) => setT1End(e.target.value)} /></div>
+              <IsoDateField label="วันเริ่ม" value={t1Start} onChange={setT1Start} inputStyle={{ width: '100%' }} />
+              <IsoDateField label="วันสิ้นสุด" value={t1End} onChange={setT1End} inputStyle={{ width: '100%' }} />
             </div>
           </div>
           <div>
             <div className="form-label" style={{ marginBottom: 6 }}>ภาคเรียนที่ 2</div>
             <div className="grid-2">
-              <div><label className="form-label">วันเริ่ม</label><input className="form-input" type="date" value={t2Start} onChange={(e) => setT2Start(e.target.value)} /></div>
-              <div><label className="form-label">วันสิ้นสุด</label><input className="form-input" type="date" value={t2End} onChange={(e) => setT2End(e.target.value)} /></div>
+              <IsoDateField label="วันเริ่ม" value={t2Start} onChange={setT2Start} inputStyle={{ width: '100%' }} />
+              <IsoDateField label="วันสิ้นสุด" value={t2End} onChange={setT2End} inputStyle={{ width: '100%' }} />
             </div>
           </div>
           {!existing && (

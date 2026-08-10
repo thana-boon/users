@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
+import { DateField } from '@/components/DateField';
+import { todayThai } from '@/lib/thai';
 import { nextGrade, isKeyStageBoundary, keyStageOf, KEY_STAGE_LABEL_TH, GRADE_ORDER } from '@/lib/grades';
 
 /**
@@ -74,7 +76,9 @@ export default function PromotionsPage() {
   const [recordCompletion, setRecordCompletion] = useState(true);
   const [renumber, setRenumber] = useState(true);
   // Exit metadata for the "จบการศึกษา (ไม่เรียนต่อ)" bucket at a stage boundary.
-  const [exitDate, setExitDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // exit_date is free text and every other screen writes ว/ด/ป พ.ศ. into it;
+  // this one used to post the ISO string a native picker hands back.
+  const [exitDate, setExitDate] = useState(todayThai);
   const [exitReason, setExitReason] = useState('จบการศึกษา (ไม่ศึกษาต่อ)');
 
   // ids being dragged right now (the selection, or the single card if unselected).
@@ -576,11 +580,7 @@ export default function PromotionsPage() {
                 <div className="row" style={{ gap: 12, flexWrap: 'wrap', alignItems: 'flex-end',
                   borderTop: '0.5px solid var(--skdw-border)', paddingTop: 12 }}>
                   <span className="badge badge-warning" style={{ alignSelf: 'center' }}>จบการศึกษา {graduateCount} คน</span>
-                  <div>
-                    <label className="form-label">วันที่จบการศึกษา</label>
-                    <input type="date" className="form-input" style={{ width: 160 }}
-                      value={exitDate} onChange={(e) => setExitDate(e.target.value)} />
-                  </div>
+                  <DateField label="วันที่จบการศึกษา" value={exitDate} onChange={setExitDate} today />
                   <div style={{ flex: 1, minWidth: 220 }}>
                     <label className="form-label">เหตุผล</label>
                     <input className="form-input" style={{ width: '100%' }}
