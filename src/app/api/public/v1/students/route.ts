@@ -7,6 +7,7 @@ import { ok, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { tryDecrypt } from '@/lib/crypto';
 import { resolveActiveYearId } from '@/lib/services/students';
+import { gradeRank, roomRank, roomText } from '@/lib/grade-sql';
 
 export const runtime = 'nodejs';
 
@@ -91,7 +92,14 @@ export async function GET(req: NextRequest) {
         .from(students)
         .innerJoin(enrollments, eq(enrollments.studentId, students.id))
         .where(where)
-        .orderBy(asc(enrollments.gradeLevel), asc(enrollments.classroom), asc(enrollments.seqOrder))
+        // ชั้น by curriculum order (เตรียมอนุบาล → อ → ป → ม) — consumers page
+        // through this feed and expect the same order the module shows.
+        .orderBy(
+          asc(gradeRank(enrollments.gradeLevel)),
+          asc(roomRank(enrollments.classroom)),
+          asc(roomText(enrollments.classroom)),
+          asc(enrollments.seqOrder),
+        )
         .limit(pageSize)
         .offset((page - 1) * pageSize),
       db

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { normalizeChoice } from '@/lib/options';
 
 /**
@@ -13,6 +14,14 @@ import { normalizeChoice } from '@/lib/options';
  * `normalizeChoice`, which snaps common misspellings ("พุทธิ") and synonyms
  * ("ศาสนาพุทธ", "มุสลิม") onto the canonical option. Pass `normalize={false}`
  * to keep the raw text.
+ *
+ * The list is rendered into a portal on `document.body` and positioned with
+ * `position: fixed`, not absolutely inside the field. An absolute list is
+ * clipped by any scrolling ancestor, and `.modal` sets `overflow-y: auto` — so
+ * a combo near the bottom of a dialog (เหตุผล in the จำหน่าย/ลาออก dialog) had
+ * its options cut off by the dialog's own edge. Fixed + portal escapes every
+ * such clip; the trade is that the position must be re-measured whenever
+ * anything scrolls or resizes.
  */
 export function Combo({
   label,
@@ -42,9 +51,10 @@ export function Combo({
   // every option even when a value is already selected.
   const [typing, setTyping] = useState(false);
   const [active, setActive] = useState(-1);
-  // Fields near the bottom of a scrolling .modal would push the list past the
-  // modal's clipped edge — flip it above the input when there is no room below.
-  const [dropUp, setDropUp] = useState(false);
+  // Viewport coordinates for the portalled list, re-measured on scroll/resize.
+  // Also carries the room available below vs above, so the list flips upward
+  // instead of running off the bottom of the window.
+  const [box, setBox] = useState<{ left: number; width: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -57,17 +67,41 @@ export function Combo({
     return hits.length ? hits : options;
   }, [options, text, typing]);
 
-  useEffect(() => {
-    if (!open) return;
-    const box = wrapRef.current?.getBoundingClientRect();
-    if (box) setDropUp(window.innerHeight - box.bottom < 240 && box.top > 240);
-  }, [open]);
+  const measure = useCallback(() => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const below = window.innerHeight - r.bottom - 8;
+    const above = r.top - 8;
+    const up = below < 180 && above > below;
+    setBox({
+      left: r.left,
+      width: r.width,
+      ...(up ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
+      maxHeight: Math.max(120, Math.min(220, up ? above : below)),
+    });
+  }, []);
 
-  // Close when the click lands outside the widget.
+  // Measure before paint so the list never flashes at the wrong spot, then keep
+  // it pinned to the input while anything scrolls (capture: true also catches
+  // the .modal's own scroll, which does not bubble).
+  useLayoutEffect(() => {
+    if (!open) return;
+    measure();
+    window.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure);
+    };
+  }, [open, measure]);
+
+  // Close when the click lands outside the widget. The list lives in a portal,
+  // so "outside" has to exclude it explicitly — it is not a DOM descendant.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!wrapRef.current?.contains(t) && !listRef.current?.contains(t)) setOpen(false);
     };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
@@ -134,14 +168,17 @@ export function Combo({
           ▼
         </span>
 
-        {open && filtered.length > 0 && (
+        {open && filtered.length > 0 && box && typeof document !== 'undefined' && createPortal(
           <div
             ref={listRef}
             role="listbox"
             style={{
-              position: 'absolute', zIndex: 30, left: 0, right: 0,
-              ...(dropUp ? { bottom: 'calc(100% + 4px)' } : { top: 'calc(100% + 4px)' }),
-              maxHeight: 220, overflowY: 'auto', background: '#fff',
+              position: 'fixed',
+              // Above .modal (--z-modal: 300) so a dialog never covers the list.
+              zIndex: 350,
+              left: box.left, width: box.width,
+              ...(box.top !== undefined ? { top: box.top } : { bottom: box.bottom }),
+              maxHeight: box.maxHeight, overflowY: 'auto', background: '#fff',
               border: '1px solid var(--skdw-border)', borderRadius: 'var(--radius-sm)',
               boxShadow: 'var(--shadow-md, 0 8px 24px rgba(26,22,37,0.12))',
             }}
@@ -165,7 +202,8 @@ export function Combo({
                 </div>
               );
             })}
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
       {hint && <p className="form-hint">{hint}</p>}

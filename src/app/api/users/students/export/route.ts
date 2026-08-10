@@ -7,6 +7,7 @@ import { handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { buildStudentExport, type StudentExportRow } from '@/lib/excel-io';
 import { resolveActiveYearId } from '@/lib/services/students';
+import { gradeRank, roomRank, roomText } from '@/lib/grade-sql';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -34,7 +35,16 @@ export async function GET(req: NextRequest) {
       .select({ id: students.id })
       .from(students)
       .innerJoin(enrollments, eq(enrollments.studentId, students.id))
-      .where(and(...conds));
+      .where(and(...conds))
+      // Same ชั้น order as the registry (เตรียมอนุบาล → อ → ป → ม): the sheet is
+      // read as a class list, so it must not come out in insertion order.
+      .orderBy(
+        gradeRank(enrollments.gradeLevel),
+        roomRank(enrollments.classroom),
+        roomText(enrollments.classroom),
+        enrollments.seqOrder,
+        students.studentCode,
+      );
     const ids = idRows.map((r) => r.id);
 
     let rows: StudentExportRow[] = [];

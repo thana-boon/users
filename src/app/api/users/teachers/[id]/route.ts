@@ -37,6 +37,9 @@ const patchSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   email: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  lineId: z.string().nullable().optional(),
+  birthDate: z.string().nullable().optional(), // raw Thai dd/mm/BBBB
   subjectGroup: z.string().nullable().optional(),
   gradeTaught: z.string().nullable().optional(),
   gender: z.string().nullable().optional(),

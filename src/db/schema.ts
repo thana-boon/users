@@ -386,6 +386,14 @@ export const teachers = pgTable(
     gradeTaught: varchar('grade_taught', { length: 128 }), // ชั้นที่สอน
     passwordEncrypted: text('password_encrypted'),
 
+    // Contact + วันเกิด. Not secret (a staff directory is the point), so these
+    // sit in the clear beside the name and ride the plain `teachers:read`
+    // scope — unlike เลขบัตร ปชช., which stays behind `teachers:pii`.
+    // birthDate keeps the same raw Buddhist dd/mm/BBBB text as students.
+    birthDate: varchar('birth_date', { length: 20 }),
+    phone: varchar('phone', { length: 32 }),
+    lineId: varchar('line_id', { length: 64 }), // ไอดีไลน์ — free text, not a URL
+
     // Demographics — same picklists as students (see src/lib/options.ts).
     // Nullable: the teachers.xlsx source does not carry them, so they are
     // filled in from the teacher detail form.

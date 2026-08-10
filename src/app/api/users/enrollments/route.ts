@@ -5,16 +5,21 @@ import { students, enrollments } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, handleError } from '@/lib/http';
 import { resolveActiveYearId } from '@/lib/services/students';
+import { gradeRank, roomRank, roomText } from '@/lib/grade-sql';
 
 export const runtime = 'nodejs';
 
 /**
- * GET /api/users/enrollments?yearId=&grade=&classroom=
+ * GET /api/users/enrollments?yearId=&grade=&classroom=&status=
  *
  * Full (unpaginated) roster for one academic year, optionally scoped to a grade
  * and/or room. Feeds the promotion tool (source-year roster) and the class-
  * number tool (one room). Includes lifecycle `status` so the UI can default-
  * exclude withdrawn/graduated students from promotion.
+ *
+ * `?status=studying` narrows it further, for tools that must not even show
+ * students who have already left — the graduation tool lists a cohort to act
+ * on, and a row that is already จบแล้ว is only there to be misread.
  */
 export async function GET(req: NextRequest) {
   const guard = await requireTeacherAdmin(req);
@@ -24,6 +29,7 @@ export async function GET(req: NextRequest) {
     const yearId = sp.get('yearId') ? Number(sp.get('yearId')) : await resolveActiveYearId();
     const grade = (sp.get('grade') ?? '').trim();
     const classroom = (sp.get('classroom') ?? '').trim();
+    const status = (sp.get('status') ?? '').trim();
 
     const conds = [
       eq(enrollments.academicYearId, yearId),
@@ -31,6 +37,9 @@ export async function GET(req: NextRequest) {
     ];
     if (grade) conds.push(eq(enrollments.gradeLevel, grade));
     if (classroom) conds.push(eq(enrollments.classroom, classroom));
+    if (status === 'studying' || status === 'withdrawn' || status === 'graduated') {
+      conds.push(eq(students.status, status));
+    }
 
     const rows = await db
       .select({
@@ -51,8 +60,11 @@ export async function GET(req: NextRequest) {
       .innerJoin(enrollments, eq(enrollments.studentId, students.id))
       .where(and(...conds))
       .orderBy(
-        asc(enrollments.gradeLevel),
-        asc(enrollments.classroom),
+        // ชั้น by curriculum order (เตรียมอนุบาล → อ → ป → ม), not by Thai
+        // code points, which would read ป, ม, อ, เตรียมอนุบาล.
+        asc(gradeRank(enrollments.gradeLevel)),
+        asc(roomRank(enrollments.classroom)),
+        asc(roomText(enrollments.classroom)),
         asc(enrollments.seqOrder), // ASC = NULLS LAST in Postgres
         asc(students.studentCode),
       );

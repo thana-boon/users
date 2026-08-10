@@ -114,6 +114,9 @@ curl -H "X-API-Key: sk_live_..." \
 | `teachers:read` | อ่านรายชื่อครู + ครูประจำชั้น | ครอบคลุม `/homerooms` ด้วย |
 | `teachers:pii` | อ่าน **เลขบัตร ปชช.** ครู | เสริม · ถูก audit ทุกครั้ง |
 | `teachers:photo` | ดึง **รูป** ครู | เสริม |
+| `workers:read` | อ่านรายชื่อ **คนงาน** (นักการภารโรง ฯลฯ) | แยกจาก `teachers:read` — คนงานเป็นคนละตาราง ไม่มีบัญชีล็อกอิน |
+| `workers:pii` | อ่าน **เลขบัตร ปชช.** คนงาน | เสริม · ถูก audit ทุกครั้ง |
+| `workers:photo` | ดึง **รูป** คนงาน | เสริม |
 | `years:read` | อ่านปีการศึกษา + ช่วงภาคเรียน | ไม่มี PII — ระบบตารางสอน/เช็คชื่อควรได้แค่อันนี้ |
 | `auth:students` | ตรวจรหัสผ่าน**นักเรียน** | ผ่าน `/auth/verify` |
 | `auth:teachers` | ตรวจรหัสผ่าน**ครู** | แยกจากนักเรียน เพื่อไม่ให้ระบบของเด็กเดารหัสครูได้ |
@@ -135,10 +138,11 @@ curl -H "X-API-Key: sk_live_..." \
 | 4.2 | `GET /students` | `students:read` | ดึงรายชื่อนักเรียน |
 | 4.3 | `GET /students/{id}` | `students:read` | ดึงนักเรียน **รายคน** + ประวัติทุกปี — ไม่ผูกกับปีการศึกษา |
 | 4.4 | `GET /teachers` | `teachers:read` | ดึงรายชื่อครู |
+| 4.4b | `GET /workers` | `workers:read` | ดึงรายชื่อคนงาน |
 | 4.5 | `GET /academic-years` | `years:read` | ดูปีการศึกษา + ช่วงภาคเรียน |
 | 4.6 | `GET /homerooms` | `teachers:read` | ดูครูประจำชั้นรายห้อง |
-| 4.7 | `GET /students/{id}/photo`<br>`GET /teachers/{id}/photo` | `*:read` + `*:photo` | แสดงรูปทีละคน |
-| 4.8 | `GET /students/photos?ids=`<br>`GET /teachers/photos?ids=` | `*:read` + `*:photo` | sync รูปจำนวนมาก |
+| 4.7 | `GET /students/{id}/photo`<br>`GET /teachers/{id}/photo`<br>`GET /workers/{id}/photo` | `*:read` + `*:photo` | แสดงรูปทีละคน |
+| 4.8 | `GET /students/photos?ids=`<br>`GET /teachers/photos?ids=`<br>`GET /workers/photos?ids=` | `*:read` + `*:photo` | sync รูปจำนวนมาก |
 | 4.9 | `POST /auth/verify` | `auth:students` / `auth:teachers` | ให้ผู้ใช้ล็อกอินด้วยบัญชี SchoolOS |
 | 4.10 | `GET /api/auth/session` | — (cookie) | เช็คว่า **เบราว์เซอร์นี้ล็อกอินอยู่แล้วหรือยัง** ก่อนโชว์หน้า login ของตัวเอง |
 | | `POST /api/auth/refresh` | — (cookie) | ต่ออายุ session เมื่อผู้ใช้ยังทำงานอยู่ในระบบคุณ |
@@ -329,6 +333,9 @@ Endpoint เดียวที่ **ไม่ต้องมี scope** แล�
       "lastName": "แสงทอง",
       "fullName": "นายอาทิตย์ แสงทอง",
       "email": "artit@example.ac.th",
+      "phone": "0812345678",
+      "lineId": "artit.s",
+      "birthDate": "14/02/2530",
       "subjectGroup": "คณิตศาสตร์",
       "gradeTaught": "ม.ปลาย",
       "role": "teacher-admin",
@@ -346,6 +353,42 @@ Endpoint เดียวที่ **ไม่ต้องมี scope** แล�
 - **`role` คือแหล่งความจริงเรื่องสิทธิ์ระดับระบบ** — `teacher-admin` = ผู้ดูแล ระบบปลายทางควร map สิทธิ์จากฟิลด์นี้
 - `homerooms` = ห้องที่ครูคนนี้เป็นครูประจำชั้น **ในปีที่ถาม** (ว่างได้)
 - `q` ค้นได้ทั้งชื่อ/สกุล/`teacherCode`/อีเมล
+- `phone` / `lineId` / `birthDate` เป็นข้อมูลติดต่อในทำเนียบบุคลากร มากับ `teachers:read` เหมือน `email` (null ได้ถ้ายังไม่กรอก) · `birthDate` เป็นข้อความ **พ.ศ. `ว/ด/ปปปป`** เหมือนของนักเรียน — ไม่ใช่ ISO date
+- เลขบัตร ปชช. ยังคงเป็นฟิลด์เดียวที่ต้องใช้ `teachers:pii`
+
+---
+
+### 4.4b `GET /api/public/v1/workers` — รายชื่อคนงาน
+
+Scope `workers:read` · เลขบัตร ปชช. ต้องมี `workers:pii` เพิ่ม (ถูก audit ทุกครั้ง)
+
+**Query:** `position`, `status` (`active` \| `resigned` \| `all`, default `active`), `q`, `page`, `pageSize` (สูงสุด 200)
+
+```json
+{
+  "data": [
+    {
+      "id": 4,
+      "workerCode": "W005",
+      "prefix": "นาง",
+      "firstName": "สมศรี",
+      "lastName": "ใจดี",
+      "fullName": "นางสมศรี ใจดี",
+      "position": "นักการภารโรง",
+      "phone": "0898765432",
+      "employmentStatus": "active",
+      "exitDate": null,
+      "hasPhoto": true,
+      "photoUrl": "/api/public/v1/workers/4/photo"
+    }
+  ],
+  "page": 1, "pageSize": 50, "total": 12
+}
+```
+
+- **คนงานไม่มีบัญชีล็อกอิน** — ไม่มี `role`, ไม่มี `email`, ไม่มีรหัสผ่าน ระบบปลายทางจึงใช้ข้อมูลนี้ให้สิทธิ์ใครไม่ได้ ใช้ได้แค่แสดงทำเนียบ/ติดต่อ
+- `q` ค้นได้ทั้งชื่อ/สกุล/`workerCode`/ตำแหน่ง
+- `exitDate` เป็นข้อความ **พ.ศ. `ว/ด/ปปปป`** (null ถ้ายังทำงานอยู่)
 
 ---
 
@@ -407,7 +450,7 @@ Scope `teachers:read` (ใช้ scope เดิม ไม่ต้องออ�
 
 ---
 
-### 4.7 รูปทีละคน — `GET /students/{id}/photo` · `GET /teachers/{id}/photo`
+### 4.7 รูปทีละคน — `GET /students/{id}/photo` · `GET /teachers/{id}/photo` · `GET /workers/{id}/photo`
 
 Scope: `*:read` **และ** `*:photo`
 
@@ -430,7 +473,7 @@ Scope: `*:read` **และ** `*:photo`
 
 ### 4.8 รูปหลายคนพร้อมกัน — `GET /students/photos?ids=1,2,3`
 
-Scope เดียวกับ 4.7 · ครูใช้ `/teachers/photos?ids=`
+Scope เดียวกับ 4.7 · ครูใช้ `/teachers/photos?ids=` · คนงานใช้ `/workers/photos?ids=`
 
 ใช้เมื่อต้อง sync รูปทั้งโรงเรียน: ยิงทีละคน 2000 ครั้งจะชน rate limit (600/นาที = รอ 4 นาทีเปล่า ๆ) แบบนี้เหลือ ~40 ครั้ง
 

@@ -9,6 +9,7 @@ import { ImportDialog } from '@/components/ImportDialog';
 import { PhotoImportDialog } from '@/components/PhotoImportDialog';
 import { PhotoThumb, PhotoLightbox } from '@/components/PhotoThumb';
 import { Combo } from '@/components/Combo';
+import { DateField } from '@/components/DateField';
 import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
   STAFF_PREFIX_OPTIONS,
@@ -169,6 +170,7 @@ function NewTeacher({ onClose, onCreated }: { onClose: () => void; onCreated: ()
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({
     teacherCode: '', prefix: 'นาย', firstName: '', lastName: '', email: '',
+    phone: '', lineId: '', birthDate: '',
     subjectGroup: '', gradeTaught: '', role: 'teacher', password: '',
     gender: '', religion: 'พุทธ', nationality: 'ไทย', ethnicity: 'ไทย',
   });
@@ -203,6 +205,11 @@ function NewTeacher({ onClose, onCreated }: { onClose: () => void; onCreated: ()
             <Combo label="สัญชาติ" value={f.nationality} onChange={setV('nationality')} options={NATIONALITY_OPTIONS} />
             <Combo label="เชื้อชาติ" value={f.ethnicity} onChange={setV('ethnicity')} options={ETHNICITY_OPTIONS} />
           </div>
+          <div className="grid-2">
+            <div><label className="form-label">เบอร์โทร</label><input className="form-input" value={f.phone} onChange={set('phone')} placeholder="เช่น 0812345678" /></div>
+            <div><label className="form-label">ไอดีไลน์</label><input className="form-input" value={f.lineId} onChange={set('lineId')} /></div>
+          </div>
+          <DateField label="วันเดือนปีเกิด" value={f.birthDate} onChange={setV('birthDate')} />
           <div><label className="form-label">กลุ่มสาระที่สอน</label><input className="form-input" value={f.subjectGroup} onChange={set('subjectGroup')} /></div>
           <div className="grid-2">
             <div><label className="form-label">อีเมล</label><input className="form-input" value={f.email} onChange={set('email')} /></div>

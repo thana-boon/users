@@ -5,6 +5,7 @@ import { students } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, badRequest, notFound, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
+import { photoResponse } from '@/lib/services/photos';
 
 export const runtime = 'nodejs';
 
@@ -29,14 +30,10 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       where: eq(students.id, id),
       columns: { photoBase64: true, photoMime: true },
     });
-    if (!s?.photoBase64) return notFound('ยังไม่มีรูปภาพ');
-    const buf = Buffer.from(s.photoBase64, 'base64');
-    return new Response(new Uint8Array(buf), {
-      headers: {
-        'Content-Type': s.photoMime || 'image/jpeg',
-        'Cache-Control': 'private, no-cache',
-      },
-    });
+    // Same ETag/304 contract as the public feed. The registry table renders 25
+    // thumbnails a page; with `no-cache` and no validator every page turn
+    // re-sent ~1 MB of images and re-decoded that much base64 server-side.
+    return photoResponse(req, s) ?? notFound('ยังไม่มีรูปภาพ');
   } catch (err) {
     return handleError(err);
   }

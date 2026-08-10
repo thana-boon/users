@@ -7,6 +7,8 @@ import { useConfirm } from './Confirm';
 import { ReinstateDialog } from './ReinstateDialog';
 import { IconSearch, IconPlus, IconRestore } from './Icons';
 import { Combo } from './Combo';
+import { DateField } from './DateField';
+import { todayThai } from '@/lib/thai';
 import { EXIT_TYPE_OPTIONS, EXIT_REASON_OPTIONS } from '@/lib/options';
 
 /**
@@ -63,7 +65,9 @@ export function WithdrawTool() {
 
   // -- exit fields --
   const [exitType, setExitType] = useState('ลาออก');
-  const [exitDate, setExitDate] = useState('');
+  // Defaults to today: an exit is recorded on the day it is decided far more
+  // often than back-dated, and a typed date is the easiest thing to get wrong.
+  const [exitDate, setExitDate] = useState(todayThai);
   const [exitReason, setExitReason] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -71,6 +75,9 @@ export function WithdrawTool() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [histLoading, setHistLoading] = useState(true);
   const [histQuery, setHistQuery] = useState('');
+  // Starts on the current academic year rather than ทุกปี — the list grows by a
+  // year every year, and the rows anyone is looking for are almost always this
+  // year's. `all` is still one click away. Resolved once the year list arrives.
   const [histYear, setHistYear] = useState<'all' | number>('all');
   const [histFrom, setHistFrom] = useState('');
   const [histTo, setHistTo] = useState('');
@@ -82,7 +89,10 @@ export function WithdrawTool() {
     api<Meta>('/api/users/meta').then((m) => {
       setYears(m.years);
       const active = m.years.find((y) => y.isActive) ?? m.years[m.years.length - 1];
-      if (active) setExitYearId(active.id);
+      if (active) {
+        setExitYearId(active.id);
+        setHistYear(active.year);
+      }
     }).catch(() => {});
   }, []);
 
@@ -159,7 +169,7 @@ export function WithdrawTool() {
       setQ('');
       setResults([]);
       setExitReason('');
-      setExitDate('');
+      setExitDate(todayThai());
       loadHistory();
     } catch (e) {
       toast((e as Error).message, 'error');
@@ -168,12 +178,16 @@ export function WithdrawTool() {
     }
   }
 
-  // Distinct exit years present in the history, newest first, for the filter.
+  // Years offered by the filter, newest first: every academic year the school
+  // has, unioned with any exit year seen in the history. The school years alone
+  // are not enough (old rows can point at a deleted year) and the history alone
+  // is not either — the default is the current year, which has no rows yet on
+  // the day it opens, and a select whose value has no option renders blank.
   const histYearOpts = useMemo(() => {
-    const set = new Set<number>();
+    const set = new Set<number>(years.map((y) => y.year));
     for (const h of history) if (h.exitYear != null) set.add(h.exitYear);
     return [...set].sort((a, b) => b - a);
-  }, [history]);
+  }, [history, years]);
 
   const filteredHistory = useMemo(() => {
     const term = histQuery.trim().toLowerCase();
@@ -281,11 +295,7 @@ export function WithdrawTool() {
               normalize={false}
               style={{ width: 190 }}
             />
-            <div>
-              <label className="form-label">วันที่ (ว/ด/ปพ.ศ.)</label>
-              <input className="form-input" style={{ width: 160 }} placeholder="เช่น 31/03/2569"
-                value={exitDate} onChange={(e) => setExitDate(e.target.value)} />
-            </div>
+            <DateField label="วันที่" value={exitDate} onChange={setExitDate} today />
             <Combo
               label="เหตุผล"
               value={exitReason}
@@ -337,16 +347,8 @@ export function WithdrawTool() {
               {histYearOpts.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
-          <div>
-            <label className="form-label">ตั้งแต่วันที่ (ว/ด/ปพ.ศ.)</label>
-            <input className="form-input" style={{ width: 150 }} placeholder="เช่น 01/04/2568"
-              value={histFrom} onChange={(e) => setHistFrom(e.target.value)} />
-          </div>
-          <div>
-            <label className="form-label">ถึงวันที่ (ว/ด/ปพ.ศ.)</label>
-            <input className="form-input" style={{ width: 150 }} placeholder="เช่น 31/03/2569"
-              value={histTo} onChange={(e) => setHistTo(e.target.value)} />
-          </div>
+          <DateField label="ตั้งแต่วันที่" value={histFrom} onChange={setHistFrom} />
+          <DateField label="ถึงวันที่" value={histTo} onChange={setHistTo} />
           {(histYear !== 'all' || histFrom || histTo) && (
             <button className="btn btn-ghost btn-sm" onClick={() => { setHistYear('all'); setHistFrom(''); setHistTo(''); }}>
               ล้างตัวกรอง

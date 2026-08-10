@@ -6,6 +6,8 @@ import { useToast } from './Toast';
 import { useConfirm } from './Confirm';
 import { keyStageOf, KEY_STAGE_LABEL_TH } from '@/lib/grades';
 import { IconChevron, IconRestore } from './Icons';
+import { DateField } from './DateField';
+import { todayThai } from '@/lib/thai';
 
 /**
  * จบการศึกษา (graduation) — batch tool. Pick a year + grade (defaults to the top
@@ -44,7 +46,8 @@ export function GraduationTool() {
   const [busy, setBusy] = useState(false);
 
   const [exitType, setExitType] = useState('จบการศึกษา');
-  const [exitDate, setExitDate] = useState('');
+  // Defaults to today — the batch is almost always recorded on the day it happens.
+  const [exitDate, setExitDate] = useState(todayThai);
   const [exitReason, setExitReason] = useState('สำเร็จการศึกษา');
   const [recordCompletion, setRecordCompletion] = useState(true);
 
@@ -81,14 +84,14 @@ export function GraduationTool() {
     if (!yearId || !grade) { setRows([]); setSel({}); return; }
     setLoading(true);
     try {
-      const sp = new URLSearchParams({ yearId: String(yearId), grade });
+      // status=studying only: a student who already จบ/ออก has nothing left to
+      // do here, and showing them greyed-out just invites "why is this row
+      // ticked/not ticked?". They stay visible in ประวัติ below.
+      const sp = new URLSearchParams({ yearId: String(yearId), grade, status: 'studying' });
       if (room) sp.set('classroom', room);
       const res = await api<{ data: RosterRow[] }>(`/api/users/enrollments?${sp}`);
       setRows(res.data);
-      // Default select only students still studying (skip already-exited).
-      const s: Record<number, boolean> = {};
-      for (const r of res.data) s[r.studentId] = r.status === 'studying';
-      setSel(s);
+      setSel(Object.fromEntries(res.data.map((r) => [r.studentId, true])));
     } catch (e) {
       toast((e as Error).message, 'error');
     } finally {
@@ -99,7 +102,7 @@ export function GraduationTool() {
   useEffect(() => { loadRoster(); }, [loadRoster]);
 
   const setAll = (v: boolean) =>
-    setSel(Object.fromEntries(rows.map((r) => [r.studentId, v && r.status === 'studying'])));
+    setSel(Object.fromEntries(rows.map((r) => [r.studentId, v])));
 
   const selectedIds = useMemo(
     () => rows.filter((r) => sel[r.studentId]).map((r) => r.studentId),
@@ -252,34 +255,28 @@ export function GraduationTool() {
               <thead>
                 <tr>
                   <th style={{ width: 36 }}></th>
-                  <th>รหัส</th><th>ชื่อ-นามสกุล</th><th>เพศ</th><th>ชั้น/ห้อง</th><th>สถานะ</th>
+                  <th>รหัส</th><th>ชื่อ-นามสกุล</th><th>เพศ</th><th>ชั้น/ห้อง</th>
                 </tr>
               </thead>
               <tbody>
-                {loading && <tr><td colSpan={6}><div className="skeleton" style={{ height: 20 }} /></td></tr>}
+                {loading && <tr><td colSpan={5}><div className="skeleton" style={{ height: 20 }} /></td></tr>}
                 {!loading && rows.length === 0 && (
-                  <tr><td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 32 }}>ไม่พบนักเรียน</td></tr>
+                  <tr><td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 32 }}>
+                    ไม่มีนักเรียนที่ยังกำลังศึกษาในชั้นนี้ — คนที่จบหรือออกไปแล้วดูได้ที่ประวัติด้านล่าง
+                  </td></tr>
                 )}
-                {rows.map((r) => {
-                  const exited = r.status !== 'studying';
-                  return (
-                    <tr key={r.studentId} style={{ opacity: sel[r.studentId] ? 1 : 0.55 }}>
-                      <td>
-                        <input type="checkbox" checked={!!sel[r.studentId]}
-                          onChange={(e) => setSel((s) => ({ ...s, [r.studentId]: e.target.checked }))} />
-                      </td>
-                      <td className="mono">{r.studentCode}</td>
-                      <td>{r.prefix ?? ''}{r.firstName} {r.lastName}</td>
-                      <td>{r.gender ?? '-'}</td>
-                      <td>{r.gradeLevel ?? '-'} / {r.classroom ?? '-'}</td>
-                      <td>
-                        {exited
-                          ? <span className="badge badge-muted">{r.status === 'graduated' ? 'จบแล้ว' : 'ออกแล้ว'}</span>
-                          : <span className="muted" style={{ fontSize: 12 }}>กำลังศึกษา</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {rows.map((r) => (
+                  <tr key={r.studentId} style={{ opacity: sel[r.studentId] ? 1 : 0.55 }}>
+                    <td>
+                      <input type="checkbox" checked={!!sel[r.studentId]}
+                        onChange={(e) => setSel((s) => ({ ...s, [r.studentId]: e.target.checked }))} />
+                    </td>
+                    <td className="mono">{r.studentCode}</td>
+                    <td>{r.prefix ?? ''}{r.firstName} {r.lastName}</td>
+                    <td>{r.gender ?? '-'}</td>
+                    <td>{r.gradeLevel ?? '-'} / {r.classroom ?? '-'}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -294,11 +291,7 @@ export function GraduationTool() {
               <label className="form-label">ประเภท</label>
               <input className="form-input" style={{ width: 180 }} value={exitType} onChange={(e) => setExitType(e.target.value)} />
             </div>
-            <div>
-              <label className="form-label">วันที่จบ (ว/ด/ปพ.ศ.)</label>
-              <input className="form-input" style={{ width: 160 }} placeholder="เช่น 31/03/2569"
-                value={exitDate} onChange={(e) => setExitDate(e.target.value)} />
-            </div>
+            <DateField label="วันที่จบ" value={exitDate} onChange={setExitDate} today />
             <div style={{ flex: 1, minWidth: 200 }}>
               <label className="form-label">เหตุผล</label>
               <input className="form-input" value={exitReason} onChange={(e) => setExitReason(e.target.value)} />

@@ -33,6 +33,12 @@ export const API_SCOPES = [
   'teachers:read',
   'teachers:pii',
   'teachers:photo',
+  // คนงาน — a separate table from teachers (no login, no role), so it needs its
+  // own scopes rather than riding on `teachers:read`. A key that pulls the
+  // teaching staff has no business reading the support staff unless asked.
+  'workers:read',
+  'workers:pii',
+  'workers:photo',
   // School calendar: academic years + term windows. Read-only, no PII.
   // Added after the first keys were issued — existing keys keep working
   // unchanged, they just don't have this scope until an admin ticks it.
@@ -52,6 +58,9 @@ export const SCOPE_LABEL_TH: Record<ApiScope, string> = {
   'teachers:read': 'อ่านรายชื่อครู',
   'teachers:pii': 'อ่านเลขบัตร ปชช. ครู',
   'teachers:photo': 'ดึงรูปครู',
+  'workers:read': 'อ่านรายชื่อคนงาน',
+  'workers:pii': 'อ่านเลขบัตร ปชช. คนงาน',
+  'workers:photo': 'ดึงรูปคนงาน',
   'years:read': 'อ่านปีการศึกษาและช่วงภาคเรียน',
   'auth:students': 'ตรวจรหัสผ่านนักเรียน (ล็อกอิน)',
   'auth:teachers': 'ตรวจรหัสผ่านครู (ล็อกอิน)',
@@ -65,8 +74,10 @@ export const SCOPE_LABEL_TH: Record<ApiScope, string> = {
 export const PII_SCOPES: ApiScope[] = [
   'students:pii',
   'teachers:pii',
+  'workers:pii',
   'students:photo',
   'teachers:photo',
+  'workers:photo',
 ];
 
 /**

@@ -34,6 +34,34 @@ export function formatThaiDate(raw: string | null | undefined): string {
   return `${d} ${TH_MONTHS[mo - 1] ?? ''} ${y}`.trim();
 }
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * Raw Thai date -> "YYYY-MM-DD" (Gregorian) for a native `<input type="date">`.
+ * Returns null when the stored text is not a date we can render in a picker —
+ * the caller must then keep showing the raw text rather than silently blanking
+ * legacy data.
+ */
+export function thaiToIso(raw: string | null | undefined): string | null {
+  const d = parseThaiDate(raw);
+  if (!d) return null;
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+}
+
+/** "YYYY-MM-DD" (Gregorian, from a date input) -> raw Thai "dd/mm/BBBB". */
+export function isoToThai(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const m = String(iso).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  return `${m[3]}/${m[2]}/${Number(m[1]) + 543}`;
+}
+
+/** Today as a raw Thai date "dd/mm/BBBB", in the machine's local timezone. */
+export function todayThai(): string {
+  const now = new Date();
+  return `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear() + 543}`;
+}
+
 /** Compute age in years from a raw Thai birth date, relative to now. */
 export function ageFromThaiDate(raw: string | null | undefined): number | null {
   const born = parseThaiDate(raw);

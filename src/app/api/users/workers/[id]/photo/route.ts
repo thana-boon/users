@@ -5,6 +5,7 @@ import { workers } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, badRequest, notFound, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
+import { photoResponse } from '@/lib/services/photos';
 
 export const runtime = 'nodejs';
 
@@ -23,14 +24,8 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       where: eq(workers.id, id),
       columns: { photoBase64: true, photoMime: true },
     });
-    if (!w?.photoBase64) return notFound('ยังไม่มีรูปภาพ');
-    const buf = Buffer.from(w.photoBase64, 'base64');
-    return new Response(new Uint8Array(buf), {
-      headers: {
-        'Content-Type': w.photoMime || 'image/jpeg',
-        'Cache-Control': 'private, no-cache',
-      },
-    });
+    // ETag + 304, same as the students twin — see the note there.
+    return photoResponse(req, w) ?? notFound('ยังไม่มีรูปภาพ');
   } catch (err) {
     return handleError(err);
   }

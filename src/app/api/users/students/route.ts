@@ -8,6 +8,7 @@ import { ok, created, handleError, badRequest } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { resolveActiveYearId, upsertStudentFull } from '@/lib/services/students';
 import { openLeavesFor } from '@/lib/services/leaves';
+import { gradeRank, roomRank, roomText } from '@/lib/grade-sql';
 import type { ParsedStudent } from '@/lib/excel-map';
 
 export const runtime = 'nodejs';
@@ -75,7 +76,14 @@ export async function GET(req: NextRequest) {
         .from(students)
         .innerJoin(enrollments, eq(enrollments.studentId, students.id))
         .where(where)
-        .orderBy(enrollments.gradeLevel, enrollments.classroom, enrollments.seqOrder)
+        // ชั้น by curriculum order (เตรียมอนุบาล → อ → ป → ม); ordering on the
+        // raw column sorts by Thai code points and reads ป, ม, อ, เตรียมอนุบาล.
+        .orderBy(
+          gradeRank(enrollments.gradeLevel),
+          roomRank(enrollments.classroom),
+          roomText(enrollments.classroom),
+          enrollments.seqOrder,
+        )
         .limit(pageSize)
         .offset((page - 1) * pageSize),
       db

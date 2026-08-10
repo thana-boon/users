@@ -5,6 +5,7 @@ import { api, jsonBody } from '@/lib/client';
 import { useToast } from './Toast';
 import { useConfirm } from './Confirm';
 import { Combo } from './Combo';
+import { DateField } from './DateField';
 import { IconSearch, IconPlus, IconRestore, IconTrash } from './Icons';
 import { LEAVE_TYPE_OPTIONS, LEAVE_REASON_OPTIONS } from '@/lib/options';
 
@@ -308,16 +309,8 @@ export function LeaveTool() {
               normalize={false}
               style={{ width: 190 }}
             />
-            <div>
-              <label className="form-label required">เริ่มพัก (ว/ด/ปพ.ศ.)</label>
-              <input className="form-input" style={{ width: 160 }} placeholder="เช่น 01/07/2569"
-                value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="form-label">กำหนดกลับ (ถ้ามี)</label>
-              <input className="form-input" style={{ width: 160 }} placeholder="เช่น 01/11/2569"
-                value={expectedReturnDate} onChange={(e) => setExpectedReturnDate(e.target.value)} />
-            </div>
+            <DateField label="เริ่มพัก" value={startDate} onChange={setStartDate} required today />
+            <DateField label="กำหนดกลับ (ถ้ามี)" value={expectedReturnDate} onChange={setExpectedReturnDate} />
             {disciplinary && (
               <div>
                 <label className="form-label">เลขที่คำสั่ง</label>
@@ -502,11 +495,7 @@ function ReturnDialog({ row, onClose, onDone }: { row: LeaveRow; onClose: () => 
           <p className="muted" style={{ fontSize: 13 }}>
             <strong>{row.studentCode} {fullName(row)}</strong> — {row.leaveType} ตั้งแต่ {row.startDate ?? '-'}
           </p>
-          <div>
-            <label className="form-label required">วันที่กลับมาเรียน (ว/ด/ปพ.ศ.)</label>
-            <input className="form-input" placeholder="เช่น 01/11/2569"
-              value={returnedDate} onChange={(e) => setReturnedDate(e.target.value)} />
-          </div>
+          <DateField label="วันที่กลับมาเรียน" value={returnedDate} onChange={setReturnedDate} required today />
           <div>
             <label className="form-label">หมายเหตุ (ถ้ามี)</label>
             <input className="form-input" value={note} onChange={(e) => setNote(e.target.value)} />

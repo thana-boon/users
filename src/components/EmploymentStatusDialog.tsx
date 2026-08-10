@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from './Toast';
 import { Combo } from './Combo';
+import { DateField } from './DateField';
+import { todayThai } from '@/lib/thai';
 import { STAFF_EXIT_REASON_OPTIONS } from '@/lib/options';
 
 interface YearOpt { id: number; year: number; isActive: boolean }
@@ -22,7 +24,7 @@ export function EmploymentStatusDialog({
   onDone: () => void;
 }) {
   const toast = useToast();
-  const [exitDate, setExitDate] = useState('');
+  const [exitDate, setExitDate] = useState(todayThai);
   const [exitReason, setExitReason] = useState('');
   const [years, setYears] = useState<YearOpt[]>([]);
   const [exitYearId, setExitYearId] = useState<number | null>(null);
@@ -70,10 +72,7 @@ export function EmploymentStatusDialog({
               {years.map((y) => <option key={y.id} value={y.id}>{y.year}{y.isActive ? ' (ปัจจุบัน)' : ''}</option>)}
             </select>
           </div>
-          <div>
-            <label className="form-label">วันที่ออก (ว/ด/ปพ.ศ.)</label>
-            <input className="form-input" placeholder="เช่น 31/03/2569" value={exitDate} onChange={(e) => setExitDate(e.target.value)} />
-          </div>
+          <DateField label="วันที่ออก" value={exitDate} onChange={setExitDate} today />
           <Combo
             label="เหตุผล (ถ้ามี)"
             value={exitReason}

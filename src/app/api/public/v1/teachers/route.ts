@@ -71,6 +71,12 @@ export async function GET(req: NextRequest) {
           firstName: teachers.firstName,
           lastName: teachers.lastName,
           email: teachers.email,
+          // Directory contact fields — plain `teachers:read`, like email. They
+          // are what a sibling system needs to reach a teacher; เลขบัตร ปชช.
+          // remains the only teacher field behind `teachers:pii`.
+          phone: teachers.phone,
+          lineId: teachers.lineId,
+          birthDate: teachers.birthDate,
           subjectGroup: teachers.subjectGroup,
           gradeTaught: teachers.gradeTaught,
           role: teachers.role,

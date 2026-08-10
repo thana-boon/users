@@ -13,6 +13,7 @@ import { formatThaiDate, ageFromThaiDate } from '@/lib/thai';
 import { StatusDialog } from '@/components/StatusDialog';
 import { ReinstateDialog } from '@/components/ReinstateDialog';
 import { Combo } from '@/components/Combo';
+import { DateField } from '@/components/DateField';
 import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
   STUDENT_PREFIX_OPTIONS,
@@ -346,13 +347,13 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                 <TInput label="นามสกุล (EN)" value={core.lastNameEn} onChange={setC('lastNameEn')} />
                 <TInput label="ชื่อเล่น (EN)" value={core.nicknameEn} onChange={setC('nicknameEn')} />
                 <Combo label="เพศ" value={core.gender} onChange={setC('gender')} options={GENDER_OPTIONS} />
-                <TInput label="วันเกิด (ว/ด/ปพ.)" value={core.birthDate} onChange={setC('birthDate')} />
+                <DateField label="วันเกิด" value={core.birthDate} onChange={setC('birthDate')} />
                 <Combo label="ศาสนา" value={core.religion} onChange={setC('religion')} options={RELIGION_OPTIONS} />
                 <Combo label="สัญชาติ" value={core.nationality} onChange={setC('nationality')} options={NATIONALITY_OPTIONS} />
                 <Combo label="เชื้อชาติ" value={core.ethnicity} onChange={setC('ethnicity')} options={ETHNICITY_OPTIONS} />
                 <TInput label="เบอร์โทร" value={core.phone} onChange={setC('phone')} />
                 <TInput label="อีเมล" value={core.email} onChange={setC('email')} />
-                <TInput label="วันที่เข้าเรียน" value={core.admissionDate} onChange={setC('admissionDate')} />
+                <DateField label="วันที่เข้าเรียน" value={core.admissionDate} onChange={setC('admissionDate')} />
               </div>
             )}
           </div>

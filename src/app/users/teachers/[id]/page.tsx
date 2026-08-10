@@ -11,6 +11,7 @@ import { EmploymentStatusDialog } from '@/components/EmploymentStatusDialog';
 import { PhotoCard } from '@/components/PhotoCard';
 import { IconBack, IconTrash } from '@/components/Icons';
 import { Combo } from '@/components/Combo';
+import { DateField } from '@/components/DateField';
 import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
   STAFF_PREFIX_OPTIONS,
@@ -19,6 +20,7 @@ import {
 interface Detail {
   id: number; teacherCode: string; prefix: string | null;
   firstName: string; lastName: string; email: string | null;
+  phone: string | null; lineId: string | null; birthDate: string | null;
   subjectGroup: string | null; gradeTaught: string | null; role: string;
   gender: string | null; religion: string | null;
   nationality: string | null; ethnicity: string | null;
@@ -59,7 +61,8 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
     try {
       const payload: Record<string, unknown> = {
         prefix: form.prefix, firstName: form.firstName, lastName: form.lastName,
-        email: form.email, subjectGroup: form.subjectGroup, gradeTaught: form.gradeTaught,
+        email: form.email, phone: form.phone, lineId: form.lineId, birthDate: form.birthDate,
+        subjectGroup: form.subjectGroup, gradeTaught: form.gradeTaught,
         gender: form.gender, religion: form.religion,
         nationality: form.nationality, ethnicity: form.ethnicity,
         role: form.role,
@@ -149,6 +152,9 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
           <div><label className="form-label">อีเมล</label><input className="form-input" value={form.email ?? ''} onChange={set('email')} /></div>
           <div><label className="form-label">ชื่อ</label><input className="form-input" value={form.firstName ?? ''} onChange={set('firstName')} /></div>
           <div><label className="form-label">นามสกุล</label><input className="form-input" value={form.lastName ?? ''} onChange={set('lastName')} /></div>
+          <div><label className="form-label">เบอร์โทร</label><input className="form-input" value={form.phone ?? ''} onChange={set('phone')} placeholder="เช่น 0812345678" /></div>
+          <div><label className="form-label">ไอดีไลน์</label><input className="form-input" value={form.lineId ?? ''} onChange={set('lineId')} placeholder="เช่น teacher.somchai" /></div>
+          <DateField label="วันเดือนปีเกิด" value={form.birthDate} onChange={setV('birthDate')} />
           <Combo label="เพศ" value={form.gender} onChange={setV('gender')} options={GENDER_OPTIONS} />
           <Combo label="ศาสนา" value={form.religion} onChange={setV('religion')} options={RELIGION_OPTIONS} />
           <Combo label="สัญชาติ" value={form.nationality} onChange={setV('nationality')} options={NATIONALITY_OPTIONS} />

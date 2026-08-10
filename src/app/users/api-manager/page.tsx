@@ -324,6 +324,11 @@ GET ${BASE_PATH}/api/public/v1/teachers   # ต้องมีสิทธิ์
     ?subjectGroup=&role=teacher&status=active&q=&yearId=&page=1&pageSize=50
     # แต่ละคนมี homerooms: [{gradeLevel, classroom}] = ห้องที่ประจำชั้น
     # ในปีนั้น (ค่าเริ่มต้น: ปีปัจจุบัน)
+    # มี phone / lineId / birthDate มาด้วย (พ.ศ. ว/ด/ปปปป)
+
+GET ${BASE_PATH}/api/public/v1/workers    # ต้องมีสิทธิ์ workers:read
+    ?position=&status=active&q=&page=1&pageSize=50
+    # คนงาน (นักการภารโรง ฯลฯ) — ไม่มีบัญชีล็อกอิน จึงไม่มี role/email
 
 GET ${BASE_PATH}/api/public/v1/homerooms  # ครูประจำชั้นรายห้อง — ใช้สิทธิ์ teachers:read
     ?yearId=&grade=ป.6&classroom=2

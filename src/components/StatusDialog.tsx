@@ -5,6 +5,8 @@ import { api, jsonBody } from '@/lib/client';
 import { useToast } from './Toast';
 import { keyStageOf, KEY_STAGE_LABEL_TH } from '@/lib/grades';
 import { Combo } from './Combo';
+import { DateField } from './DateField';
+import { todayThai } from '@/lib/thai';
 import { EXIT_TYPE_OPTIONS, EXIT_REASON_OPTIONS } from '@/lib/options';
 
 interface YearOpt { id: number; year: number; isActive: boolean }
@@ -28,7 +30,7 @@ export function StatusDialog({
   const graduate = mode === 'graduated';
   const stage = keyStageOf(activeGrade);
   const [exitType, setExitType] = useState(graduate ? 'จบการศึกษา' : 'ลาออก');
-  const [exitDate, setExitDate] = useState('');
+  const [exitDate, setExitDate] = useState(todayThai);
   const [exitReason, setExitReason] = useState(graduate ? 'สำเร็จการศึกษา' : '');
   const [recordCompletion, setRecordCompletion] = useState(graduate && !!stage);
   const [years, setYears] = useState<YearOpt[]>([]);
@@ -84,10 +86,7 @@ export function StatusDialog({
           ) : (
             <Combo label="ประเภท" value={exitType} onChange={setExitType} options={EXIT_TYPE_OPTIONS} normalize={false} />
           )}
-          <div>
-            <label className="form-label">วันที่ออก (ว/ด/ปพ.ศ.)</label>
-            <input className="form-input" placeholder="เช่น 31/03/2569" value={exitDate} onChange={(e) => setExitDate(e.target.value)} />
-          </div>
+          <DateField label="วันที่ออก" value={exitDate} onChange={setExitDate} today />
           <Combo
             label="เหตุผล"
             value={exitReason}
