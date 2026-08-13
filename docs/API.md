@@ -574,9 +574,14 @@ if (data.valid) {
   // ล็อกอินอยู่แล้ว — ข้ามหน้า login ไปเลย
   showApp(data.user);
 } else {
-  showLoginPage();
+  // ยังไม่ล็อกอิน — ส่งไป portal ของแพลตฟอร์ม **ไม่ใช่**หน้า login ของระบบคุณ
+  const url = new URL(data.loginUrl);          // = https://schoolos.sukhon.ac.th/
+  url.searchParams.set('next', location.href); // ล็อกอินเสร็จให้พากลับมาที่นี่
+  location.href = url.toString();
 }
 ```
+
+> ⚠️ **ห้ามเด้งไปหน้า login ของระบบคุณเอง** — นี่คือข้อผิดพลาดที่เจอบ่อยที่สุด ผู้ใช้ที่ล็อกอินที่ระบบคุณจะได้ session ของระบบคุณระบบเดียว ส่วนแพลตฟอร์มยังมองว่าเขาเป็นคนแปลกหน้า พอเปิดระบบถัดไปก็ต้องล็อกอินใหม่อีก ซึ่งทำลายจุดประสงค์ของ SSO ทั้งหมด ปลายทางที่ถูกคือ `loginUrl` ที่เราส่งมาให้ในคำตอบเสมอ (อย่า hardcode — วันไหนย้ายโดเมน portal ค่านี้เปลี่ยนให้เอง)
 
 **ล็อกอินอยู่ (200)**
 
@@ -597,7 +602,11 @@ if (data.valid) {
 **ยังไม่ได้ล็อกอิน (ก็ยัง 200)**
 
 ```json
-{ "valid": false, "user": null }
+{
+  "valid": false,
+  "user": null,
+  "loginUrl": "https://schoolos.sukhon.ac.th/"
+}
 ```
 
 > ตอบ **200 ทั้งสองกรณี** — "ยังไม่ล็อกอิน" เป็นคำตอบ ไม่ใช่ error ให้เช็คที่ฟิลด์ `valid` ไม่ใช่ status code
@@ -607,6 +616,7 @@ if (data.valid) {
 - `role` — `teacher` \| `student` (ระดับ session) ส่วน `teacher-admin` สะท้อนมาเป็น `permissions` ที่มี `users:*`
 - `permissions` — สิทธิ์ในโมดูล Users เท่านั้น **ไม่ใช่**สิทธิ์ในระบบคุณ ระบบคุณตัดสินใจเอง
 - `expiresAt` — เวลาที่ session นี้จะตาย (epoch ms) แคชคำตอบได้ถึงเวลานี้ ไม่ต้องยิงทุกหน้า
+- `loginUrl` — มาเฉพาะตอน `valid:false` ปลายทางที่ต้องส่งผู้ใช้ไปล็อกอิน (portal ของแพลตฟอร์ม) ใส่ `?next=` ต่อท้ายเองได้
 - ไม่มี `active`/`status` แบบข้อ 4.9 — ถ้าต้องรู้ว่าคนนี้ยังเรียน/ยังทำงานอยู่ไหม ให้ถาม `GET /students` / `GET /teachers` ด้วย key ของคุณ
 
 **ตั้งค่าฝั่ง SchoolOS ก่อนใช้** — origin ของระบบคุณต้องถูกใส่ใน `SSO_ALLOWED_ORIGINS` ของ Users service (แจ้งแอดมิน) ไม่งั้นเบราว์เซอร์จะบล็อกเพราะไม่มี CORS header กลับมา ต้องเป็น origin เป๊ะ ๆ (scheme + host + port) เช่น `http://localhost:3017` — ใช้ `*` ไม่ได้เพราะเป็น request ที่พก cookie
@@ -617,12 +627,20 @@ if (data.valid) {
 
 การใช้งานในระบบคุณ **ไม่**นับเป็น activity ของ session โดยอัตโนมัติ — ตัวที่เลื่อน idle window ออกไปทำงานเฉพาะกับหน้าและ API ของโมดูล Users เท่านั้น ถ้าผู้ใช้ทำงานในระบบคุณ 15 นาทีโดยไม่แตะ Users เลย session จะหมดอายุกลางคัน ระบบคุณจึงต้องเรียก endpoint นี้เองเมื่อเห็นว่าผู้ใช้ยังใช้งานอยู่จริง
 
+> ⚠️ **ข้อนี้ไม่ใช่ของแถม — ไม่เรียกแล้วระบบอื่นพังตามด้วย** `sso_session` เป็นคุกกี้ใบเดียวกันทั้งแพลตฟอร์ม ถ้าระบบคุณออก session ของตัวเองไว้แล้วไม่เคย refresh ผู้ใช้จะยังทำงานในระบบคุณได้เรื่อย ๆ (เพราะอยู่ด้วยคุกกี้ของคุณ) แต่คุกกี้กลางตายไปตั้งแต่นาทีที่ 15 — พอเขาสลับไป**ระบบอื่น** ระบบนั้นจะเจอ `valid:false` แล้วเด้งออกทั้งที่เพิ่งทำงานอยู่แท้ ๆ อาการ "ระบบนี้ใช้ได้ แต่อีกระบบตัดเวลา" มาจากตรงนี้เกือบทุกครั้ง
+
 ```js
 const res = await fetch('http://localhost:3002/api/auth/refresh', {
   method: 'POST',
   credentials: 'include',
 });
-if (res.status === 401) return showLoginPage();   // หมดเวลาไปแล้ว
+if (res.status === 401) {
+  // หมดเวลาไปแล้ว — ไป portal เหมือนกรณี valid:false ข้างบน ไม่ใช่หน้า login ของคุณ
+  const { loginUrl } = await res.json();
+  const url = new URL(loginUrl);
+  url.searchParams.set('next', location.href);
+  return (location.href = url.toString());
+}
 const { expiresAt, absoluteEndsAt } = await res.json();
 ```
 
@@ -674,8 +692,8 @@ const { expiresAt, absoluteEndsAt } = await res.json();
 const res = await fetch('http://localhost:3002/api/auth/handoff?audience=arena', {
   credentials: 'include',          // ← ขาดบรรทัดนี้ = valid:false ตลอด
 });
-const { valid, code } = await res.json();
-if (!valid) return showLoginPage();
+const { valid, code, loginUrl } = await res.json();
+if (!valid) return (location.href = loginUrl);   // portal ไม่ใช่หน้า login ของคุณ — ดูข้อ 4.10
 
 await fetch('/your/sso', { method: 'POST', body: JSON.stringify({ code }) });
 ```
@@ -689,7 +707,7 @@ await fetch('/your/sso', { method: 'POST', body: JSON.stringify({ code }) });
 **ยังไม่ได้ล็อกอิน (ก็ยัง 200)** — เหมือนข้อ 4.10 ให้ดูที่ `valid`
 
 ```json
-{ "valid": false, "code": null }
+{ "valid": false, "code": null, "loginUrl": "https://schoolos.sukhon.ac.th/" }
 ```
 
 | สถานะอื่น | เมื่อไหร่ |

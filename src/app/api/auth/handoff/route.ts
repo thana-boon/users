@@ -5,6 +5,7 @@ import { SSO_COOKIE, verifySession } from '@/lib/jwt';
 import { corsPreflight, withCors, isAllowedOrigin } from '@/lib/cors';
 import { issueHandoffCode, isValidAudience } from '@/lib/handoff';
 import { withNoStore } from '@/lib/http';
+import { platformHomeUrl } from '@/lib/platform';
 import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -62,7 +63,12 @@ async function handler(req: NextRequest) {
     (await verifySession(req.cookies.get(SSO_COOKIE)?.value)) ??
     (await getSessionFromRequest(req));
 
-  if (!session) return NextResponse.json({ valid: false, code: null });
+  // `loginUrl`: same contract as GET /api/auth/session — a consumer that finds
+  // nobody signed in gets told where sign-in for the whole platform lives,
+  // rather than falling back to a login form of its own.
+  if (!session) {
+    return NextResponse.json({ valid: false, code: null, loginUrl: platformHomeUrl() });
+  }
 
   // Keyed by the session, not the IP: one shared-NAT school building is one IP,
   // and it is a single user's session that could be milked for codes.

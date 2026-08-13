@@ -9,6 +9,7 @@ import {
   setSessionCookies,
 } from '@/lib/jwt';
 import { corsPreflight, withCors } from '@/lib/cors';
+import { platformHomeUrl } from '@/lib/platform';
 
 export const runtime = 'nodejs';
 
@@ -39,8 +40,13 @@ async function handler(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) {
     // Already over. Clear the stale cookies and tell the client to stop
-    // counting and send the user to the login page.
-    const res = NextResponse.json({ error: 'หมดเวลาการใช้งาน' }, { status: 401 });
+    // counting and send the user to the portal — `loginUrl` for the same reason
+    // GET /api/auth/session carries it: this is the other moment a consumer has
+    // to decide where a user goes, and its own login form is the wrong answer.
+    const res = NextResponse.json(
+      { error: 'หมดเวลาการใช้งาน', loginUrl: platformHomeUrl() },
+      { status: 401 },
+    );
     clearSessionCookies(res.cookies);
     return res;
   }

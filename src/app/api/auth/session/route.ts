@@ -4,6 +4,7 @@ import { getSessionFromRequest } from '@/lib/auth';
 import { SSO_COOKIE, sessionExpiresAt, verifySession } from '@/lib/jwt';
 import { corsPreflight, withCors } from '@/lib/cors';
 import { withNoStore } from '@/lib/http';
+import { platformHomeUrl } from '@/lib/platform';
 
 export const runtime = 'nodejs';
 
@@ -32,7 +33,20 @@ async function handler(req: NextRequest) {
   if (!session) {
     // `session: null` is the shape this endpoint answered before SSO existed.
     // Kept alongside `valid` so anything already calling it keeps working.
-    return NextResponse.json({ valid: false, user: null, session: null });
+    return NextResponse.json({
+      valid: false,
+      user: null,
+      session: null,
+      /**
+       * Where to send a browser that has no session. Answered here because a
+       * consumer left to decide for itself sends the user to its OWN login
+       * form — which is a dead end: signing in there signs you into one service
+       * while the platform still thinks you are a stranger. The portal is the
+       * one page whose sign-in covers everything. Consumers add their own
+       * `?next=`; see docs/API.md §4.10.
+       */
+      loginUrl: platformHomeUrl(),
+    });
   }
 
   const user = {
