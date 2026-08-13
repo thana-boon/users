@@ -28,6 +28,11 @@
 ส่วนการยิงตรงพอร์ต 3002 ใช้ path ตามเอกสารได้เลยไม่ต้องเติมอะไร — **ทั้งสองแบบใช้ได้พร้อมกัน**
 เลือกตามว่าระบบของคุณเข้าถึงเซิร์ฟเวอร์ทางไหน
 
+> ⚠️ กฎนี้ใช้กับ **ทุก** path ไม่ใช่แค่ `/api/public/v1/*` — endpoint SSO (`/api/auth/session`,
+> `/api/auth/refresh`, `/api/auth/handoff` ในข้อ 4.10–4.11) ก็ต้องมี `/users` นำหน้าเวลาเรียกผ่าน
+> gateway ด้วย ลืมข้อนี้แล้วจะได้หน้า HTML 404 กลับไปแทน JSON ซึ่ง**หน้าตาเหมือนผู้ใช้ยังไม่ล็อกอิน**
+> ทุกประการ นี่เป็นบั๊กที่เกิดขึ้นจริงมาแล้วกับหลายระบบ รายละเอียดอยู่ในกล่องเตือนข้อ 4.10
+
 ---
 
 ## 1. แนวคิดของข้อมูล (อ่านก่อน เขียนโค้ดจะง่ายขึ้นมาก)
@@ -89,14 +94,14 @@ Key ออกได้จาก UI เท่านั้น (dev ที่ต้
 **2) ทดสอบว่า key ใช้ได้** — ยิง `/me` ก่อนเสมอ ไม่แตะข้อมูลจริง
 
 ```bash
-curl -H "X-API-Key: sk_live_..." https://schoolos.example.ac.th/api/public/v1/me
+curl -H "X-API-Key: sk_live_..." https://schoolos.example.ac.th/users/api/public/v1/me
 ```
 
 **3) เรียกข้อมูลจริง**
 
 ```bash
 curl -H "X-API-Key: sk_live_..." \
-  "https://schoolos.example.ac.th/api/public/v1/students?grade=ม.1&pageSize=200"
+  "https://schoolos.example.ac.th/users/api/public/v1/students?grade=ม.1&pageSize=200"
 ```
 
 แนบ key ได้ 2 แบบ — `X-API-Key: sk_live_...` หรือ `Authorization: Bearer sk_live_...`
@@ -507,7 +512,7 @@ Scope `auth:students` หรือ `auth:teachers` ตาม `role` ที่ส
 ```bash
 curl -X POST -H "X-API-Key: sk_live_..." -H "Content-Type: application/json" \
   -d '{"role":"teacher","username":"T00116","password":"secret"}' \
-  https://schoolos.example.ac.th/api/public/v1/auth/verify
+  https://schoolos.example.ac.th/users/api/public/v1/auth/verify
 ```
 
 - `role`: `student` \| `teacher`
@@ -562,10 +567,27 @@ if (!data.user.active) return null;  // ← ห้ามลืมบรรทั
 
 **หลักการ:** เมื่อผู้ใช้ล็อกอินที่ Users แล้ว แอปจะเซ็ต cookie `sso_session` (HttpOnly, `Path=/`, `SameSite=Lax`) ระบบอื่นเช็ค session ได้โดย**ถาม** endpoint นี้ — จงใจไม่ให้ระบบอื่น verify JWT เอง เพราะนั่นแปลว่าต้องแจก `JWT_SECRET` (เหตุผลเดียวกับข้อ 4.9)
 
+> 🚨 **`/users` นำหน้าด้วย — endpoint นี้ก็อยู่หลัง gateway เหมือนกัน** นี่คือสาเหตุอันดับหนึ่งของ "silent SSO ไม่ทำงาน" ที่เจอจริง
+>
+> | URL | ได้อะไร |
+> |---|---|
+> | `https://schoolos.sukhon.ac.th/api/auth/session` | ❌ **404 + หน้า HTML** |
+> | `https://schoolos.sukhon.ac.th/users/api/auth/session` | ✅ `200` + JSON |
+>
+> เส้นทางที่ไม่มี `/users` gateway ไม่ได้ส่งมาที่แอปนี้เลย — สิ่งที่ระบบคุณได้กลับไปคือหน้า HTML 404 พอเอาไปเข้า `res.json()` ก็ throw ตกเข้า `catch` แล้วระบบคุณก็สรุปว่า "ยังไม่ล็อกอิน" → เด้งไปหน้า login ของตัวเอง **ทั้งที่ผู้ใช้ล็อกอินอยู่**
+>
+> ที่ร้ายกว่านั้นคือ `POST /api/auth/refresh` ก็ 404 เงียบ ๆ ด้วย session กลางจึงไม่เคยถูกต่ออายุ แล้วไปตายที่นาทีที่ 15 กลางอากาศ (ดูหัวข้อ "ต่ออายุ session" ข้างล่าง)
+>
+> เช็คของจริงก่อนเขียนโค้ดได้เลย ต้องได้ `200` กับ `application/json`:
+> ```bash
+> curl -i https://schoolos.sukhon.ac.th/users/api/auth/session
+> ```
+> (ยิงตรงพอร์ต `http://<host>:3002/api/auth/session` ไม่ต้องมี `/users` — ดูหัวข้อ Base URL ตอนต้นเอกสาร)
+
 **เรียกยังไง** — ต้องมี `credentials: 'include'` ไม่งั้นเบราว์เซอร์ไม่ส่ง cookie ข้ามพอร์ตมาให้
 
 ```js
-const res  = await fetch('http://localhost:3002/api/auth/session', {
+const res  = await fetch('https://schoolos.example.ac.th/users/api/auth/session', {
   credentials: 'include',           // ← ขาดบรรทัดนี้ = ได้ valid:false ตลอด
 });
 const data = await res.json();
@@ -630,7 +652,7 @@ if (data.valid) {
 > ⚠️ **ข้อนี้ไม่ใช่ของแถม — ไม่เรียกแล้วระบบอื่นพังตามด้วย** `sso_session` เป็นคุกกี้ใบเดียวกันทั้งแพลตฟอร์ม ถ้าระบบคุณออก session ของตัวเองไว้แล้วไม่เคย refresh ผู้ใช้จะยังทำงานในระบบคุณได้เรื่อย ๆ (เพราะอยู่ด้วยคุกกี้ของคุณ) แต่คุกกี้กลางตายไปตั้งแต่นาทีที่ 15 — พอเขาสลับไป**ระบบอื่น** ระบบนั้นจะเจอ `valid:false` แล้วเด้งออกทั้งที่เพิ่งทำงานอยู่แท้ ๆ อาการ "ระบบนี้ใช้ได้ แต่อีกระบบตัดเวลา" มาจากตรงนี้เกือบทุกครั้ง
 
 ```js
-const res = await fetch('http://localhost:3002/api/auth/refresh', {
+const res = await fetch('https://schoolos.example.ac.th/users/api/auth/refresh', {
   method: 'POST',
   credentials: 'include',
 });
@@ -689,7 +711,7 @@ const { expiresAt, absoluteEndsAt } = await res.json();
 #### `GET /api/auth/handoff?audience=<ชื่อระบบ>` — เบราว์เซอร์เรียก (cookie)
 
 ```js
-const res = await fetch('http://localhost:3002/api/auth/handoff?audience=arena', {
+const res = await fetch('https://schoolos.example.ac.th/users/api/auth/handoff?audience=arena', {
   credentials: 'include',          // ← ขาดบรรทัดนี้ = valid:false ตลอด
 });
 const { valid, code, loginUrl } = await res.json();
@@ -724,7 +746,7 @@ await fetch('/your/sso', { method: 'POST', body: JSON.stringify({ code }) });
 ```bash
 curl -X POST -H "X-API-Key: sk_live_..." -H "Content-Type: application/json" \
   -d '{"code":"hc_kZ8…"}' \
-  https://schoolos.example.ac.th/api/public/v1/auth/handoff/redeem
+  https://schoolos.example.ac.th/users/api/public/v1/auth/handoff/redeem
 ```
 
 **สำเร็จ (200)**
