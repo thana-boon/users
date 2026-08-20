@@ -39,6 +39,9 @@ export const API_SCOPES = [
   'workers:read',
   'workers:pii',
   'workers:photo',
+  // อาจารย์พิเศษ — its own table too, and it holds neither เลขบัตร ปชช. nor a
+  // photo, so one plain read scope is the whole surface there is to grant.
+  'special-teachers:read',
   // School calendar: academic years + term windows. Read-only, no PII.
   // Added after the first keys were issued — existing keys keep working
   // unchanged, they just don't have this scope until an admin ticks it.
@@ -61,6 +64,7 @@ export const SCOPE_LABEL_TH: Record<ApiScope, string> = {
   'workers:read': 'อ่านรายชื่อคนงาน',
   'workers:pii': 'อ่านเลขบัตร ปชช. คนงาน',
   'workers:photo': 'ดึงรูปคนงาน',
+  'special-teachers:read': 'อ่านรายชื่ออาจารย์พิเศษ',
   'years:read': 'อ่านปีการศึกษาและช่วงภาคเรียน',
   'auth:students': 'ตรวจรหัสผ่านนักเรียน (ล็อกอิน)',
   'auth:teachers': 'ตรวจรหัสผ่านครู (ล็อกอิน)',

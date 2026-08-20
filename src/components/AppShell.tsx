@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { withBase } from '@/lib/client';
 import {
   IconDashboard,
@@ -25,6 +25,7 @@ import {
   IconKey,
   IconHomeroom,
   IconDatabase,
+  IconSpecialTeacher,
 } from './Icons';
 
 interface SessionInfo {
@@ -74,6 +75,70 @@ function Avatar({ photoUrl, initial, name }: { photoUrl: string | null; initial:
   );
 }
 
+/**
+ * The signed-in user as a menu: the photo (or initial) is the button, and
+ * ออกจากระบบ lives inside it — which is where people look for it, and it keeps
+ * a destructive action one deliberate click away instead of sitting exposed in
+ * the navbar next to the nav items.
+ *
+ * The whole thing is one `<button>` so keyboard and screen-reader users get the
+ * same affordance; the menu closes on click-away and on Escape.
+ */
+function UserMenu({ session, onLogout }: { session: SessionInfo; onLogout: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const name = session.name ?? 'ผู้ดูแลระบบ';
+
+  useEffect(() => {
+    if (!open) return;
+    // mousedown, not click: a click on a menu item would otherwise be raced by
+    // the close handler and the item would never fire.
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        className="user-btn"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`บัญชีผู้ใช้ — ${name}`}
+      >
+        <Avatar photoUrl={session.photoUrl} initial={session.initial} name={name} />
+        {/* The avatar stays on mobile — it is the one thing that still says
+            who is signed in once the name is hidden. */}
+        <span style={{ fontSize: 13, opacity: 0.9 }} className="hide-mobile">{name}</span>
+        <IconChevron width={14} height={14} className="user-btn-chevron" data-open={open} />
+      </button>
+
+      {open && (
+        <div className="user-menu" role="menu">
+          <div className="user-menu-head">
+            <div style={{ fontWeight: 600 }}>{name}</div>
+            <div className="muted mono" style={{ fontSize: 11 }}>{session.role}</div>
+          </div>
+          <button type="button" role="menuitem" className="user-menu-item" onClick={onLogout}>
+            <IconLogout width={16} height={16} /> ออกจากระบบ
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type Leaf = { href: string; label: string; Icon: typeof IconDashboard; exact?: boolean };
 type Group = { label: string; Icon: typeof IconDashboard; children: Leaf[] };
 type NavNode = Leaf | Group;
@@ -102,6 +167,7 @@ const NAV: NavNode[] = [
     children: [
       { href: '/users/teachers', label: 'ครู', Icon: IconTeachers },
       { href: '/users/homerooms', label: 'ครูประจำชั้น', Icon: IconHomeroom },
+      { href: '/users/special-teachers', label: 'อาจารย์พิเศษ', Icon: IconSpecialTeacher },
       { href: '/users/workers', label: 'คนงาน', Icon: IconWorker },
     ],
   },
@@ -191,21 +257,7 @@ export function AppShell({
           >
             <IconShield width={13} height={13} /> ผู้ดูแล
           </span>
-          <div className="row" style={{ gap: 8 }}>
-            <Avatar
-              photoUrl={session.photoUrl}
-              initial={session.initial}
-              name={session.name ?? 'ผู้ดูแลระบบ'}
-            />
-            {/* The avatar stays on mobile — it is the one thing that still says
-                who is signed in once the name is hidden. */}
-            <span style={{ fontSize: 13, opacity: 0.9 }} className="hide-mobile">
-              {session.name ?? 'ผู้ดูแลระบบ'}
-            </span>
-          </div>
-          <button className="btn btn-sm btn-ghost" onClick={logout} style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.4)' }}>
-            <IconLogout width={16} height={16} /> <span className="hide-mobile">ออกจากระบบ</span>
-          </button>
+          <UserMenu session={session} onLogout={logout} />
         </div>
       </header>
 
@@ -286,6 +338,35 @@ export function AppShell({
         }
         .side-subitem:hover { background: var(--skdw-bg); }
         .side-subitem[data-active="true"] { background: var(--skdw-purple-pale); color: var(--skdw-purple); font-weight: 600; }
+        .user-btn {
+          display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px;
+          border: 1px solid transparent; border-radius: 999px; cursor: pointer;
+          background: none; color: inherit; font-family: inherit; font-size: inherit;
+          transition: background var(--transition-fast), border-color var(--transition-fast);
+        }
+        .user-btn:hover, .user-btn[aria-expanded="true"] {
+          background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.35);
+        }
+        .user-btn-chevron { transition: transform var(--transition-fast); opacity: 0.85; }
+        .user-btn-chevron[data-open="false"] { transform: rotate(-90deg); }
+        .user-menu {
+          position: absolute; top: calc(100% + 8px); right: 0; min-width: 208px;
+          background: #fff; color: var(--skdw-dark); border: 0.5px solid var(--skdw-border);
+          border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+          padding: 6px; z-index: 300;
+        }
+        .user-menu-head {
+          padding: 8px 10px 10px; border-bottom: 0.5px solid var(--skdw-border);
+          margin-bottom: 6px; line-height: 1.35;
+        }
+        .user-menu-item {
+          display: flex; align-items: center; gap: 10px; width: 100%;
+          padding: 9px 10px; border: none; background: none; cursor: pointer;
+          text-align: left; border-radius: var(--radius-sm);
+          font-family: inherit; font-size: var(--text-md); color: var(--color-error);
+          transition: background var(--transition-fast);
+        }
+        .user-menu-item:hover { background: var(--color-error-bg); }
         .bottom-nav { display: none; }
         @media (max-width: 900px) {
           .sidebar-desktop { display: none; }

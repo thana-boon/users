@@ -6,13 +6,22 @@ import { api, jsonBody } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
 import { IconSearch, IconRestore, IconTrash } from '@/components/Icons';
-import { DeleteForeverDialog } from '@/components/DeleteForeverDialog';
+import {
+  DeleteForeverDialog,
+  TRASH_KIND_LABEL,
+  type TrashKind,
+} from '@/components/DeleteForeverDialog';
 import { BulkDeleteForeverDialog } from '@/components/BulkDeleteForeverDialog';
 
 /**
  * ถังขยะ — records removed with the ย้ายไปถังขยะ button (soft-delete,
  * is_archived) are hidden from every list but never destroyed. This page lists
- * archived นักเรียน + ครู and lets an admin restore (กู้คืน) them.
+ * archived นักเรียน / ครู / คนงาน / อาจารย์พิเศษ and lets an admin restore
+ * (กู้คืน) them.
+ *
+ * Rows are kept in one map keyed by the same `TrashKind` the API's `type` field
+ * uses, so the tab, the restore call, the delete dialog and the "which list do
+ * I drop the row from" step all read from a single value.
  */
 
 interface ArchivedStudent {
@@ -29,9 +38,28 @@ interface ArchivedWorker {
   id: number; workerCode: string; prefix: string | null;
   firstName: string; lastName: string; position: string | null;
 }
+interface ArchivedSpecialTeacher {
+  id: number; specialTeacherCode: string; prefix: string | null;
+  firstName: string; lastName: string; subjectGroup: string | null;
+}
+
+interface Trash {
+  student: ArchivedStudent[];
+  teacher: ArchivedTeacher[];
+  worker: ArchivedWorker[];
+  special_teacher: ArchivedSpecialTeacher[];
+}
+
+const EMPTY: Trash = { student: [], teacher: [], worker: [], special_teacher: [] };
+
+const TABS: TrashKind[] = ['student', 'teacher', 'worker', 'special_teacher'];
 
 const fullName = (r: { prefix: string | null; firstName: string; lastName: string }) =>
   `${r.prefix ?? ''}${r.firstName} ${r.lastName}`.trim();
+
+/** Free-text search over whichever fields a tab shows. Empty term matches all. */
+const matches = (term: string, ...fields: (string | null)[]) =>
+  !term || fields.some((f) => (f ?? '').toLowerCase().includes(term));
 
 const STATUS_LABEL: Record<string, string> = {
   studying: 'กำลังศึกษา', withdrawn: 'จำหน่าย/ลาออก', graduated: 'จบการศึกษา',
@@ -41,27 +69,31 @@ export default function ArchivePage() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  const [tab, setTab] = useState<'students' | 'teachers' | 'workers'>('students');
-  const [students, setStudents] = useState<ArchivedStudent[]>([]);
-  const [teachers, setTeachers] = useState<ArchivedTeacher[]>([]);
-  const [workers, setWorkers] = useState<ArchivedWorker[]>([]);
+  const [tab, setTab] = useState<TrashKind>('student');
+  const [trash, setTrash] = useState<Trash>(EMPTY);
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const [delTarget, setDelTarget] = useState<
-    { type: 'student' | 'teacher' | 'worker'; id: number; code: string; label: string } | null
+    { type: TrashKind; id: number; code: string; label: string } | null
   >(null);
-  const [bulkDel, setBulkDel] = useState<'student' | 'teacher' | 'worker' | null>(null);
+  const [bulkDel, setBulkDel] = useState<TrashKind | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api<{ students: ArchivedStudent[]; teachers: ArchivedTeacher[]; workers: ArchivedWorker[] }>(
-        '/api/users/archived',
-      );
-      setStudents(res.students);
-      setTeachers(res.teachers);
-      setWorkers(res.workers);
+      const res = await api<{
+        students: ArchivedStudent[];
+        teachers: ArchivedTeacher[];
+        workers: ArchivedWorker[];
+        specialTeachers: ArchivedSpecialTeacher[];
+      }>('/api/users/archived');
+      setTrash({
+        student: res.students,
+        teacher: res.teachers,
+        worker: res.workers,
+        special_teacher: res.specialTeachers ?? [],
+      });
     } catch (e) {
       toast((e as Error).message, 'error');
     } finally {
@@ -71,29 +103,34 @@ export default function ArchivePage() {
 
   useEffect(() => { load(); }, [load]);
 
+  /** Drop one row (or every row of a kind) from the list already on screen. */
+  const drop = useCallback((kind: TrashKind, id: number | 'all') => {
+    setTrash((t) => ({
+      ...t,
+      [kind]: id === 'all' ? [] : (t[kind] as { id: number }[]).filter((x) => x.id !== id),
+    }));
+  }, []);
+
   const term = q.trim().toLowerCase();
+
   const filteredStudents = useMemo(
-    () => students.filter((s) =>
-      !term || s.studentCode.toLowerCase().includes(term) ||
-      fullName(s).toLowerCase().includes(term) ||
-      (s.nickname ?? '').toLowerCase().includes(term)),
-    [students, term],
+    () => trash.student.filter((s) => matches(term, s.studentCode, fullName(s), s.nickname)),
+    [trash.student, term],
   );
   const filteredTeachers = useMemo(
-    () => teachers.filter((t) =>
-      !term || t.teacherCode.toLowerCase().includes(term) ||
-      fullName(t).toLowerCase().includes(term)),
-    [teachers, term],
+    () => trash.teacher.filter((t) => matches(term, t.teacherCode, fullName(t))),
+    [trash.teacher, term],
   );
   const filteredWorkers = useMemo(
-    () => workers.filter((w) =>
-      !term || w.workerCode.toLowerCase().includes(term) ||
-      fullName(w).toLowerCase().includes(term) ||
-      (w.position ?? '').toLowerCase().includes(term)),
-    [workers, term],
+    () => trash.worker.filter((w) => matches(term, w.workerCode, fullName(w), w.position)),
+    [trash.worker, term],
+  );
+  const filteredSpecialTeachers = useMemo(
+    () => trash.special_teacher.filter((s) => matches(term, s.specialTeacherCode, fullName(s), s.subjectGroup)),
+    [trash.special_teacher, term],
   );
 
-  async function restore(type: 'student' | 'teacher' | 'worker', row: { id: number; label: string }) {
+  async function restore(type: TrashKind, row: { id: number; label: string }) {
     if (!(await confirm({
       title: 'กู้คืนรายการนี้',
       message: `กู้คืน “${row.label}” กลับเข้าระบบ? รายการจะกลับไปแสดงในทะเบียนตามเดิม`,
@@ -103,9 +140,7 @@ export default function ArchivePage() {
     try {
       await api('/api/users/archived', jsonBody({ type, id: row.id }));
       toast('กู้คืนแล้ว', 'success');
-      if (type === 'student') setStudents((xs) => xs.filter((x) => x.id !== row.id));
-      else if (type === 'teacher') setTeachers((xs) => xs.filter((x) => x.id !== row.id));
-      else setWorkers((xs) => xs.filter((x) => x.id !== row.id));
+      drop(type, row.id);
     } catch (e) {
       toast((e as Error).message, 'error');
     } finally {
@@ -113,30 +148,28 @@ export default function ArchivePage() {
     }
   }
 
-  const activeType: 'student' | 'teacher' | 'worker' =
-    tab === 'students' ? 'student' : tab === 'teachers' ? 'teacher' : 'worker';
-  const activeCount = tab === 'students' ? students.length : tab === 'teachers' ? teachers.length : workers.length;
+  const activeCount = trash[tab].length;
 
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div>
         <h1 className="page-title"><IconTrash width={22} height={22} style={{ verticalAlign: '-4px', marginRight: 8 }} />ถังขยะ</h1>
         <p className="muted" style={{ marginTop: 4 }}>
-          นักเรียนและครูที่กด “ย้ายไปถังขยะ” จะถูกซ่อนจากทุกรายการ แต่ข้อมูลไม่ถูกลบจริง —
+          นักเรียนและบุคลากรที่กด “ย้ายไปถังขยะ” จะถูกซ่อนจากทุกรายการ แต่ข้อมูลไม่ถูกลบจริง —
           กู้คืนกลับเข้าระบบได้ที่นี่ทุกเมื่อ หรือลบถาวรหากสร้างผิด.
         </p>
       </div>
 
-      <div className="row" style={{ gap: 8 }}>
-        <button className={`btn btn-sm ${tab === 'students' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('students')}>
-          นักเรียน ({students.length})
-        </button>
-        <button className={`btn btn-sm ${tab === 'teachers' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('teachers')}>
-          ครู ({teachers.length})
-        </button>
-        <button className={`btn btn-sm ${tab === 'workers' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('workers')}>
-          คนงาน ({workers.length})
-        </button>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        {TABS.map((k) => (
+          <button
+            key={k}
+            className={`btn btn-sm ${tab === k ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setTab(k)}
+          >
+            {TRASH_KIND_LABEL[k]} ({trash[k].length})
+          </button>
+        ))}
         <div className="spacer" />
         <div style={{ position: 'relative', maxWidth: 280, width: '100%' }}>
           <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--skdw-muted)' }}>
@@ -149,7 +182,7 @@ export default function ArchivePage() {
           className="btn btn-sm btn-danger"
           disabled={loading || activeCount === 0}
           title={activeCount === 0 ? 'ถังขยะว่าง' : 'ลบทุกรายการในแท็บนี้ออกจากฐานข้อมูลอย่างถาวร'}
-          onClick={() => setBulkDel(activeType)}
+          onClick={() => setBulkDel(tab)}
         >
           <IconTrash width={14} height={14} /> ลบทั้งหมด ({activeCount})
         </button>
@@ -157,7 +190,7 @@ export default function ArchivePage() {
 
       <div className="card" style={{ padding: 0 }}>
         <div className="table-wrap">
-          {tab === 'students' && (
+          {tab === 'student' && (
             <table className="table">
               <thead>
                 <tr>
@@ -169,7 +202,7 @@ export default function ArchivePage() {
                 {loading && <tr><td colSpan={6}><div className="skeleton" style={{ height: 20 }} /></td></tr>}
                 {!loading && filteredStudents.length === 0 && (
                   <tr><td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 32 }}>
-                    {students.length === 0 ? 'ถังขยะว่าง — ยังไม่มีนักเรียนในถังขยะ' : 'ไม่พบรายชื่อที่ค้นหา'}
+                    {trash.student.length === 0 ? 'ถังขยะว่าง — ยังไม่มีนักเรียนในถังขยะ' : 'ไม่พบรายชื่อที่ค้นหา'}
                   </td></tr>
                 )}
                 {filteredStudents.map((s) => (
@@ -198,7 +231,7 @@ export default function ArchivePage() {
               </tbody>
             </table>
           )}
-          {tab === 'teachers' && (
+          {tab === 'teacher' && (
             <table className="table">
               <thead>
                 <tr>
@@ -210,7 +243,7 @@ export default function ArchivePage() {
                 {loading && <tr><td colSpan={5}><div className="skeleton" style={{ height: 20 }} /></td></tr>}
                 {!loading && filteredTeachers.length === 0 && (
                   <tr><td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 32 }}>
-                    {teachers.length === 0 ? 'ถังขยะว่าง — ยังไม่มีครูในถังขยะ' : 'ไม่พบรายชื่อที่ค้นหา'}
+                    {trash.teacher.length === 0 ? 'ถังขยะว่าง — ยังไม่มีครูในถังขยะ' : 'ไม่พบรายชื่อที่ค้นหา'}
                   </td></tr>
                 )}
                 {filteredTeachers.map((t) => (
@@ -238,7 +271,7 @@ export default function ArchivePage() {
               </tbody>
             </table>
           )}
-          {tab === 'workers' && (
+          {tab === 'worker' && (
             <table className="table">
               <thead>
                 <tr>
@@ -249,7 +282,7 @@ export default function ArchivePage() {
                 {loading && <tr><td colSpan={4}><div className="skeleton" style={{ height: 20 }} /></td></tr>}
                 {!loading && filteredWorkers.length === 0 && (
                   <tr><td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 32 }}>
-                    {workers.length === 0 ? 'ถังขยะว่าง — ยังไม่มีคนงานในถังขยะ' : 'ไม่พบรายชื่อที่ค้นหา'}
+                    {trash.worker.length === 0 ? 'ถังขยะว่าง — ยังไม่มีคนงานในถังขยะ' : 'ไม่พบรายชื่อที่ค้นหา'}
                   </td></tr>
                 )}
                 {filteredWorkers.map((w) => (
@@ -276,6 +309,44 @@ export default function ArchivePage() {
               </tbody>
             </table>
           )}
+          {tab === 'special_teacher' && (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>รหัส</th><th>ชื่อ-นามสกุล</th><th>กลุ่มสาระ</th><th style={{ width: 120 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && <tr><td colSpan={4}><div className="skeleton" style={{ height: 20 }} /></td></tr>}
+                {!loading && filteredSpecialTeachers.length === 0 && (
+                  <tr><td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 32 }}>
+                    {trash.special_teacher.length === 0 ? 'ถังขยะว่าง — ยังไม่มีอาจารย์พิเศษในถังขยะ' : 'ไม่พบรายชื่อที่ค้นหา'}
+                  </td></tr>
+                )}
+                {filteredSpecialTeachers.map((s) => (
+                  <tr key={s.id}>
+                    {/* อาจารย์พิเศษ have no detail page — the whole record is on
+                        the list page — so the code is plain text, not a link. */}
+                    <td className="mono">{s.specialTeacherCode}</td>
+                    <td>{fullName(s)}</td>
+                    <td style={{ fontSize: 13 }}>{s.subjectGroup ?? '-'}</td>
+                    <td>
+                      <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
+                        <button className="btn btn-ghost btn-sm" disabled={restoringId === s.id}
+                          onClick={() => restore('special_teacher', { id: s.id, label: `${s.specialTeacherCode} ${fullName(s)}` })}>
+                          <IconRestore width={14} height={14} /> {restoringId === s.id ? 'กำลังกู้คืน…' : 'กู้คืน'}
+                        </button>
+                        <button className="btn btn-ghost btn-sm" title="ลบถาวร" style={{ color: 'var(--color-error)' }}
+                          onClick={() => setDelTarget({ type: 'special_teacher', id: s.id, code: s.specialTeacherCode, label: `${s.specialTeacherCode} ${fullName(s)}` })}>
+                          <IconTrash width={14} height={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -287,10 +358,7 @@ export default function ArchivePage() {
           label={delTarget.label}
           onClose={() => setDelTarget(null)}
           onDone={() => {
-            const { type, id } = delTarget;
-            if (type === 'student') setStudents((xs) => xs.filter((x) => x.id !== id));
-            else if (type === 'teacher') setTeachers((xs) => xs.filter((x) => x.id !== id));
-            else setWorkers((xs) => xs.filter((x) => x.id !== id));
+            drop(delTarget.type, delTarget.id);
             setDelTarget(null);
           }}
         />
@@ -299,12 +367,10 @@ export default function ArchivePage() {
       {bulkDel && (
         <BulkDeleteForeverDialog
           type={bulkDel}
-          count={bulkDel === 'student' ? students.length : bulkDel === 'teacher' ? teachers.length : workers.length}
+          count={trash[bulkDel].length}
           onClose={() => setBulkDel(null)}
           onDone={() => {
-            if (bulkDel === 'student') setStudents([]);
-            else if (bulkDel === 'teacher') setTeachers([]);
-            else setWorkers([]);
+            drop(bulkDel, 'all');
             setBulkDel(null);
           }}
         />

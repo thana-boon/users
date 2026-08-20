@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { db } from '@/db';
-import { enrollments, teachers, academicYears } from '@/db/schema';
+import { enrollments, teachers, specialTeachers, academicYears } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, handleError } from '@/lib/http';
 import { resolveActiveYearId } from '@/lib/services/students';
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const yearId = sp.get('yearId') ? Number(sp.get('yearId')) : await resolveActiveYearId();
 
-    const [grades, rooms, subjects, years] = await Promise.all([
+    const [grades, rooms, subjects, specialSubjects, years] = await Promise.all([
       db
         .selectDistinct({ v: enrollments.gradeLevel })
         .from(enrollments)
@@ -30,6 +30,13 @@ export async function GET(req: NextRequest) {
         .selectDistinct({ v: teachers.subjectGroup })
         .from(teachers)
         .where(and(eq(teachers.isArchived, false), isNotNull(teachers.subjectGroup))),
+      // อาจารย์พิเศษ share the same free-text กลุ่มสาระ column, so a group that
+      // so far has only guest teachers in it must still appear in the picker —
+      // otherwise the next admin retypes it and the two spellings drift apart.
+      db
+        .selectDistinct({ v: specialTeachers.subjectGroup })
+        .from(specialTeachers)
+        .where(and(eq(specialTeachers.isArchived, false), isNotNull(specialTeachers.subjectGroup))),
       db.select().from(academicYears).orderBy(academicYears.year),
     ]);
 
@@ -40,7 +47,9 @@ export async function GET(req: NextRequest) {
       yearId,
       grades: gradeVals,
       classrooms: rooms.map((r) => r.v!).filter(Boolean).sort(),
-      subjectGroups: subjects.map((s) => s.v!).filter(Boolean).sort(),
+      subjectGroups: [
+        ...new Set([...subjects, ...specialSubjects].map((s) => s.v!).filter(Boolean)),
+      ].sort(),
       years: years.map((y) => ({ id: y.id, year: y.year, isActive: y.isActive })),
     });
   } catch (err) {

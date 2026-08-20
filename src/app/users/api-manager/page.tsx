@@ -330,6 +330,11 @@ GET ${BASE_PATH}/api/public/v1/workers    # ต้องมีสิทธิ์
     ?position=&status=active&q=&page=1&pageSize=50
     # คนงาน (นักการภารโรง ฯลฯ) — ไม่มีบัญชีล็อกอิน จึงไม่มี role/email
 
+GET ${BASE_PATH}/api/public/v1/special-teachers  # ต้องมีสิทธิ์ special-teachers:read
+    ?subjectGroup=&q=&page=1&pageSize=50
+    # อาจารย์พิเศษ/วิทยากร — ไม่มีบัญชีล็อกอิน ไม่มีรหัสผ่าน/เลขบัตร ปชช./รูป
+    # มีรหัส ชื่อ-สกุล กลุ่มสาระที่สังกัด และเบอร์โทร
+
 GET ${BASE_PATH}/api/public/v1/homerooms  # ครูประจำชั้นรายห้อง — ใช้สิทธิ์ teachers:read
     ?yearId=&grade=ป.6&classroom=2
     # ตอบทุกห้องที่มีนักเรียนในปีนั้น + รายชื่อครูประจำชั้น

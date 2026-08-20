@@ -52,6 +52,7 @@ export interface AuditInput {
     | 'student'
     | 'teacher'
     | 'worker'
+    | 'special_teacher'
     | 'academic_year'
     | 'enrollment'
     | 'homeroom'

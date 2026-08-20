@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { api } from '@/lib/client';
 import { useToast } from './Toast';
 import { IconTrash } from './Icons';
+import { TRASH_KIND_LABEL, type TrashKind } from './DeleteForeverDialog';
 
 const BULK_CONFIRM_PHRASE = 'ลบทั้งหมด';
 
@@ -16,7 +17,7 @@ const BULK_CONFIRM_PHRASE = 'ลบทั้งหมด';
 export function BulkDeleteForeverDialog({
   type, count, onClose, onDone,
 }: {
-  type: 'student' | 'teacher' | 'worker';
+  type: TrashKind;
   count: number;
   onClose: () => void;
   onDone: (deleted: number) => void;
@@ -24,7 +25,7 @@ export function BulkDeleteForeverDialog({
   const toast = useToast();
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
-  const kind = type === 'student' ? 'นักเรียน' : type === 'teacher' ? 'ครู' : 'คนงาน';
+  const kind = TRASH_KIND_LABEL[type];
   const match = typed.trim() === BULK_CONFIRM_PHRASE;
 
   async function submit() {

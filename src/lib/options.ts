@@ -21,6 +21,30 @@ export const STAFF_PREFIX_OPTIONS = [
   'ดร.', 'ผศ.', 'รศ.', 'พระ',
 ] as const;
 
+/**
+ * กลุ่มสาระการเรียนรู้ ตามหลักสูตรแกนกลาง 2551 (ฉบับปรับปรุง 2560) + the two
+ * non-subject groupings a school still has to file people under.
+ *
+ * A starting list, not the truth: the school's own spellings (which may or may
+ * not carry the "กลุ่มสาระการเรียนรู้" prefix) already live in `teachers.
+ * subject_group`, so the picker unions this list with the distinct values from
+ * the database and still accepts free text. Snapping to a canonical spelling
+ * here would rewrite ครู and อาจารย์พิเศษ onto different strings and split
+ * every per-group count in two.
+ */
+export const SUBJECT_GROUP_OPTIONS = [
+  'ภาษาไทย',
+  'คณิตศาสตร์',
+  'วิทยาศาสตร์และเทคโนโลยี',
+  'สังคมศึกษา ศาสนา และวัฒนธรรม',
+  'สุขศึกษาและพลศึกษา',
+  'ศิลปะ',
+  'การงานอาชีพ',
+  'ภาษาต่างประเทศ',
+  'กิจกรรมพัฒนาผู้เรียน',
+  'ปฐมวัย',
+] as const;
+
 export const RELIGION_OPTIONS = [
   'พุทธ', 'อิสลาม', 'คริสต์', 'ฮินดู', 'ซิกข์', 'ไม่นับถือศาสนา',
 ] as const;

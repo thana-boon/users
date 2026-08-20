@@ -486,6 +486,38 @@ export const workers = pgTable(
   }),
 );
 
+// -- special_teachers (อาจารย์พิเศษ) — non-login teaching staff ------
+// วิทยากร/อาจารย์พิเศษที่มาสอนเป็นรายวิชา. A separate table for the same reason
+// `workers` is one: they teach, but they hold NO account — no password, no
+// role, no email — so nothing in this row can ever authorize anybody, and
+// teacher RBAC/login never has to grow a "but not these" case.
+//
+// What the school actually needs from them is the roster line (รหัส + ชื่อ)
+// and which กลุ่มสาระ they sit under, so a subject group can list its own
+// people. `subject_group` is plain varchar and free text, exactly like
+// teachers.subject_group — the two lists have to compare equal for a report
+// that counts a subject group's staff to be able to add them together.
+export const specialTeachers = pgTable(
+  'special_teachers',
+  {
+    id: serial('id').primaryKey(),
+    specialTeacherCode: varchar('special_teacher_code', { length: 32 }).notNull(), // รหัสอาจารย์พิเศษ
+    prefix: varchar('prefix', { length: 32 }),
+    firstName: varchar('first_name', { length: 128 }).notNull(),
+    lastName: varchar('last_name', { length: 128 }).notNull(),
+    subjectGroup: varchar('subject_group', { length: 191 }), // กลุ่มสาระที่สังกัด
+    phone: varchar('phone', { length: 32 }),
+
+    isArchived: boolean('is_archived').notNull().default(false),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow().$onUpdate(now),
+  },
+  (t) => ({
+    codeUniq: unique('special_teachers_code_uniq').on(t.specialTeacherCode),
+    subjectIdx: index('special_teachers_subject_idx').on(t.subjectGroup),
+  }),
+);
+
 // -- api_keys (machine-to-machine access for OTHER SchoolOS systems) -
 // Issued from the API Manager UI so a sibling system (e.g. ห้องสมุด, การเงิน)
 // can pull the student/teacher roster over `/api/public/v1/*`.

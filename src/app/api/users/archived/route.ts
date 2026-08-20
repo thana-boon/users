@@ -2,7 +2,14 @@ import type { NextRequest } from 'next/server';
 import { and, asc, desc, eq, ilike, inArray, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { students, teachers, workers, enrollments, academicYears } from '@/db/schema';
+import {
+  students,
+  teachers,
+  workers,
+  specialTeachers,
+  enrollments,
+  academicYears,
+} from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, notFound, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
@@ -14,7 +21,8 @@ export const runtime = 'nodejs';
  * (is_archived = true), so they vanish from every list. This endpoint surfaces
  * them so an admin can review and restore.
  *
- * GET  /api/users/archived      - archived students + teachers (optional ?q=).
+ * GET  /api/users/archived      - archived students + teachers + คนงาน +
+ *                                 อาจารย์พิเศษ (optional ?q=).
  * POST /api/users/archived      - restore one ({ type, id }): is_archived = false.
  */
 
@@ -59,7 +67,19 @@ export async function GET(req: NextRequest) {
         : undefined,
     );
 
-    const [studentRows, teacherRows, workerRows] = await Promise.all([
+    const specialTeacherWhere = and(
+      eq(specialTeachers.isArchived, true),
+      q
+        ? or(
+            ilike(specialTeachers.firstName, `%${q}%`),
+            ilike(specialTeachers.lastName, `%${q}%`),
+            ilike(specialTeachers.specialTeacherCode, `%${q}%`),
+            ilike(specialTeachers.subjectGroup, `%${q}%`),
+          )
+        : undefined,
+    );
+
+    const [studentRows, teacherRows, workerRows, specialTeacherRows] = await Promise.all([
       db
         .select({
           id: students.id,
@@ -98,6 +118,18 @@ export async function GET(req: NextRequest) {
         .from(workers)
         .where(workerWhere)
         .orderBy(asc(workers.workerCode)),
+      db
+        .select({
+          id: specialTeachers.id,
+          specialTeacherCode: specialTeachers.specialTeacherCode,
+          prefix: specialTeachers.prefix,
+          firstName: specialTeachers.firstName,
+          lastName: specialTeachers.lastName,
+          subjectGroup: specialTeachers.subjectGroup,
+        })
+        .from(specialTeachers)
+        .where(specialTeacherWhere)
+        .orderBy(asc(specialTeachers.specialTeacherCode)),
     ]);
 
     // Attach each archived student's latest enrollment (ชั้น/ห้อง + ปี) as context.
@@ -126,14 +158,19 @@ export async function GET(req: NextRequest) {
       return { ...r, lastGrade: last?.grade ?? null, lastRoom: last?.room ?? null, lastYear: last?.year ?? null };
     });
 
-    return ok({ students: studentsData, teachers: teacherRows, workers: workerRows });
+    return ok({
+      students: studentsData,
+      teachers: teacherRows,
+      workers: workerRows,
+      specialTeachers: specialTeacherRows,
+    });
   } catch (err) {
     return handleError(err);
   }
 }
 
 const restoreSchema = z.object({
-  type: z.enum(['student', 'teacher', 'worker']),
+  type: z.enum(['student', 'teacher', 'worker', 'special_teacher']),
   id: z.number().int(),
 });
 
@@ -175,7 +212,7 @@ export async function POST(req: NextRequest) {
         detail: 'กู้คืนจากถังขยะ',
         req,
       });
-    } else {
+    } else if (type === 'worker') {
       const w = await db.query.workers.findFirst({
         where: eq(workers.id, id),
         columns: { id: true, workerCode: true, firstName: true, lastName: true, isArchived: true },
@@ -191,6 +228,22 @@ export async function POST(req: NextRequest) {
         detail: 'กู้คืนจากถังขยะ',
         req,
       });
+    } else {
+      const st = await db.query.specialTeachers.findFirst({
+        where: eq(specialTeachers.id, id),
+        columns: { id: true, specialTeacherCode: true, firstName: true, lastName: true, isArchived: true },
+      });
+      if (!st) return notFound();
+      await db.update(specialTeachers).set({ isArchived: false }).where(eq(specialTeachers.id, id));
+      await recordAudit({
+        session: guard.session,
+        action: 'restore',
+        targetType: 'special_teacher',
+        targetId: id,
+        targetLabel: `${st.specialTeacherCode} ${st.firstName} ${st.lastName}`,
+        detail: 'กู้คืนจากถังขยะ',
+        req,
+      });
     }
 
     return ok({ ok: true, restored: true });
@@ -199,19 +252,24 @@ export async function POST(req: NextRequest) {
   }
 }
 
-const kindOf = { student: students, teacher: teachers, worker: workers } as const;
+const kindOf = {
+  student: students,
+  teacher: teachers,
+  worker: workers,
+  special_teacher: specialTeachers,
+} as const;
 
 /** Phrase the admin must type to unlock the bulk "ลบทั้งหมด" (empty-the-trash) action. */
 const BULK_CONFIRM_PHRASE = 'ลบทั้งหมด';
 
 const deleteSchema = z.union([
   z.object({
-    type: z.enum(['student', 'teacher', 'worker']),
+    type: z.enum(['student', 'teacher', 'worker', 'special_teacher']),
     id: z.number().int(),
     confirmCode: z.string(),
   }),
   z.object({
-    type: z.enum(['student', 'teacher', 'worker']),
+    type: z.enum(['student', 'teacher', 'worker', 'special_teacher']),
     all: z.literal(true),
     confirmCode: z.string(),
   }),
@@ -303,7 +361,7 @@ export async function DELETE(req: NextRequest) {
         detail: 'ลบถาวรจากถังขยะ (hard delete)',
         req,
       });
-    } else {
+    } else if (type === 'worker') {
       const w = await db.query.workers.findFirst({
         where: eq(workers.id, id),
         columns: { id: true, workerCode: true, firstName: true, lastName: true, isArchived: true },
@@ -319,6 +377,25 @@ export async function DELETE(req: NextRequest) {
         targetType: 'worker',
         targetId: id,
         targetLabel: `${w.workerCode} ${w.firstName} ${w.lastName}`,
+        detail: 'ลบถาวรจากถังขยะ (hard delete)',
+        req,
+      });
+    } else {
+      const st = await db.query.specialTeachers.findFirst({
+        where: eq(specialTeachers.id, id),
+        columns: { id: true, specialTeacherCode: true, firstName: true, lastName: true, isArchived: true },
+      });
+      if (!st) return notFound();
+      if (!st.isArchived) return badRequest('ต้องย้ายรายการลงถังขยะก่อนจึงจะลบถาวรได้');
+      if (typed !== st.specialTeacherCode) return badRequest('รหัสยืนยันไม่ตรงกับรหัสอาจารย์พิเศษ');
+
+      await db.delete(specialTeachers).where(eq(specialTeachers.id, id));
+      await recordAudit({
+        session: guard.session,
+        action: 'delete',
+        targetType: 'special_teacher',
+        targetId: id,
+        targetLabel: `${st.specialTeacherCode} ${st.firstName} ${st.lastName}`,
         detail: 'ลบถาวรจากถังขยะ (hard delete)',
         req,
       });

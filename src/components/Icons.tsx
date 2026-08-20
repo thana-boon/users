@@ -100,3 +100,8 @@ export const IconDatabase = (p: SVGProps<SVGSVGElement>) => (
 export const IconKey = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} aria-hidden><circle cx="7.5" cy="15.5" r="4.5" /><path d="m10.7 12.3 8.3-8.3" /><path d="m17 5 3 3" /><path d="m14 8 3 3" /></svg>
 );
+// อาจารย์พิเศษ — a teacher figure with a star: same person mark as ครู, marked
+// as a guest so the two nav rows are not read as the same list twice.
+export const IconSpecialTeacher = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><circle cx="10" cy="7" r="3.2" /><path d="M4 20c0-3.3 2.7-6 6-6 1.2 0 2.3.3 3.2.8" /><path d="m18 12.5 1.3 2.6 2.9.4-2.1 2 .5 2.9-2.6-1.4-2.6 1.4.5-2.9-2.1-2 2.9-.4Z" /></svg>
+);

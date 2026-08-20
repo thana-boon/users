@@ -5,6 +5,17 @@ import { api } from '@/lib/client';
 import { useToast } from './Toast';
 import { IconTrash } from './Icons';
 
+/** What the ถังขยะ holds. Shared with BulkDeleteForeverDialog and the trash
+ *  page so the tabs, the dialogs and the API's `type` all stay one vocabulary. */
+export type TrashKind = 'student' | 'teacher' | 'worker' | 'special_teacher';
+
+export const TRASH_KIND_LABEL: Record<TrashKind, string> = {
+  student: 'นักเรียน',
+  teacher: 'ครู',
+  worker: 'คนงาน',
+  special_teacher: 'อาจารย์พิเศษ',
+};
+
 /**
  * ลบถาวร (hard delete) a record already sitting in the trash. Deliberately
  * high-friction: the admin must type the record's exact code before the button
@@ -14,7 +25,7 @@ import { IconTrash } from './Icons';
 export function DeleteForeverDialog({
   type, id, code, label, onClose, onDone,
 }: {
-  type: 'student' | 'teacher' | 'worker';
+  type: TrashKind;
   id: number;
   code: string;
   label: string;
@@ -24,7 +35,7 @@ export function DeleteForeverDialog({
   const toast = useToast();
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
-  const kind = type === 'student' ? 'นักเรียน' : type === 'teacher' ? 'ครู' : 'คนงาน';
+  const kind = TRASH_KIND_LABEL[type];
   const match = typed.trim() === code;
 
   async function submit() {
