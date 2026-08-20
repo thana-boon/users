@@ -98,3 +98,36 @@ export function maskCitizenId(id: string | null): string | null {
   if (digits.length < 5) return '••••';
   return `${digits[0]}-XXXX-XXXXX-XX-${digits.slice(-1)}`;
 }
+
+/**
+ * Password check for the login paths: exact match first, trimmed match second.
+ *
+ * WHY THE FALLBACK. Mobile keyboards insert a trailing space of their own — the
+ * autocomplete bar appends one when a suggestion is accepted, and long-press
+ * capitalisation on some IMEs does the same. The user cannot see it in a masked
+ * field, and the reply is deliberately uniform ("code or password is wrong"), so
+ * a person typing the right password is told nothing that would let them work it
+ * out. Same for a leading space pasted in from a chat message or a spreadsheet
+ * cell.
+ *
+ * WHY NOT JUST TRIM. A password that legitimately ends in a space would stop
+ * working the moment we did, and nothing prevents one existing: the admin
+ * create/update routes now trim on the way in, but rows written before that did
+ * not. Trying the exact string first keeps every such account working; the
+ * trimmed comparison is only ever reached once the exact one has failed.
+ *
+ * The cost is that one stored password accepts two spellings instead of one,
+ * which is not a meaningful gain for anyone guessing — they would have to know
+ * the password already to profit from it.
+ *
+ * Both branches go through safeStrEqual, so neither leaks by timing.
+ */
+export function passwordMatches(stored: string, given: string): boolean {
+  if (safeStrEqual(stored, given)) return true;
+  const ts = stored.trim();
+  const tg = given.trim();
+  // An all-whitespace guess must not be allowed to match an all-whitespace
+  // stored value by collapsing both to ''.
+  if (ts === '' || tg === '') return false;
+  return safeStrEqual(ts, tg);
+}

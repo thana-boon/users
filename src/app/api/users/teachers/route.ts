@@ -91,7 +91,9 @@ const createSchema = z.object({
   ethnicity: z.string().nullable().optional(),
   role: z.enum(['teacher', 'teacher-admin']).default('teacher'),
   citizenId: z.string().nullable().optional(),
-  password: z.string().nullable().optional(),
+  // Trimmed on the way in so a password can never be STORED with edge
+  // whitespace — the login path only tolerates it, it does not want more of it.
+  password: z.string().trim().nullable().optional(),
 });
 
 export async function POST(req: NextRequest) {

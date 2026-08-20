@@ -7,7 +7,7 @@ import { students, teachers } from '@/db/schema';
 import { requireApiScope } from '@/lib/apiauth';
 import { handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
-import { decrypt } from '@/lib/crypto';
+import { decrypt, passwordMatches } from '@/lib/crypto';
 import { checkLockout, registerFailure, clearFailures } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -151,7 +151,10 @@ async function verifyStudent(username: string, password: string): Promise<Verifi
 
   let ok = false;
   try {
-    ok = decrypt(row.passwordEncrypted) === password;
+    const stored = decrypt(row.passwordEncrypted);
+    // Exact first, then trimmed — see passwordMatches(). Also a constant-time
+    // compare, which the plain === this replaced was not.
+    ok = stored !== null && passwordMatches(stored, password);
   } catch {
     ok = false;
   }
@@ -190,7 +193,10 @@ async function verifyTeacher(username: string, password: string): Promise<Verifi
 
   let ok = false;
   try {
-    ok = decrypt(row.passwordEncrypted) === password;
+    const stored = decrypt(row.passwordEncrypted);
+    // Exact first, then trimmed — see passwordMatches(). Also a constant-time
+    // compare, which the plain === this replaced was not.
+    ok = stored !== null && passwordMatches(stored, password);
   } catch {
     ok = false;
   }

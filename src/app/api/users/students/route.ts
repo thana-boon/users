@@ -125,7 +125,9 @@ const createSchema = z.object({
   phone: z.string().optional().nullable(),
   email: z.string().optional().nullable(),
   citizenId: z.string().optional().nullable(),
-  password: z.string().optional().nullable(),
+  // Trimmed on the way in so a password can never be STORED with edge
+  // whitespace — the login path only tolerates it, it does not want more of it.
+  password: z.string().trim().optional().nullable(),
   admissionDate: z.string().optional().nullable(),
   gradeLevel: z.string().optional().nullable(),
   classroom: z.string().optional().nullable(),

@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { teachers } from '@/db/schema';
 import { issueSession, USERS_READ, USERS_WRITE } from '@/lib/jwt';
-import { decrypt, safeStrEqual } from '@/lib/crypto';
+import { decrypt, passwordMatches } from '@/lib/crypto';
 import { badRequest, handleError } from '@/lib/http';
 import {
   checkLockout,
@@ -79,7 +79,7 @@ async function handler(req: NextRequest) {
     if (row && !row.isArchived && row.passwordEncrypted) {
       try {
         const stored = decrypt(row.passwordEncrypted);
-        valid = stored !== null && safeStrEqual(stored, body.password);
+        valid = stored !== null && passwordMatches(stored, body.password);
       } catch {
         valid = false;
       }

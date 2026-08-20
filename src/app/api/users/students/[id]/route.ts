@@ -91,7 +91,9 @@ const patchSchema = z.object({
   email: nstr,
   admissionDate: nstr,
   citizenId: nstr,
-  password: nstr,
+  // Not nstr: trimmed on the way in so a password can never be STORED with
+  // edge whitespace — the login path only tolerates it, it does not want more.
+  password: z.string().trim().nullable().optional(),
   enrollment: z
     .object({
       id: z.number().optional(),
