@@ -22,27 +22,30 @@ export const STAFF_PREFIX_OPTIONS = [
 ] as const;
 
 /**
- * กลุ่มสาระการเรียนรู้ ตามหลักสูตรแกนกลาง 2551 (ฉบับปรับปรุง 2560) + the two
- * non-subject groupings a school still has to file people under.
+ * กลุ่มสาระ — the eleven the school actually files people under, in the school's
+ * own spelling (with the "กลุ่มสาระการเรียนรู้" prefix), plus ธุรการ and ปฐมวัย,
+ * which are not subject areas but are where the remaining staff sit.
  *
- * A starting list, not the truth: the school's own spellings (which may or may
- * not carry the "กลุ่มสาระการเรียนรู้" prefix) already live in `teachers.
- * subject_group`, so the picker unions this list with the distinct values from
- * the database and still accepts free text. Snapping to a canonical spelling
- * here would rewrite ครู and อาจารย์พิเศษ onto different strings and split
- * every per-group count in two.
+ * These are only the SEED for the `subject_groups` table: on first boot they are
+ * inserted, and every value already present in `teachers.subject_group` /
+ * `special_teachers.subject_group` is backfilled alongside them, so no existing
+ * roster row is ever left pointing at a name the picker does not offer (see
+ * src/lib/bootstrap.ts). After that the table is the source of truth and this
+ * list is not consulted again — new groups are added in /users/subject-groups,
+ * not here.
  */
 export const SUBJECT_GROUP_OPTIONS = [
-  'ภาษาไทย',
-  'คณิตศาสตร์',
-  'วิทยาศาสตร์และเทคโนโลยี',
-  'สังคมศึกษา ศาสนา และวัฒนธรรม',
-  'สุขศึกษาและพลศึกษา',
-  'ศิลปะ',
-  'การงานอาชีพ',
-  'ภาษาต่างประเทศ',
-  'กิจกรรมพัฒนาผู้เรียน',
+  'กลุ่มสาระการเรียนรู้ภาษาไทย',
+  'กลุ่มสาระการเรียนรู้คณิตศาสตร์',
+  'กลุ่มสาระการเรียนรู้วิทยาศาสตร์',
+  'กลุ่มสาระการเรียนรู้เทคโนโลยี',
+  'กลุ่มสาระการเรียนรู้สังคมศึกษา ศาสนาและวัฒนธรรม',
+  'กลุ่มสาระการเรียนรู้สุขศึกษาและพลศึกษา',
+  'กลุ่มสาระการเรียนรู้ศิลปะ ดนตรี และนาฏศิลป์',
+  'กลุ่มสาระการเรียนรู้การงานอาชีพ',
+  'กลุ่มสาระการเรียนรู้ภาษาต่างประเทศ',
   'ปฐมวัย',
+  'ธุรการ',
 ] as const;
 
 export const RELIGION_OPTIONS = [

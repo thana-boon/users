@@ -122,7 +122,8 @@ curl -H "X-API-Key: sk_live_..." \
 | `workers:read` | อ่านรายชื่อ **คนงาน** (นักการภารโรง ฯลฯ) | แยกจาก `teachers:read` — คนงานเป็นคนละตาราง ไม่มีบัญชีล็อกอิน |
 | `workers:pii` | อ่าน **เลขบัตร ปชช.** คนงาน | เสริม · ถูก audit ทุกครั้ง |
 | `workers:photo` | ดึง **รูป** คนงาน | เสริม |
-| `special-teachers:read` | อ่านรายชื่อ **อาจารย์พิเศษ** (วิทยากร) | แยกจาก `teachers:read` — คนละตาราง ไม่มีบัญชีล็อกอิน · ไม่มี `:pii`/`:photo` เพราะตารางไม่ได้เก็บไว้เลย |
+| `special-teachers:read` | อ่านรายชื่อ **อาจารย์พิเศษ** (วิทยากร) | แยกจาก `teachers:read` — คนละตาราง ไม่มีบัญชีล็อกอิน · ไม่มี `:pii` เพราะตารางไม่ได้เก็บเลขบัตร ปชช. |
+| `special-teachers:photo` | ดึง **รูป** อาจารย์พิเศษ | เสริม |
 | `years:read` | อ่านปีการศึกษา + ช่วงภาคเรียน | ไม่มี PII — ระบบตารางสอน/เช็คชื่อควรได้แค่อันนี้ |
 | `auth:students` | ตรวจรหัสผ่าน**นักเรียน** | ผ่าน `/auth/verify` |
 | `auth:teachers` | ตรวจรหัสผ่าน**ครู** | แยกจากนักเรียน เพื่อไม่ให้ระบบของเด็กเดารหัสครูได้ |
@@ -148,8 +149,8 @@ curl -H "X-API-Key: sk_live_..." \
 | 4.4c | `GET /special-teachers` | `special-teachers:read` | ดึงรายชื่ออาจารย์พิเศษ |
 | 4.5 | `GET /academic-years` | `years:read` | ดูปีการศึกษา + ช่วงภาคเรียน |
 | 4.6 | `GET /homerooms` | `teachers:read` | ดูครูประจำชั้นรายห้อง |
-| 4.7 | `GET /students/{id}/photo`<br>`GET /teachers/{id}/photo`<br>`GET /workers/{id}/photo` | `*:read` + `*:photo` | แสดงรูปทีละคน |
-| 4.8 | `GET /students/photos?ids=`<br>`GET /teachers/photos?ids=`<br>`GET /workers/photos?ids=` | `*:read` + `*:photo` | sync รูปจำนวนมาก |
+| 4.7 | `GET /students/{id}/photo`<br>`GET /teachers/{id}/photo`<br>`GET /workers/{id}/photo`<br>`GET /special-teachers/{id}/photo` | `*:read` + `*:photo` | แสดงรูปทีละคน |
+| 4.8 | `GET /students/photos?ids=`<br>`GET /teachers/photos?ids=`<br>`GET /workers/photos?ids=`<br>`GET /special-teachers/photos?ids=` | `*:read` + `*:photo` | sync รูปจำนวนมาก |
 | 4.9 | `POST /auth/verify` | `auth:students` / `auth:teachers` | ให้ผู้ใช้ล็อกอินด้วยบัญชี SchoolOS |
 | 4.10 | `GET /api/auth/session` | — (cookie) | เช็คว่า **เบราว์เซอร์นี้ล็อกอินอยู่แล้วหรือยัง** ก่อนโชว์หน้า login ของตัวเอง |
 | | `POST /api/auth/refresh` | — (cookie) | ต่ออายุ session เมื่อผู้ใช้ยังทำงานอยู่ในระบบคุณ |
@@ -401,7 +402,7 @@ Scope `workers:read` · เลขบัตร ปชช. ต้องมี `wor
 
 ### 4.4c `GET /api/public/v1/special-teachers` — รายชื่ออาจารย์พิเศษ
 
-Scope `special-teachers:read` (ไม่มี `:pii`/`:photo` — ตารางนี้ไม่ได้เก็บเลขบัตร ปชช. และรูป)
+Scope `special-teachers:read` (ไม่มี `:pii` — ตารางนี้ไม่ได้เก็บเลขบัตร ปชช.) · รูปใช้ `special-teachers:photo` เพิ่ม แล้วเรียกที่ข้อ 4.7/4.8
 
 **Query:** `subjectGroup`, `q`, `page`, `pageSize` (สูงสุด 200)
 
@@ -415,8 +416,9 @@ Scope `special-teachers:read` (ไม่มี `:pii`/`:photo` — ตารา�
       "firstName": "อนันต์",
       "lastName": "ศรีสุข",
       "fullName": "นายอนันต์ ศรีสุข",
-      "subjectGroup": "ศิลปะ",
-      "phone": "0812345678"
+      "subjectGroup": "กลุ่มสาระการเรียนรู้ศิลปะ ดนตรี และนาฏศิลป์",
+      "phone": "0812345678",
+      "hasPhoto": true
     }
   ],
   "page": 1, "pageSize": 50, "total": 4
@@ -424,7 +426,9 @@ Scope `special-teachers:read` (ไม่มี `:pii`/`:photo` — ตารา�
 ```
 
 - **อาจารย์พิเศษไม่มีบัญชีล็อกอิน** — ไม่มี `role`, ไม่มีอีเมล, ไม่มีรหัสผ่าน และ `/auth/verify` ไม่รู้จักคนกลุ่มนี้ ระบบปลายทางจึงให้สิทธิ์ใครจากข้อมูลนี้ไม่ได้
-- `subjectGroup` เป็นข้อความชุดเดียวกับ `teachers.subjectGroup` — กรองด้วยค่าที่ตรงกันทั้งสองทะเบียนได้ (`?subjectGroup=ศิลปะ` ต้องตรงตัวอักษรเป๊ะ)
+- `subjectGroup` เป็นข้อความชุดเดียวกับ `teachers.subjectGroup` — กรองด้วยค่าที่ตรงกันทั้งสองทะเบียนได้ และต้องตรงตัวอักษรเป๊ะ
+- ตั้งแต่มีหน้า **กลุ่มสาระ** ในโมดูล ค่านี้จะถูกเลือกจากรายการที่โรงเรียนสร้างไว้ ไม่ใช่พิมพ์เอง จึงสะกดตรงกันทั้งระบบ **แต่ยังเป็นข้อความเหมือนเดิม ไม่ใช่ id** — ค่าที่เคยดึงไปใช้จึงไม่เปลี่ยน (ถ้าผู้ดูแลเปลี่ยนชื่อกลุ่มสาระ ทั้งสองทะเบียนจะถูกเปลี่ยนตามพร้อมกัน)
+- `hasPhoto` บอกว่ามีรูปไหม — ตัวรูปต้องเรียกแยกด้วย scope `special-teachers:photo` (ข้อ 4.7/4.8)
 - `q` ค้นได้ทั้งชื่อ/สกุล/`specialTeacherCode`/กลุ่มสาระ
 - คนที่ถูกย้ายเข้าถังขยะจะไม่อยู่ในผลลัพธ์
 

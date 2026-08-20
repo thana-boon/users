@@ -105,3 +105,8 @@ export const IconKey = (p: SVGProps<SVGSVGElement>) => (
 export const IconSpecialTeacher = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} aria-hidden><circle cx="10" cy="7" r="3.2" /><path d="M4 20c0-3.3 2.7-6 6-6 1.2 0 2.3.3 3.2.8" /><path d="m18 12.5 1.3 2.6 2.9.4-2.1 2 .5 2.9-2.6-1.4-2.6 1.4.5-2.9-2.1-2 2.9-.4Z" /></svg>
 );
+// กลุ่มสาระ — stacked books: the list of subject areas people are filed under,
+// distinct from the person-shaped marks used for the rosters themselves.
+export const IconSubjectGroup = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H19v13H6.5A2.5 2.5 0 0 0 4 19.5Z" /><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H19v3H6.5A2.5 2.5 0 0 1 4 19.5Z" /><path d="M9 8h6" /></svg>
+);

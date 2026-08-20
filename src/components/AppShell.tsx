@@ -26,6 +26,7 @@ import {
   IconHomeroom,
   IconDatabase,
   IconSpecialTeacher,
+  IconSubjectGroup,
 } from './Icons';
 
 interface SessionInfo {
@@ -169,6 +170,7 @@ const NAV: NavNode[] = [
       { href: '/users/homerooms', label: 'ครูประจำชั้น', Icon: IconHomeroom },
       { href: '/users/special-teachers', label: 'อาจารย์พิเศษ', Icon: IconSpecialTeacher },
       { href: '/users/workers', label: 'คนงาน', Icon: IconWorker },
+      { href: '/users/subject-groups', label: 'กลุ่มสาระ', Icon: IconSubjectGroup },
     ],
   },
   { href: '/users/academic-years', label: 'ปีการศึกษา', Icon: IconCalendar },

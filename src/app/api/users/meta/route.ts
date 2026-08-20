@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { db } from '@/db';
 import { enrollments, teachers, specialTeachers, academicYears } from '@/db/schema';
+import { listActiveNames } from '@/lib/services/subject-groups';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, handleError } from '@/lib/http';
 import { resolveActiveYearId } from '@/lib/services/students';
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const yearId = sp.get('yearId') ? Number(sp.get('yearId')) : await resolveActiveYearId();
 
-    const [grades, rooms, subjects, specialSubjects, years] = await Promise.all([
+    const [grades, rooms, subjects, specialSubjects, managedGroups, years] = await Promise.all([
       db
         .selectDistinct({ v: enrollments.gradeLevel })
         .from(enrollments)
@@ -37,6 +38,9 @@ export async function GET(req: NextRequest) {
         .selectDistinct({ v: specialTeachers.subjectGroup })
         .from(specialTeachers)
         .where(and(eq(specialTeachers.isArchived, false), isNotNull(specialTeachers.subjectGroup))),
+      // The managed กลุ่มสาระ list, so a group that has been created but has
+      // nobody in it yet still appears in a filter dropdown built from here.
+      listActiveNames(),
       db.select().from(academicYears).orderBy(academicYears.year),
     ]);
 
@@ -48,7 +52,10 @@ export async function GET(req: NextRequest) {
       grades: gradeVals,
       classrooms: rooms.map((r) => r.v!).filter(Boolean).sort(),
       subjectGroups: [
-        ...new Set([...subjects, ...specialSubjects].map((s) => s.v!).filter(Boolean)),
+        ...new Set([
+          ...managedGroups,
+          ...[...subjects, ...specialSubjects].map((s) => s.v!).filter(Boolean),
+        ]),
       ].sort(),
       years: years.map((y) => ({ id: y.id, year: y.year, isActive: y.isActive })),
     });

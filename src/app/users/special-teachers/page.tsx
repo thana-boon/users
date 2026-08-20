@@ -1,19 +1,28 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, jsonBody } from '@/lib/client';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { api, jsonBody, withBase } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
 import { Combo } from '@/components/Combo';
-import { IconSearch, IconPlus, IconEdit, IconTrash } from '@/components/Icons';
-import { STAFF_PREFIX_OPTIONS, SUBJECT_GROUP_OPTIONS } from '@/lib/options';
+import { SubjectGroupSelect, SubjectGroupFilter } from '@/components/SubjectGroupSelect';
+import { ImportDialog } from '@/components/ImportDialog';
+import { PhotoImportDialog } from '@/components/PhotoImportDialog';
+import { PhotoThumb, PhotoLightbox } from '@/components/PhotoThumb';
+import { PhotoCard } from '@/components/PhotoCard';
+import {
+  IconSearch, IconPlus, IconEdit, IconTrash, IconUpload, IconDownload, IconImage,
+} from '@/components/Icons';
+import { STAFF_PREFIX_OPTIONS } from '@/lib/options';
 
 /**
  * อาจารย์พิเศษ — วิทยากร/ครูพิเศษที่มาสอนเป็นรายวิชา.
  *
- * They hold no account, so this page has no รหัสผ่าน/สิทธิ์ column and no
- * detail page behind it: รหัส + ชื่อ + กลุ่มสาระ is the entire record, which
- * fits in the same dialog that creates it.
+ * They hold no account, so this page has no รหัสผ่าน/สิทธิ์ column and no detail
+ * page behind it: รหัส + ชื่อ + กลุ่มสาระ + รูป is the entire record, which fits
+ * in the same dialog that creates it. The photo is the one field that cannot be
+ * set before the row exists, so it appears in the dialog only when editing.
  */
 
 interface Row {
@@ -24,19 +33,25 @@ interface Row {
   lastName: string;
   subjectGroup: string | null;
   phone: string | null;
+  hasPhoto: boolean;
 }
 
 export default function SpecialTeachersPage() {
   const toast = useToast();
   const confirm = useConfirm();
+  const search = useSearchParams();
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [q, setQ] = useState('');
-  const [subjectGroup, setSubjectGroup] = useState('');
-  const [groups, setGroups] = useState<string[]>([]);
+  // Seeded from ?subjectGroup= so the counts on the กลุ่มสาระ page link straight
+  // to the people in that group.
+  const [subjectGroup, setSubjectGroup] = useState(search.get('subjectGroup') ?? '');
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Row | 'new' | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [showPhotos, setShowPhotos] = useState(false);
+  const [zoom, setZoom] = useState<Row | null>(null);
   const pageSize = 25;
   const deb = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -57,23 +72,6 @@ export default function SpecialTeachersPage() {
     deb.current = setTimeout(() => load(1), 300);
     return () => clearTimeout(deb.current);
   }, [q, subjectGroup, load]);
-
-  // กลุ่มสาระ already in use across ครู + อาจารย์พิเศษ, so the picker offers the
-  // school's own spellings first and the two rosters keep sharing one list.
-  const loadGroups = useCallback(async () => {
-    try {
-      const res = await api<{ subjectGroups: string[] }>('/api/users/meta');
-      setGroups(res.subjectGroups ?? []);
-    } catch {
-      /* the picker still accepts free text — not worth an error toast */
-    }
-  }, []);
-  useEffect(() => { loadGroups(); }, [loadGroups]);
-
-  const groupOptions = useMemo(
-    () => [...new Set([...groups, ...SUBJECT_GROUP_OPTIONS])],
-    [groups],
-  );
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -100,9 +98,21 @@ export default function SpecialTeachersPage() {
             วิทยากร/อาจารย์พิเศษที่มาสอน — ไม่มีบัญชีเข้าสู่ระบบและไม่มีรหัสผ่าน เก็บเป็นรายชื่อตามกลุ่มสาระเท่านั้น
           </p>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => setEditing('new')}>
-          <IconPlus width={16} height={16} /> เพิ่ม
-        </button>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <a className="btn btn-ghost btn-sm" href={withBase('/api/users/special-teachers/template')}>เทมเพลต</a>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(true)}>
+            <IconUpload width={16} height={16} /> นำเข้า
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowPhotos(true)}>
+            <IconImage width={16} height={16} /> นำเข้ารูป
+          </button>
+          <a className="btn btn-secondary btn-sm" href={withBase('/api/users/special-teachers/export')}>
+            <IconDownload width={16} height={16} /> ส่งออก
+          </a>
+          <button className="btn btn-primary btn-sm" onClick={() => setEditing('new')}>
+            <IconPlus width={16} height={16} /> เพิ่ม
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ padding: 16 }}>
@@ -120,16 +130,7 @@ export default function SpecialTeachersPage() {
               aria-label="ค้นหาอาจารย์พิเศษ"
             />
           </div>
-          <select
-            className="form-select"
-            style={{ width: 260 }}
-            value={subjectGroup}
-            onChange={(e) => setSubjectGroup(e.target.value)}
-            aria-label="กลุ่มสาระ"
-          >
-            <option value="">ทุกกลุ่มสาระ</option>
-            {groupOptions.map((g) => <option key={g} value={g}>{g}</option>)}
-          </select>
+          <SubjectGroupFilter value={subjectGroup} onChange={setSubjectGroup} />
         </div>
       </div>
 
@@ -138,17 +139,18 @@ export default function SpecialTeachersPage() {
           <table className="table">
             <thead>
               <tr>
+                <th style={{ width: 48 }}>รูป</th>
                 <th>รหัส</th><th>ชื่อ-นามสกุล</th><th>กลุ่มสาระ</th><th>เบอร์โทร</th>
                 <th style={{ width: 140 }}></th>
               </tr>
             </thead>
             <tbody>
               {loading && rows.length === 0 && Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i}><td colSpan={5}><div className="skeleton" style={{ height: 20 }} /></td></tr>
+                <tr key={i}><td colSpan={6}><div className="skeleton" style={{ height: 20 }} /></td></tr>
               ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 40 }}>
+                  <td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 40 }}>
                     {!q && !subjectGroup
                       ? 'ยังไม่มีอาจารย์พิเศษในระบบ — กด “เพิ่ม” เพื่อเริ่ม'
                       : 'ไม่พบอาจารย์พิเศษที่ค้นหา'}
@@ -157,6 +159,14 @@ export default function SpecialTeachersPage() {
               )}
               {rows.map((r) => (
                 <tr key={r.id}>
+                  <td style={{ paddingTop: 6, paddingBottom: 6 }}>
+                    <PhotoThumb
+                      src={r.hasPhoto ? `/api/users/special-teachers/${r.id}/photo` : null}
+                      initials={(r.firstName[0] ?? '') + (r.lastName[0] ?? '')}
+                      alt={`${r.firstName} ${r.lastName}`}
+                      onClick={() => setZoom(r)}
+                    />
+                  </td>
                   <td className="mono">{r.specialTeacherCode}</td>
                   <td>{r.prefix ?? ''}{r.firstName} {r.lastName}</td>
                   <td style={{ fontSize: 13 }}>{r.subjectGroup ?? '-'}</td>
@@ -191,16 +201,40 @@ export default function SpecialTeachersPage() {
         </div>
       </div>
 
+      {showImport && (
+        <ImportDialog
+          kind="special-teachers"
+          onClose={() => setShowImport(false)}
+          onDone={() => { setShowImport(false); load(1); }}
+        />
+      )}
+      {showPhotos && (
+        <PhotoImportDialog
+          endpoint="/api/users/special-teachers/photos"
+          title="นำเข้ารูปอาจารย์พิเศษ"
+          hint="ตั้งชื่อไฟล์รูปให้ตรงกับ “รหัสอาจารย์พิเศษ” เช่น"
+          codeExample="SP001.jpg"
+          onClose={() => setShowPhotos(false)}
+          onDone={() => { setShowPhotos(false); load(page); }}
+        />
+      )}
+      {zoom && (
+        <PhotoLightbox
+          src={`/api/users/special-teachers/${zoom.id}/photo`}
+          alt={`${zoom.firstName} ${zoom.lastName}`}
+          caption={`${zoom.specialTeacherCode} · ${zoom.prefix ?? ''}${zoom.firstName} ${zoom.lastName}`}
+          onClose={() => setZoom(null)}
+        />
+      )}
+
       {editing && (
         <SpecialTeacherDialog
           row={editing === 'new' ? null : editing}
-          groupOptions={groupOptions}
           onClose={() => setEditing(null)}
           onDone={() => {
             const wasNew = editing === 'new';
             setEditing(null);
             load(wasNew ? 1 : page);
-            loadGroups(); // a brand-new กลุ่มสาระ should show up in the filter at once
             toast(wasNew ? 'เพิ่มอาจารย์พิเศษแล้ว' : 'บันทึกแล้ว', 'success');
           }}
         />
@@ -210,15 +244,18 @@ export default function SpecialTeachersPage() {
 }
 
 function SpecialTeacherDialog({
-  row, groupOptions, onClose, onDone,
+  row, onClose, onDone,
 }: {
   row: Row | null;
-  groupOptions: string[];
   onClose: () => void;
   onDone: () => void;
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  // Photo state is local to the dialog: uploading writes straight through to
+  // /[id]/photo, so it is already saved by the time บันทึก is pressed. The list
+  // is reloaded on close either way, which is what refreshes the thumbnail.
+  const [hasPhoto, setHasPhoto] = useState(row?.hasPhoto ?? false);
   const [f, setF] = useState({
     specialTeacherCode: row?.specialTeacherCode ?? '',
     prefix: row?.prefix ?? 'นาย',
@@ -245,30 +282,55 @@ function SpecialTeacherDialog({
     finally { setBusy(false); }
   }
 
+  const initials = `${f.firstName[0] ?? ''}${f.lastName[0] ?? ''}`.trim();
+
   return (
     <div className="modal-scrim" role="dialog" aria-modal="true" aria-label={row ? 'แก้ไขอาจารย์พิเศษ' : 'เพิ่มอาจารย์พิเศษ'}>
       <div className="modal">
         <div className="card-header">{row ? 'แก้ไขอาจารย์พิเศษ' : 'เพิ่มอาจารย์พิเศษ'}</div>
         <div className="card-pad stack" style={{ gap: 12 }}>
-          <div className="grid-2">
-            <div>
-              <label className="form-label required">รหัสอาจารย์พิเศษ</label>
-              <input className="form-input mono" value={f.specialTeacherCode} onChange={set('specialTeacherCode')} placeholder="SP001" />
+          <div className="row" style={{ gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {row ? (
+              <PhotoCard
+                baseEndpoint={`/api/users/special-teachers/${row.id}/photo`}
+                hasPhoto={hasPhoto}
+                initials={initials}
+                alt="รูปอาจารย์พิเศษ"
+                onChange={setHasPhoto}
+              />
+            ) : (
+              <div className="stack" style={{ gap: 8, alignItems: 'center', width: 116 }}>
+                <div style={{
+                  width: 116, height: 155, borderRadius: 12, background: 'var(--skdw-purple-pale)',
+                  display: 'grid', placeItems: 'center', border: '1px dashed var(--skdw-border)',
+                  color: 'var(--skdw-purple)', fontSize: 34, fontWeight: 700,
+                }}>
+                  {initials || '—'}
+                </div>
+                <p className="form-hint" style={{ textAlign: 'center', margin: 0 }}>
+                  บันทึกก่อน แล้วจึงใส่รูปได้
+                </p>
+              </div>
+            )}
+            <div className="stack" style={{ gap: 12, flex: 1, minWidth: 240 }}>
+              <div className="grid-2">
+                <div>
+                  <label className="form-label required">รหัสอาจารย์พิเศษ</label>
+                  <input className="form-input mono" value={f.specialTeacherCode} onChange={set('specialTeacherCode')} placeholder="SP001" />
+                </div>
+                <Combo label="คำนำหน้า" value={f.prefix} onChange={setV('prefix')} options={STAFF_PREFIX_OPTIONS} />
+              </div>
+              <div className="grid-2">
+                <div><label className="form-label required">ชื่อ</label><input className="form-input" value={f.firstName} onChange={set('firstName')} /></div>
+                <div><label className="form-label required">นามสกุล</label><input className="form-input" value={f.lastName} onChange={set('lastName')} /></div>
+              </div>
             </div>
-            <Combo label="คำนำหน้า" value={f.prefix} onChange={setV('prefix')} options={STAFF_PREFIX_OPTIONS} />
           </div>
-          <div className="grid-2">
-            <div><label className="form-label required">ชื่อ</label><input className="form-input" value={f.firstName} onChange={set('firstName')} /></div>
-            <div><label className="form-label required">นามสกุล</label><input className="form-input" value={f.lastName} onChange={set('lastName')} /></div>
-          </div>
-          <Combo
+          <SubjectGroupSelect
             label="กลุ่มสาระ"
             value={f.subjectGroup}
             onChange={setV('subjectGroup')}
-            options={groupOptions}
-            normalize={false}
-            placeholder="เลือกกลุ่มสาระ หรือพิมพ์เอง"
-            hint="กลุ่มสาระที่อาจารย์พิเศษคนนี้สังกัด — ใช้รายการเดียวกับครูประจำ"
+            hint="กลุ่มสาระที่อาจารย์พิเศษคนนี้สังกัด — ใช้รายการเดียวกับครูประจำ แก้ไขได้ที่หน้า “กลุ่มสาระ”"
           />
           <div>
             <label className="form-label">เบอร์โทร</label>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { api, jsonBody, withBase } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { IconSearch, IconPlus, IconDownload, IconUpload, IconImage } from '@/components/Icons';
@@ -9,6 +10,7 @@ import { ImportDialog } from '@/components/ImportDialog';
 import { PhotoImportDialog } from '@/components/PhotoImportDialog';
 import { PhotoThumb, PhotoLightbox } from '@/components/PhotoThumb';
 import { Combo } from '@/components/Combo';
+import { SubjectGroupSelect, SubjectGroupFilter } from '@/components/SubjectGroupSelect';
 import { DateField } from '@/components/DateField';
 import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
@@ -25,12 +27,17 @@ interface Row {
 
 export default function TeachersPage() {
   const toast = useToast();
+  const search = useSearchParams();
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [q, setQ] = useState('');
   const [role, setRole] = useState('');
   const [status, setStatus] = useState('');
+  // Seeded from ?subjectGroup= so the counts on the กลุ่มสาระ page can link
+  // straight to "show me these 23 people" — which is how an admin checks that
+  // nobody fell out of a group after an upgrade.
+  const [subjectGroup, setSubjectGroup] = useState(search.get('subjectGroup') ?? '');
   const [loading, setLoading] = useState(true);
   const [showImport, setShowImport] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
@@ -46,17 +53,18 @@ export default function TeachersPage() {
       if (q) sp.set('q', q);
       if (role) sp.set('role', role);
       if (status) sp.set('status', status);
+      if (subjectGroup) sp.set('subjectGroup', subjectGroup);
       const res = await api<{ data: Row[]; total: number }>(`/api/users/teachers?${sp}`);
       setRows(res.data); setTotal(res.total); setPage(p);
     } catch (e) { toast((e as Error).message, 'error'); }
     finally { setLoading(false); }
-  }, [q, role, status, toast]);
+  }, [q, role, status, subjectGroup, toast]);
 
   useEffect(() => {
     clearTimeout(deb.current);
     deb.current = setTimeout(() => load(1), 300);
     return () => clearTimeout(deb.current);
-  }, [q, role, status, load]);
+  }, [q, role, status, subjectGroup, load]);
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -89,6 +97,7 @@ export default function TeachersPage() {
             <option value="active">ทำงานอยู่</option>
             <option value="resigned">ลาออกแล้ว</option>
           </select>
+          <SubjectGroupFilter value={subjectGroup} onChange={setSubjectGroup} />
         </div>
       </div>
 
@@ -210,7 +219,7 @@ function NewTeacher({ onClose, onCreated }: { onClose: () => void; onCreated: ()
             <div><label className="form-label">ไอดีไลน์</label><input className="form-input" value={f.lineId} onChange={set('lineId')} /></div>
           </div>
           <DateField label="วันเดือนปีเกิด" value={f.birthDate} onChange={setV('birthDate')} />
-          <div><label className="form-label">กลุ่มสาระที่สอน</label><input className="form-input" value={f.subjectGroup} onChange={set('subjectGroup')} /></div>
+          <SubjectGroupSelect label="กลุ่มสาระที่สอน" value={f.subjectGroup} onChange={setV('subjectGroup')} />
           <div className="grid-2">
             <div><label className="form-label">อีเมล</label><input className="form-input" value={f.email} onChange={set('email')} /></div>
             <div>

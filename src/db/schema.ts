@@ -382,7 +382,7 @@ export const teachers = pgTable(
     firstName: varchar('first_name', { length: 128 }).notNull(),
     lastName: varchar('last_name', { length: 128 }).notNull(),
     email: varchar('email', { length: 128 }),
-    subjectGroup: varchar('subject_group', { length: 191 }), // กลุ่มสาระที่สอน
+    subjectGroup: varchar('subject_group', { length: 191 }), // กลุ่มสาระที่สอน — ชื่อจาก subject_groups
     gradeTaught: varchar('grade_taught', { length: 128 }), // ชั้นที่สอน
     passwordEncrypted: text('password_encrypted'),
 
@@ -486,6 +486,41 @@ export const workers = pgTable(
   }),
 );
 
+// -- subject_groups (กลุ่มสาระ) — the school's own list, managed in the UI --
+// The one place a กลุ่มสาระ is spelled. `teachers.subject_group` and
+// `special_teachers.subject_group` deliberately stay plain varchar holding that
+// same TEXT rather than a foreign key: 120-odd teachers were already filed under
+// hand-typed names, and the public API (/api/public/v1/teachers?subjectGroup=)
+// hands those exact strings to other systems. Turning the column into an id
+// would have rewritten every one of those rows and every consumer's saved
+// filter on the day this table shipped.
+//
+// So this table is the PICKER, not the storage: the dropdowns are built from it
+// and a rename here rewrites the matching text on both rosters in one
+// transaction (see /api/users/subject-groups/[id]). A value already in a roster
+// that is not in this table still displays and still saves — it is backfilled
+// into the table on boot (src/lib/bootstrap.ts) instead of being erased.
+export const subjectGroups = pgTable(
+  'subject_groups',
+  {
+    id: serial('id').primaryKey(),
+    // Exactly the string written into the roster columns — same length limit,
+    // so a name that fits here always fits there.
+    name: varchar('name', { length: 191 }).notNull(),
+    // Display order in every picker. Ties fall back to name, so a fresh row
+    // with the default 0 still lands somewhere predictable.
+    sortOrder: integer('sort_order').notNull().default(0),
+    // Retired groups stay in the table (a teacher may still carry the name) but
+    // drop out of the pickers, so nobody files a new person under them.
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow().$onUpdate(now),
+  },
+  (t) => ({
+    nameUniq: unique('subject_groups_name_uniq').on(t.name),
+  }),
+);
+
 // -- special_teachers (อาจารย์พิเศษ) — non-login teaching staff ------
 // วิทยากร/อาจารย์พิเศษที่มาสอนเป็นรายวิชา. A separate table for the same reason
 // `workers` is one: they teach, but they hold NO account — no password, no
@@ -494,9 +529,10 @@ export const workers = pgTable(
 //
 // What the school actually needs from them is the roster line (รหัส + ชื่อ)
 // and which กลุ่มสาระ they sit under, so a subject group can list its own
-// people. `subject_group` is plain varchar and free text, exactly like
+// people. `subject_group` holds the same plain varchar text as
 // teachers.subject_group — the two lists have to compare equal for a report
-// that counts a subject group's staff to be able to add them together.
+// that counts a subject group's staff to be able to add them together, which is
+// why both are picked from `subject_groups` rather than typed (see above).
 export const specialTeachers = pgTable(
   'special_teachers',
   {
@@ -507,6 +543,11 @@ export const specialTeachers = pgTable(
     lastName: varchar('last_name', { length: 128 }).notNull(),
     subjectGroup: varchar('subject_group', { length: 191 }), // กลุ่มสาระที่สังกัด
     phone: varchar('phone', { length: 32 }),
+
+    // Profile photo stored inline (base64), exactly like ครู/คนงาน — the school
+    // prints อาจารย์พิเศษ on the same boards and certificates as everyone else.
+    photoBase64: text('photo_base64'),
+    photoMime: varchar('photo_mime', { length: 32 }),
 
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -696,6 +737,9 @@ export type HomeroomTeacher = typeof homeroomTeachers.$inferSelect;
 export type NewHomeroomTeacher = typeof homeroomTeachers.$inferInsert;
 export type Completion = typeof completions.$inferSelect;
 export type NewCompletion = typeof completions.$inferInsert;
+export type SpecialTeacher = typeof specialTeachers.$inferSelect;
+export type SubjectGroup = typeof subjectGroups.$inferSelect;
+export type NewSubjectGroup = typeof subjectGroups.$inferInsert;
 export type StudentLeave = typeof studentLeaves.$inferSelect;
 export type NewStudentLeave = typeof studentLeaves.$inferInsert;
 export type LeaveType = (typeof LEAVE_TYPES)[number];

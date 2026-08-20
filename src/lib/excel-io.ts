@@ -44,6 +44,17 @@ export const TEACHER_COLUMNS: string[] = [
   'Username', 'Password', 'Email', 'ชั้นที่สอน', 'กลุ่มสาระที่สอน',
 ];
 
+/**
+ * อาจารย์พิเศษ — a short sheet, because the row IS the whole record: they hold
+ * no account, no เลขบัตร ปชช. and no password, so there is nothing here that a
+ * spreadsheet left on a shared drive could leak. `กลุ่มสาระ` must match a name
+ * from the กลุ่มสาระ page; the import says so per-row rather than inventing a
+ * new group out of a typo.
+ */
+export const SPECIAL_TEACHER_COLUMNS: string[] = [
+  'ลำดับ', 'รหัสอาจารย์พิเศษ', 'คำนำหน้า', 'ชื่อ', 'นามสกุล', 'กลุ่มสาระ', 'เบอร์โทร',
+];
+
 const SKDW_PURPLE = 'FF5B2D8E';
 const SKDW_GOLD = 'FFF5C518';
 
@@ -78,6 +89,15 @@ export async function buildTeacherTemplate(): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('teachers');
   ws.columns = TEACHER_COLUMNS.map((h) => ({ header: h, key: h, width: 20 }));
+  styleHeader(ws, true);
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  return toBuffer(wb);
+}
+
+export async function buildSpecialTeacherTemplate(): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('อาจารย์พิเศษ');
+  ws.columns = SPECIAL_TEACHER_COLUMNS.map((h) => ({ header: h, key: h, width: 26 }));
   styleHeader(ws, true);
   ws.views = [{ state: 'frozen', ySplit: 1 }];
   return toBuffer(wb);
@@ -207,6 +227,37 @@ export async function buildTeacherExport(rows: TeacherExportRow[]): Promise<Buff
       val(t.email),
       val(t.gradeTaught),
       val(t.subjectGroup),
+    ]);
+  });
+  styleHeader(ws, true);
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  return toBuffer(wb);
+}
+
+export interface SpecialTeacherExportRow {
+  specialTeacherCode: string;
+  prefix: string | null;
+  firstName: string;
+  lastName: string;
+  subjectGroup: string | null;
+  phone: string | null;
+}
+
+export async function buildSpecialTeacherExport(rows: SpecialTeacherExportRow[]): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('อาจารย์พิเศษ');
+  ws.addRow(SPECIAL_TEACHER_COLUMNS);
+  rows.forEach((t, i) => {
+    ws.addRow([
+      i + 1,
+      t.specialTeacherCode,
+      val(t.prefix),
+      t.firstName,
+      t.lastName,
+      val(t.subjectGroup),
+      // Written as a JS string, never a number: 0812345678 must keep its
+      // leading zero both in the cell and on the round trip back in.
+      String(t.phone ?? ''),
     ]);
   });
   styleHeader(ws, true);

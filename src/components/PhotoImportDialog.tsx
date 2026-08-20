@@ -5,7 +5,7 @@ import { withBase } from '@/lib/client';
 import { cropToFace, preloadFaceDetector } from '@/lib/face-crop';
 import { useToast } from './Toast';
 
-interface PhotoIssue { file: string; reason: string; studentCode?: string; teacherCode?: string; workerCode?: string }
+interface PhotoIssue { file: string; reason: string; studentCode?: string; teacherCode?: string; workerCode?: string; specialTeacherCode?: string }
 
 /** Result of the name-only precheck (JSON round trip, no image bytes). */
 interface CheckReport {
@@ -47,7 +47,7 @@ const BATCH_MAX_BYTES = 800 * 1024;
 
 /** Read whichever *Code field the server returned on an issue row. */
 function issueCode(it: PhotoIssue): string {
-  return it.studentCode ?? it.teacherCode ?? it.workerCode ?? '-';
+  return it.studentCode ?? it.teacherCode ?? it.workerCode ?? it.specialTeacherCode ?? '-';
 }
 
 function newRun(total: number): RunState {
@@ -64,9 +64,9 @@ function formatEta(seconds: number): string {
 
 /**
  * Bulk profile-photo import. Files are matched by filename: the name minus its
- * extension must equal the person's code. Generic across นักเรียน/ครู/คนงาน via
- * the `endpoint` + label props (defaults to students so existing usage is
- * unchanged).
+ * extension must equal the person's code. Generic across
+ * นักเรียน/ครู/คนงาน/อาจารย์พิเศษ via the `endpoint` + label props (defaults to
+ * students so existing usage is unchanged).
  *
  * Built for the real job — "here are 4000 files, sort them out" — in two steps:
  *

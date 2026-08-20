@@ -11,6 +11,7 @@ import { EmploymentStatusDialog } from '@/components/EmploymentStatusDialog';
 import { PhotoCard } from '@/components/PhotoCard';
 import { IconBack, IconTrash } from '@/components/Icons';
 import { Combo } from '@/components/Combo';
+import { SubjectGroupSelect } from '@/components/SubjectGroupSelect';
 import { DateField } from '@/components/DateField';
 import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
@@ -159,7 +160,13 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
           <Combo label="ศาสนา" value={form.religion} onChange={setV('religion')} options={RELIGION_OPTIONS} />
           <Combo label="สัญชาติ" value={form.nationality} onChange={setV('nationality')} options={NATIONALITY_OPTIONS} />
           <Combo label="เชื้อชาติ" value={form.ethnicity} onChange={setV('ethnicity')} options={ETHNICITY_OPTIONS} />
-          <div style={{ gridColumn: '1 / -1' }}><label className="form-label">กลุ่มสาระที่สอน</label><input className="form-input" value={form.subjectGroup ?? ''} onChange={set('subjectGroup')} /></div>
+          <SubjectGroupSelect
+            label="กลุ่มสาระที่สอน"
+            value={form.subjectGroup}
+            onChange={setV('subjectGroup')}
+            hint="เลือกจากรายการกลุ่มสาระของโรงเรียน — แก้ไขรายการได้ที่หน้า “กลุ่มสาระ”"
+            style={{ gridColumn: '1 / -1' }}
+          />
           <div>
             <label className="form-label">สิทธิ์ (role)</label>
             <select className="form-select" value={form.role ?? 'teacher'} onChange={set('role')}>

@@ -332,8 +332,9 @@ GET ${BASE_PATH}/api/public/v1/workers    # ต้องมีสิทธิ์
 
 GET ${BASE_PATH}/api/public/v1/special-teachers  # ต้องมีสิทธิ์ special-teachers:read
     ?subjectGroup=&q=&page=1&pageSize=50
-    # อาจารย์พิเศษ/วิทยากร — ไม่มีบัญชีล็อกอิน ไม่มีรหัสผ่าน/เลขบัตร ปชช./รูป
-    # มีรหัส ชื่อ-สกุล กลุ่มสาระที่สังกัด และเบอร์โทร
+    # อาจารย์พิเศษ/วิทยากร — ไม่มีบัญชีล็อกอิน ไม่มีรหัสผ่าน/เลขบัตร ปชช.
+    # มีรหัส ชื่อ-สกุล กลุ่มสาระที่สังกัด เบอร์โทร และ hasPhoto
+    # รูปอยู่ที่ /special-teachers/{id}/photo — ต้องมี special-teachers:photo เพิ่ม
 
 GET ${BASE_PATH}/api/public/v1/homerooms  # ครูประจำชั้นรายห้อง — ใช้สิทธิ์ teachers:read
     ?yearId=&grade=ป.6&classroom=2

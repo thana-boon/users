@@ -17,7 +17,16 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
-    const row = await db.query.specialTeachers.findFirst({ where: eq(specialTeachers.id, id) });
+    // Columns are listed rather than taking the whole row: `photo_base64` is a
+    // megabyte-scale string and belongs in /[id]/photo, not in a JSON detail
+    // response — the client only needs to know whether one exists.
+    const row = await db.query.specialTeachers.findFirst({
+      where: eq(specialTeachers.id, id),
+      columns: { photoBase64: false, photoMime: false },
+      extras: (t, { sql }) => ({
+        hasPhoto: sql<boolean>`${t.photoBase64} is not null`.as('has_photo'),
+      }),
+    });
     if (!row) return notFound();
     return ok(row);
   } catch (err) {

@@ -1,34 +1,32 @@
 import type { NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { teachers } from '@/db/schema';
+import { specialTeachers } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { readSheetRows } from '@/lib/excel-io';
-import { parseTeacherRow } from '@/lib/excel-map';
-import { encrypt } from '@/lib/crypto';
-import { isValidCitizenId } from '@/lib/thai';
+import { parseSpecialTeacherRow } from '@/lib/excel-map';
 import { listActiveNames, snapSubjectGroup } from '@/lib/services/subject-groups';
 
 export const runtime = 'nodejs';
 
 /**
- * POST /api/users/teachers/import (multipart: file, dryRun)
- * Imports teachers. `Password` column is plain text -> encrypted here.
- * NEW teachers land as role=teacher; role is never set from the file
- * (promotion to teacher-admin is a deliberate UI action).
+ * POST /api/users/special-teachers/import (multipart: file, dryRun)
  *
- * `กลุ่มสาระที่สอน` is checked against the กลุ่มสาระ list rather than written
- * as typed: a cell that folds onto a known group is stored with that group's
- * own spelling, and a cell matching nothing is reported as a row error. This is
- * the same gate the UI dropdown provides — without it, one spreadsheet with a
- * stray space would split a group in two behind everyone's back, which is
- * precisely what the กลุ่มสาระ page exists to stop.
+ * Two-step like every other import: ตรวจสอบ reports the bad rows, ยืนยัน writes
+ * only when there are none. Existing รหัส are updated in place, so re-importing
+ * a corrected sheet is safe and does not duplicate anybody.
+ *
+ * The กลุ่มสาระ column is checked against the กลุ่มสาระ list rather than taken
+ * as written: a cell that folds onto a known group is stored with the group's
+ * own spelling, and a cell that matches nothing is a row error naming what to
+ * do about it. Letting a typo through here is precisely what would split a
+ * group in two and break the `?subjectGroup=` queries other systems run.
  */
 interface RowIssue {
   row: number;
-  teacherCode: string;
+  specialTeacherCode: string;
   errors: string[];
 }
 
@@ -48,17 +46,15 @@ export async function POST(req: NextRequest) {
     const known = await listActiveNames();
 
     const issues: RowIssue[] = [];
-    const valid: NonNullable<ReturnType<typeof parseTeacherRow>>[] = [];
+    const valid: NonNullable<ReturnType<typeof parseSpecialTeacherRow>>[] = [];
     const seen = new Map<string, number>();
 
     rawRows.forEach((raw, i) => {
-      const rowNo = i + 2;
-      const t = parseTeacherRow(raw);
+      const rowNo = i + 2; // +1 for the header, +1 because spreadsheets are 1-based
+      const t = parseSpecialTeacherRow(raw);
       if (!t) return;
       const errs: string[] = [];
-      if (!t.teacherCode) errs.push('ขาดรหัสครู');
-      if (!t.firstName && !t.lastName) errs.push('ขาดชื่อ-นามสกุล');
-      if (!isValidCitizenId(t.citizenId)) errs.push('เลขบัตรประชาชนไม่ถูกต้อง');
+      if (!t.firstName || !t.lastName) errs.push('ขาดชื่อหรือนามสกุล');
 
       const snapped = snapSubjectGroup(t.subjectGroup, known);
       if (snapped === undefined) {
@@ -67,10 +63,11 @@ export async function POST(req: NextRequest) {
         t.subjectGroup = snapped;
       }
 
-      const prev = seen.get(t.teacherCode);
+      const prev = seen.get(t.specialTeacherCode);
       if (prev) errs.push(`รหัสซ้ำกับแถว ${prev}`);
-      else seen.set(t.teacherCode, rowNo);
-      if (errs.length) issues.push({ row: rowNo, teacherCode: t.teacherCode, errors: errs });
+      else seen.set(t.specialTeacherCode, rowNo);
+
+      if (errs.length) issues.push({ row: rowNo, specialTeacherCode: t.specialTeacherCode, errors: errs });
       else valid.push(t);
     });
 
@@ -81,26 +78,26 @@ export async function POST(req: NextRequest) {
     let createdCount = 0;
     let updatedCount = 0;
     for (const t of valid) {
-      const existing = await db.query.teachers.findFirst({
-        where: eq(teachers.teacherCode, t.teacherCode),
+      const existing = await db.query.specialTeachers.findFirst({
+        where: eq(specialTeachers.specialTeacherCode, t.specialTeacherCode),
         columns: { id: true },
       });
+      // `is_archived` is deliberately absent: re-importing the sheet must not
+      // resurrect someone who was moved to ถังขยะ — restoring is its own action.
       const base = {
         prefix: t.prefix,
         firstName: t.firstName,
         lastName: t.lastName,
-        email: t.email,
         subjectGroup: t.subjectGroup,
-        gradeTaught: t.gradeTaught,
-        citizenIdEncrypted: encrypt(t.citizenId),
-        passwordEncrypted: encrypt(t.plainPassword),
+        phone: t.phone,
       };
       if (existing) {
-        // Do NOT touch role on re-import (preserve promotions).
-        await db.update(teachers).set(base).where(eq(teachers.id, existing.id));
+        await db.update(specialTeachers).set(base).where(eq(specialTeachers.id, existing.id));
         updatedCount++;
       } else {
-        await db.insert(teachers).values({ teacherCode: t.teacherCode, role: 'teacher', ...base });
+        await db
+          .insert(specialTeachers)
+          .values({ specialTeacherCode: t.specialTeacherCode, ...base });
         createdCount++;
       }
     }
@@ -108,12 +105,18 @@ export async function POST(req: NextRequest) {
     await recordAudit({
       session: guard.session,
       action: 'import',
-      targetType: 'teacher',
+      targetType: 'special_teacher',
       detail: `นำเข้า ${valid.length} รายการ (ใหม่ ${createdCount}, อัปเดต ${updatedCount})`,
       req,
     });
 
-    return ok({ ...summary, committed: valid.length, created: createdCount, updated: updatedCount, issues: [] });
+    return ok({
+      ...summary,
+      committed: valid.length,
+      created: createdCount,
+      updated: updatedCount,
+      issues: [],
+    });
   } catch (err) {
     return handleError(err);
   }

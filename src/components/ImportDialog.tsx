@@ -4,11 +4,28 @@ import { useState } from 'react';
 import { withBase } from '@/lib/client';
 import { useToast } from './Toast';
 
-interface Issue { row: number; studentCode?: string; teacherCode?: string; errors: string[] }
+interface Issue { row: number; studentCode?: string; teacherCode?: string; specialTeacherCode?: string; errors: string[] }
 interface Report {
   totalRows: number; valid: number; invalid: number;
   committed?: number; created?: number; updated?: number; issues: Issue[];
 }
+
+/** The three sheets this dialog can drive; the value is also the URL segment. */
+export type ImportKind = 'students' | 'teachers' | 'special-teachers';
+
+const KIND_LABEL: Record<ImportKind, string> = {
+  students: 'นักเรียน',
+  teachers: 'ครู',
+  'special-teachers': 'อาจารย์พิเศษ',
+};
+
+/** What the ตรวจสอบ step looks for, per sheet — shown under the file picker. */
+const KIND_HINT: Record<ImportKind, string> = {
+  students: 'ระบบจะตรวจสอบก่อน (เลขบัตร 13 หลัก, รหัสซ้ำ) และแสดงแถวที่ผิดก่อนบันทึกจริง',
+  teachers: 'ระบบจะตรวจสอบก่อน (เลขบัตร 13 หลัก, รหัสซ้ำ) และแสดงแถวที่ผิดก่อนบันทึกจริง',
+  'special-teachers':
+    'ระบบจะตรวจสอบก่อน (รหัสซ้ำ, กลุ่มสาระต้องตรงกับรายการในหน้ากลุ่มสาระ) และแสดงแถวที่ผิดก่อนบันทึกจริง',
+};
 
 /**
  * Two-step import: (1) validate (dryRun) and show a per-row error report,
@@ -20,7 +37,7 @@ export function ImportDialog({
   onClose,
   onDone,
 }: {
-  kind: 'students' | 'teachers';
+  kind: ImportKind;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -60,7 +77,7 @@ export function ImportDialog({
   return (
     <div className="modal-scrim" role="dialog" aria-modal="true" aria-label="นำเข้าข้อมูล">
       <div className="modal">
-        <div className="card-header">นำเข้าข้อมูล{kind === 'students' ? 'นักเรียน' : 'ครู'} (.xlsx)</div>
+        <div className="card-header">นำเข้าข้อมูล{KIND_LABEL[kind]} (.xlsx)</div>
         <div className="card-pad stack">
           <input
             type="file"
@@ -69,7 +86,7 @@ export function ImportDialog({
             style={{ paddingTop: 8 }}
             onChange={(e) => { setFile(e.target.files?.[0] ?? null); setReport(null); }}
           />
-          <p className="form-hint">ระบบจะตรวจสอบก่อน (เลขบัตร 13 หลัก, รหัสซ้ำ) และแสดงแถวที่ผิดก่อนบันทึกจริง</p>
+          <p className="form-hint">{KIND_HINT[kind]}</p>
 
           {report && (
             <div className="stack" style={{ gap: 8 }}>
@@ -86,7 +103,7 @@ export function ImportDialog({
                       {report.issues.map((it, i) => (
                         <tr key={i}>
                           <td className="mono">{it.row}</td>
-                          <td className="mono">{it.studentCode ?? it.teacherCode ?? '-'}</td>
+                          <td className="mono">{it.studentCode ?? it.teacherCode ?? it.specialTeacherCode ?? '-'}</td>
                           <td style={{ color: 'var(--color-error)', fontSize: 13 }}>{it.errors.join(', ')}</td>
                         </tr>
                       ))}

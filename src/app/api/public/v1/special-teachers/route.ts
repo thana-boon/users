@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, isNotNull, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { specialTeachers } from '@/db/schema';
 import { requireApiScope } from '@/lib/apiauth';
@@ -11,9 +11,10 @@ export const runtime = 'nodejs';
  * GET /api/public/v1/special-teachers — อาจารย์พิเศษ roster for other SchoolOS
  * systems (ตารางสอน, เกียรติบัตร, ฯลฯ).
  *
- * Auth: `special-teachers:read`. There is no `:pii` or `:photo` twin because
- * the table holds neither — an อาจารย์พิเศษ has no login, no เลขบัตร ปชช. and
- * no photo in this module, so the roster line IS the whole record.
+ * Auth: `special-teachers:read`. There is no `:pii` twin — an อาจารย์พิเศษ has
+ * no login and no เลขบัตร ปชช., so there is nothing here to gate behind one.
+ * Photos DO exist and ride the additive `special-teachers:photo` scope on
+ * `/[id]/photo` and `/photos`; this route only reports whether one is there.
  *
  * Query: ?subjectGroup= ?q= ?page= ?pageSize= (max 200)
  */
@@ -52,6 +53,7 @@ export async function GET(req: NextRequest) {
           lastName: specialTeachers.lastName,
           subjectGroup: specialTeachers.subjectGroup,
           phone: specialTeachers.phone,
+          hasPhoto: isNotNull(specialTeachers.photoBase64),
         })
         .from(specialTeachers)
         .where(where)

@@ -303,3 +303,30 @@ export function parseTeacherRow(r: unknown[]): ParsedTeacher | null {
     subjectGroup: g(r, 10),
   };
 }
+
+// -- อาจารย์พิเศษ: 7 columns ---------------------------------------
+export interface ParsedSpecialTeacher {
+  specialTeacherCode: string;
+  prefix: string | null;
+  firstName: string;
+  lastName: string;
+  /** Raw cell text. The import route snaps it onto a real กลุ่มสาระ. */
+  subjectGroup: string | null;
+  phone: string | null;
+}
+
+export function parseSpecialTeacherRow(r: unknown[]): ParsedSpecialTeacher | null {
+  // 0:ลำดับ 1:รหัสอาจารย์พิเศษ 2:คำนำหน้า 3:ชื่อ 4:นามสกุล 5:กลุ่มสาระ 6:เบอร์โทร
+  const specialTeacherCode = cleanStr(r[1]).trim();
+  const firstName = cleanStr(r[3]).trim();
+  const lastName = cleanStr(r[4]).trim();
+  if (!specialTeacherCode || (!firstName && !lastName)) return null; // skip blank rows
+  return {
+    specialTeacherCode,
+    prefix: g(r, 2),
+    firstName,
+    lastName,
+    subjectGroup: g(r, 5),
+    phone: g(r, 6),
+  };
+}

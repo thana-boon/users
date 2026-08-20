@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, isNotNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { specialTeachers } from '@/db/schema';
@@ -12,8 +12,8 @@ export const runtime = 'nodejs';
 /**
  * อาจารย์พิเศษ — the roster of visiting teachers. They have no login, so the
  * row carries no password, no role and nothing encrypted: รหัส + ชื่อ + the
- * กลุ่มสาระ they teach under is the whole record. That is also why there is no
- * /reveal twin of this route — there is nothing here to reveal.
+ * กลุ่มสาระ they teach under + a photo is the whole record. That is also why
+ * there is no /reveal twin of this route — there is nothing here to reveal.
  *
  * GET  /api/users/special-teachers  ?q= ?subjectGroup= ?page= ?pageSize=
  * POST /api/users/special-teachers
@@ -52,6 +52,11 @@ export async function GET(req: NextRequest) {
           lastName: specialTeachers.lastName,
           subjectGroup: specialTeachers.subjectGroup,
           phone: specialTeachers.phone,
+          // A boolean, never the bytes: the list renders ~25 thumbnails and
+          // each photo is base64 in the row, so shipping them inline would turn
+          // one page of the roster into megabytes. The thumbnail fetches
+          // /[id]/photo, and a row without one must not request that URL at all.
+          hasPhoto: isNotNull(specialTeachers.photoBase64),
         })
         .from(specialTeachers)
         .where(where)

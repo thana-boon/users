@@ -1,5 +1,5 @@
 /**
- * Bulk profile-photo import, shared by นักเรียน / ครู / คนงาน.
+ * Bulk profile-photo import, shared by นักเรียน / ครู / คนงาน / อาจารย์พิเศษ.
  *
  * Files are matched by name: the filename minus its extension must equal the
  * person's code ("07822.jpg" -> student 07822). The three routes differ only in
@@ -31,7 +31,7 @@ const LOOKUP_CHUNK = 500;
 /** Filenames accepted in one precheck call — a school-sized ceiling, not a limit. */
 export const MAX_PRECHECK_NAMES = 20_000;
 
-type CodeField = 'studentCode' | 'teacherCode' | 'workerCode';
+type CodeField = 'studentCode' | 'teacherCode' | 'workerCode' | 'specialTeacherCode';
 
 /** Report rows keep the module-specific code key the UI already reads. */
 export type PhotoIssue = { file: string; reason: string } & Partial<Record<CodeField, string>>;
