@@ -74,8 +74,12 @@ export function checkBudget(key: string, limit: number): RateResult {
 }
 
 /**
- * Login lockout: after `maxFails` failures, lock the identifier for `lockMs`.
+ * Login lockout: after `maxFails` failures, lock the KEY for `lockMs`.
  * Call registerFailure() on bad password, clearFailures() on success.
+ *
+ * Callers do not use these three directly — loginLockout() below composes them
+ * into the pair of buckets a login is actually judged by. See its comment for
+ * why one bucket per account is the wrong shape.
  */
 export function checkLockout(key: string): RateResult {
   const now = Date.now();
@@ -104,7 +108,11 @@ export function registerFailure(
   const k = `lock:${key}`;
   const now = Date.now();
   const b = store.get(k);
-  if (!b || now > b.resetAt) {
+  // A window that has run out — or one whose lock has already been served —
+  // starts over. Without the second half a bucket whose lock is SHORTER than
+  // its window comes back still holding maxFails failures, so the first typo
+  // after the lock lifts re-locks it instantly.
+  if (!b || now > b.resetAt || (b.lockedUntil && now >= b.lockedUntil)) {
     store.set(k, { count: 1, resetAt: now + windowMs });
     return false;
   }
@@ -134,8 +142,12 @@ export interface LoginLimits {
   /** Attempts against an identifier that matches nothing, per IP per window. */
   ipMissLimit: number;
   ipFailWindowMs: number;
-  /** Failed attempts against ONE account before it is locked. */
+  /** Failed attempts against ONE account FROM ONE ADDRESS before that address
+   * is locked out of it. */
   lockMaxFails: number;
+  /** Failed attempts against one account from ALL addresses together before the
+   * account itself is locked. The backstop; see loginLockout(). */
+  lockGlobalMaxFails: number;
   lockWindowMs: number;
   lockMs: number;
 }
@@ -151,6 +163,7 @@ export function loginLimits(): LoginLimits {
     ipMissLimit: envInt('LOGIN_IP_MISS_LIMIT', 300),
     ipFailWindowMs: envInt('LOGIN_IP_FAIL_WINDOW_MINUTES', 5) * 60_000,
     lockMaxFails: envInt('LOGIN_LOCKOUT_MAX_FAILS', 5),
+    lockGlobalMaxFails: envInt('LOGIN_LOCKOUT_GLOBAL_MAX_FAILS', 30),
     lockWindowMs: envInt('LOGIN_LOCKOUT_WINDOW_MINUTES', 15) * 60_000,
     lockMs: envInt('LOGIN_LOCKOUT_MINUTES', 15) * 60_000,
   };
@@ -191,6 +204,89 @@ export function loginIpGate(ip: string, limits: LoginLimits) {
         ? rateLimit(failKey, limits.ipFailLimit, limits.ipFailWindowMs)
         : rateLimit(missKey, limits.ipMissLimit, limits.ipFailWindowMs);
       return r.remaining === 0;
+    },
+  };
+}
+
+/** Which bucket is holding the door shut. */
+export type LockScope = 'device' | 'account';
+
+export interface LockoutResult extends RateResult {
+  scope: LockScope | null;
+}
+
+/**
+ * The per-account half of the login gates, as TWO buckets.
+ *
+ * WHY NOT ONE. A lockout keyed on the account alone locks it everywhere, so
+ * anyone who knows a code — and codes are printed on ID cards, read out in
+ * class, and sequential besides — can lock its owner out of the platform from
+ * their own phone, five wrong guesses at a time, for as long as they care to
+ * keep it up. The owner sitting at their own device, typing their own correct
+ * password, is turned away by a stranger's failures. That is a denial of
+ * service anybody can perform against anybody, and it costs the attacker
+ * nothing.
+ *
+ * So the strict count — five — is kept per (account, address). It still stops
+ * the thing a lockout is for, someone sitting at one machine working through
+ * guesses, and now it stops them and only them: the victim's own device has its
+ * own count, untouched. And a distributed attempt has not become free, because
+ * two other gates already bound it — every address may spend only
+ * LOGIN_IP_FAIL_LIMIT failures against real accounts per window, so an attacker
+ * needs a fresh address for roughly every five guesses.
+ *
+ * The second bucket is the backstop for exactly that case: a much larger count
+ * of failures against one account from every address at once, which no
+ * legitimate person produces and a botnet does. It locks the account outright,
+ * as the old single bucket did — just at a threshold a classmate with one phone
+ * cannot reach.
+ *
+ * `ip` may be null when the request arrives without a forwarded address; those
+ * all share one 'unknown' device bucket, which is the safe direction to fail
+ * (stricter, not looser).
+ */
+export function loginLockout(
+  audience: string,
+  identifier: string,
+  ip: string | null,
+  limits: LoginLimits,
+) {
+  const account = `${audience}:${identifier.toLowerCase()}`;
+  const deviceKey = `${account}@${ip ?? 'unknown'}`;
+  return {
+    /** Read-only. Reports the device lock first — it is the one a real person
+     * hits, and its message can say so. */
+    check(): LockoutResult {
+      const device = checkLockout(deviceKey);
+      if (!device.allowed) return { ...device, scope: 'device' };
+      const acct = checkLockout(account);
+      return { ...acct, scope: acct.allowed ? null : 'account' };
+    },
+    /**
+     * Charge one failed attempt to both buckets. Returns which lock THIS
+     * attempt tripped, so the caller can write a single audit row for the event
+     * rather than one per rejection afterwards, or null if it tripped neither.
+     */
+    charge(): LockScope | null {
+      const device = registerFailure(
+        deviceKey,
+        limits.lockMaxFails,
+        limits.lockWindowMs,
+        limits.lockMs,
+      );
+      const acct = registerFailure(
+        account,
+        limits.lockGlobalMaxFails,
+        limits.lockWindowMs,
+        limits.lockMs,
+      );
+      // The account-wide lock is the bigger event, so it wins the report.
+      return acct ? 'account' : device ? 'device' : null;
+    },
+    /** A correct password clears both — the owner is demonstrably present. */
+    clear(): void {
+      clearFailures(deviceKey);
+      clearFailures(account);
     },
   };
 }

@@ -7,13 +7,8 @@ import { students } from '@/db/schema';
 import { issueSession } from '@/lib/jwt';
 import { decrypt, passwordMatches } from '@/lib/crypto';
 import { badRequest, handleError } from '@/lib/http';
-import {
-  checkLockout,
-  registerFailure,
-  clearFailures,
-  loginIpGate,
-  loginLimits,
-} from '@/lib/rate-limit';
+import type { LockScope } from '@/lib/rate-limit';
+import { loginIpGate, loginLockout, loginLimits } from '@/lib/rate-limit';
 import { clientIp } from '@/lib/ip';
 import { recordAudit, recordFailedLogin } from '@/lib/audit';
 import { corsPreflight, withCors } from '@/lib/cors';
@@ -49,7 +44,8 @@ async function handler(req: NextRequest) {
     // signing in cost the old shared budget two units, halving it to ~15 student
     // logins per 5 minutes for an entire NATted site. See loginIpGate().
     const limits = loginLimits();
-    const gate = loginIpGate(clientIp(req) ?? 'unknown', limits);
+    const ip = clientIp(req);
+    const gate = loginIpGate(ip ?? 'unknown', limits);
     const ipGate = gate.check();
     if (!ipGate.allowed) {
       return NextResponse.json(
@@ -61,10 +57,15 @@ async function handler(req: NextRequest) {
     const { identifier, password } = bodySchema.parse(await req.json());
     const id = identifier.trim();
 
-    const lock = checkLockout(`student:${id.toLowerCase()}`);
+    // Per-account lockout, counted per DEVICE first: five wrong guesses lock
+    // the address that made them, not the student. See loginLockout() — keyed
+    // on the account alone, this let any classmate who knows a student code
+    // lock its owner out of every device, and codes are not secret.
+    const lockout = loginLockout('student', id, ip, limits);
+    const lock = lockout.check();
     if (!lock.allowed) {
       return NextResponse.json(
-        { error: `พยายามเข้าสู่ระบบบ่อยเกินไป ลองใหม่ใน ${lock.retryAfterSec} วินาที` },
+        { error: lockMessage(lock.scope, lock.retryAfterSec) },
         { status: 429, headers: { 'Retry-After': String(lock.retryAfterSec) } },
       );
     }
@@ -88,12 +89,7 @@ async function handler(req: NextRequest) {
       // Charge the IP budget here and only here, then leave a row saying what
       // actually happened — the reply itself stays uniform on purpose.
       const exhausted = gate.charge(Boolean(row));
-      const locked = registerFailure(
-        `student:${id.toLowerCase()}`,
-        limits.lockMaxFails,
-        limits.lockWindowMs,
-        limits.lockMs,
-      );
+      const locked = lockout.charge();
       await recordFailedLogin({
         req,
         audience: 'student',
@@ -106,7 +102,7 @@ async function handler(req: NextRequest) {
       return badRequest(INVALID);
     }
 
-    clearFailures(`student:${id.toLowerCase()}`);
+    lockout.clear();
     // Students get a valid platform token but no `users:*` permission, so this
     // admin-only module rejects them (parity with the portal contract).
     const session = await issueSession({
@@ -135,6 +131,16 @@ async function handler(req: NextRequest) {
   } catch (err) {
     return handleError(err);
   }
+}
+
+/**
+ * The 429 says which lock it hit: a device lock clears by waiting at this
+ * device, an account lock means the account itself is being hammered.
+ */
+function lockMessage(scope: LockScope | null, sec: number): string {
+  return scope === 'account'
+    ? `บัญชีนี้ถูกล็อกชั่วคราวเพราะมีการพยายามเข้าสู่ระบบผิดจำนวนมาก ลองใหม่ใน ${sec} วินาที`
+    : `ใส่รหัสผ่านผิดหลายครั้งจากเครื่องนี้ ลองใหม่ใน ${sec} วินาที`;
 }
 
 /**

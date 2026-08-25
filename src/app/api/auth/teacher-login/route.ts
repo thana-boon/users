@@ -7,13 +7,8 @@ import { teachers } from '@/db/schema';
 import { issueSession, USERS_READ, USERS_WRITE } from '@/lib/jwt';
 import { decrypt, passwordMatches } from '@/lib/crypto';
 import { badRequest, handleError } from '@/lib/http';
-import {
-  checkLockout,
-  registerFailure,
-  clearFailures,
-  loginIpGate,
-  loginLimits,
-} from '@/lib/rate-limit';
+import type { LockScope } from '@/lib/rate-limit';
+import { loginIpGate, loginLockout, loginLimits } from '@/lib/rate-limit';
 import { clientIp } from '@/lib/ip';
 import { recordAudit, recordFailedLogin } from '@/lib/audit';
 import { corsPreflight, withCors } from '@/lib/cors';
@@ -51,7 +46,8 @@ async function handler(req: NextRequest) {
     // that renders any non-200 the same way — that their password was wrong.
     // See loginIpGate() for the full reasoning.
     const limits = loginLimits();
-    const gate = loginIpGate(clientIp(req) ?? 'unknown', limits);
+    const ip = clientIp(req);
+    const gate = loginIpGate(ip ?? 'unknown', limits);
     const ipGate = gate.check();
     if (!ipGate.allowed) {
       return NextResponse.json(
@@ -63,10 +59,15 @@ async function handler(req: NextRequest) {
     const body = bodySchema.parse(await req.json());
     const code = body.teacher_code.trim();
 
-    const lock = checkLockout(`teacher:${code.toLowerCase()}`);
+    // Per-account lockout, counted per DEVICE first: five wrong guesses lock
+    // the address that made them, not the teacher. See loginLockout() — keyed
+    // on the account alone, this let anyone who knows a teacher code lock its
+    // owner out of every device from their own phone.
+    const lockout = loginLockout('teacher', code, ip, limits);
+    const lock = lockout.check();
     if (!lock.allowed) {
       return NextResponse.json(
-        { error: `พยายามเข้าสู่ระบบบ่อยเกินไป ลองใหม่ใน ${lock.retryAfterSec} วินาที` },
+        { error: lockMessage(lock.scope, lock.retryAfterSec) },
         { status: 429, headers: { 'Retry-After': String(lock.retryAfterSec) } },
       );
     }
@@ -89,12 +90,7 @@ async function handler(req: NextRequest) {
       // Charge the IP budget here and only here, then leave a row saying what
       // actually happened — the reply itself stays uniform on purpose.
       const exhausted = gate.charge(Boolean(row));
-      const locked = registerFailure(
-        `teacher:${code.toLowerCase()}`,
-        limits.lockMaxFails,
-        limits.lockWindowMs,
-        limits.lockMs,
-      );
+      const locked = lockout.charge();
       await recordFailedLogin({
         req,
         audience: 'teacher',
@@ -107,7 +103,7 @@ async function handler(req: NextRequest) {
       return badRequest(INVALID);
     }
 
-    clearFailures(`teacher:${code.toLowerCase()}`);
+    lockout.clear();
     // Session role is always `teacher`; a DB `teacher-admin` additionally carries
     // the `users:*` permissions this module's RBAC requires.
     const isAdmin = row.role === 'teacher-admin';
@@ -144,6 +140,17 @@ async function handler(req: NextRequest) {
   } catch (err) {
     return handleError(err);
   }
+}
+
+/**
+ * The 429 says which lock it hit, because the two mean different things to the
+ * person reading it: one clears by waiting at this device, the other means the
+ * account itself is being hammered and support should hear about it.
+ */
+function lockMessage(scope: LockScope | null, sec: number): string {
+  return scope === 'account'
+    ? `บัญชีนี้ถูกล็อกชั่วคราวเพราะมีการพยายามเข้าสู่ระบบผิดจำนวนมาก ลองใหม่ใน ${sec} วินาที`
+    : `ใส่รหัสผ่านผิดหลายครั้งจากเครื่องนี้ ลองใหม่ใน ${sec} วินาที`;
 }
 
 /**

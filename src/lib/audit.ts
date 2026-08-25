@@ -108,8 +108,9 @@ export interface FailedLoginInput {
   targetId?: number | null;
   /** Why it failed, for the admin reading the trail — never sent to the caller. */
   reason: string;
-  /** This failure is the one that locked the account. */
-  locked?: boolean;
+  /** This failure is the one that tripped a lock, and which: 'device' locks
+   * only the address it came from, 'account' locks the account everywhere. */
+  locked?: 'device' | 'account' | null;
   /** This failure is the one that spent the calling IP's failure budget. */
   ipExhausted?: boolean;
 }
@@ -153,7 +154,8 @@ export async function recordFailedLogin(i: FailedLoginInput): Promise<void> {
   const detail = [
     i.audience === 'teacher' ? 'เข้าสู่ระบบครู' : 'เข้าสู่ระบบนักเรียน',
     i.reason,
-    i.locked ? 'บัญชีถูกล็อกชั่วคราว' : null,
+    i.locked === 'account' ? 'บัญชีถูกล็อกชั่วคราวทุกเครื่อง' : null,
+    i.locked === 'device' ? 'ล็อกชั่วคราวเฉพาะ IP นี้' : null,
     i.ipExhausted ? 'IP นี้ใช้โควตาความพยายามที่ล้มเหลวหมดแล้ว' : null,
   ]
     .filter(Boolean)
