@@ -51,12 +51,16 @@ async function handler(req: NextRequest) {
     return res;
   }
 
+  // reissueSession() carries `client` over unchanged, so a PWA session renews
+  // into another PWA session and a browser session cannot become one by asking.
   const { token, claims } = await reissueSession(session);
   const res = NextResponse.json({
     ok: true,
+    /** Which windows this session is on — `web` or `pwa`. See GET /api/auth/session. */
+    client: session.client ?? 'web',
     expiresAt: sessionExpiresAt(claims),
     /** When the hard cap lands, whatever activity happens in between. */
-    absoluteEndsAt: session.login_at + absoluteTimeoutMs(),
+    absoluteEndsAt: session.login_at + absoluteTimeoutMs(session),
   });
   setSessionCookies(res.cookies, token, claims);
   return res;

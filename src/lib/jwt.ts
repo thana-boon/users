@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
+import { USERS_WRITE } from './permissions';
 
 /**
  * SchoolOS session token. Minted here and nowhere else — this app is the
@@ -14,6 +15,27 @@ import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 
 export type AppRole = 'teacher' | 'student';
 
+/**
+ * What kind of client this session was minted for — the one input the two
+ * windows below take besides the clock.
+ *
+ * `web` is a browser tab on a school machine: the short idle window, and
+ * cookies that die when the browser closes. `pwa` is the platform installed as
+ * an app on somebody's own phone, and gets a much longer window of its own (see
+ * idleTimeoutMs / absoluteTimeoutMs): a phone is a personal device that locks
+ * itself in a pocket, and an installed app that asks for a password every time
+ * it is reopened is one nobody keeps installed. Fifteen minutes is the right
+ * answer for a shared staffroom PC and the wrong one for a phone; this claim is
+ * what lets the same server hold both.
+ *
+ * Declared by the client at login (see the login routes) and then carried IN
+ * the token, so renewal, the absolute cap and the cookie's own lifetime all
+ * read the same answer instead of each guessing from a User-Agent string. It is
+ * self-attested — like a "remember this device" tick — so it must never widen
+ * what a session may DO, only how long it lives.
+ */
+export type SessionClient = 'web' | 'pwa';
+
 export interface SessionClaims extends JWTPayload {
   sub: string; // username = teacher_code / student_code (e.g. "T00116")
   role: AppRole;
@@ -21,6 +43,7 @@ export interface SessionClaims extends JWTPayload {
   permissions: string[]; // e.g. ["users:read", "users:write"]
   login_at: number; // wall-clock of the ORIGINAL login (ms) — never slides
   code?: string; // optional label kept for local login (usually == sub)
+  client?: SessionClient; // absent = 'web' (every token minted before PWA)
 }
 
 /** Cookie this app's local login sets (httpOnly — the token itself). */
@@ -55,24 +78,76 @@ export const SESSION_EXP_COOKIE = 'schoolos_session_exp';
 export const SSO_COOKIE = 'sso_session';
 
 /**
+ * A positive number from the environment, or null when it is unset or nonsense
+ * — so every window below falls back to its documented default rather than to
+ * zero (a zero window would log everyone out on the spot).
+ */
+function envNumber(name: string): number | null {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Whether the PWA exception is available at all.
+ *
+ * SESSION_PWA_ENABLED=false switches it off school-wide, and does so for tokens
+ * ALREADY minted: a `pwa` session immediately falls back to the browser windows
+ * below and so is over within the hour. That is what makes this a kill switch —
+ * something to reach for when a phone goes missing and nobody can say whose —
+ * rather than a setting that only applies to the next login.
+ */
+export function pwaSessionsEnabled(): boolean {
+  return (process.env.SESSION_PWA_ENABLED ?? 'true').toLowerCase() !== 'false';
+}
+
+/** The only parts of a session the two windows depend on. */
+type Timed = Pick<SessionClaims, 'client' | 'permissions'> | null | undefined;
+
+/** A session that gets the long windows: asked for them, and they are enabled. */
+function isPwa(session: Timed): boolean {
+  return session?.client === 'pwa' && pwaSessionsEnabled();
+}
+
+const DAY_MS = 24 * 60 * 60_000;
+
+/**
  * Idle window. The token's `exp` is set this far ahead and slides forward on
  * activity (middleware renews it, SessionGuard renews it while you type), so a
  * workstation left unattended logs itself out. Default 15 minutes — these are
  * shared staffroom machines holding the whole school's PII, so the unattended
  * window is kept short; someone actually working never feels it.
+ *
+ * A PWA session is the other case entirely: the device is one person's, it
+ * locks itself, and the app is closed and reopened all day. Default 30 days
+ * (SESSION_PWA_IDLE_DAYS), which in practice means the idle window stops being
+ * the thing that ends the session and the absolute cap below takes over.
  */
-export function idleTimeoutMs(): number {
-  const m = Number(process.env.SESSION_IDLE_MINUTES);
-  return (Number.isFinite(m) && m > 0 ? m : 15) * 60_000;
+export function idleTimeoutMs(session?: Timed): number {
+  if (isPwa(session)) return (envNumber('SESSION_PWA_IDLE_DAYS') ?? 30) * DAY_MS;
+  return (envNumber('SESSION_IDLE_MINUTES') ?? 15) * 60_000;
 }
 
 /**
  * Hard cap measured from the ORIGINAL login. Never slides — no amount of
  * activity extends a session past it. Default 8 hours (one school day).
+ *
+ * For a PWA it is the cap, not the idle window, that decides how often someone
+ * types their password: 30 days by default (SESSION_PWA_ABSOLUTE_DAYS).
+ *
+ * Except for an admin. A session carrying `users:write` can read every student
+ * record in the school, and on a phone that is a pocket-sized copy of the whole
+ * database — kept to one day by default (SESSION_PWA_ADMIN_HOURS) so a lost
+ * phone stops being a way in by the next morning. Raise it deliberately, if the
+ * school decides that trade differently; it is still far longer than the 8h a
+ * browser gets.
  */
-export function absoluteTimeoutMs(): number {
-  const h = Number(process.env.SESSION_ABSOLUTE_HOURS);
-  return (Number.isFinite(h) && h > 0 ? h : 8) * 60 * 60_000;
+export function absoluteTimeoutMs(session?: Timed): number {
+  if (isPwa(session)) {
+    return session?.permissions?.includes(USERS_WRITE)
+      ? (envNumber('SESSION_PWA_ADMIN_HOURS') ?? 24) * 60 * 60_000
+      : (envNumber('SESSION_PWA_ABSOLUTE_DAYS') ?? 30) * DAY_MS;
+  }
+  return (envNumber('SESSION_ABSOLUTE_HOURS') ?? 8) * 60 * 60_000;
 }
 
 /**
@@ -82,7 +157,7 @@ export function absoluteTimeoutMs(): number {
  */
 export function sessionExpiresAt(session: SessionClaims): number {
   const idleEnd = (session.exp ?? 0) * 1000;
-  const absoluteEnd = session.login_at + absoluteTimeoutMs();
+  const absoluteEnd = session.login_at + absoluteTimeoutMs(session);
   return Math.min(idleEnd, absoluteEnd);
 }
 
@@ -105,8 +180,11 @@ function secret(): Uint8Array {
  * absolute cap. Returned in SECONDS, the unit jose's setExpirationTime() takes
  * for a numeric argument.
  */
-function expirationFor(loginAt: number): number {
-  const end = Math.min(Date.now() + idleTimeoutMs(), loginAt + absoluteTimeoutMs());
+function expirationFor(claims: SignInput & { login_at: number }): number {
+  const end = Math.min(
+    Date.now() + idleTimeoutMs(claims),
+    claims.login_at + absoluteTimeoutMs(claims),
+  );
   return Math.floor(end / 1000);
 }
 
@@ -127,7 +205,7 @@ export interface SessionCookieOptions {
   sameSite: 'lax';
   secure: boolean;
   path: string;
-  /** Only ever set to 0, to delete. See sessionCookieOptions(). */
+  /** Set for a PWA session, and to 0 to delete. See sessionCookieOptions(). */
   maxAge?: number;
 }
 
@@ -148,14 +226,27 @@ export interface SessionCookieOptions {
  *
  * The price is that a browser restart signs you out even one minute later. That
  * is the intended trade on machines full of the whole school's PII.
+ *
+ * A PWA session is the exception, and it is not tidiness: an installed app is
+ * closed and reopened constantly, and every one of those counts as "the browser
+ * restarted". Without a max-age the long token would be thrown away by the phone
+ * within minutes and the whole exception would buy nothing. So a `pwa` session's
+ * cookies are given an explicit lifetime — exactly as long as the token itself
+ * can live, never longer, since a cookie that outlasts its token only buys the
+ * holder a redirect to the portal.
  */
-export function sessionCookieOptions(): SessionCookieOptions {
-  return {
+export function sessionCookieOptions(session?: SessionClaims | null): SessionCookieOptions {
+  const options: SessionCookieOptions = {
     httpOnly: true,
     sameSite: 'lax' as const,
     secure: cookieSecure(),
     path: '/',
   };
+  if (session && isPwa(session)) {
+    const seconds = Math.ceil((sessionExpiresAt(session) - Date.now()) / 1000);
+    if (seconds > 0) options.maxAge = seconds;
+  }
+  return options;
 }
 
 /** Minimal cookie writer — the shape `NextResponse.cookies.set` accepts. */
@@ -169,10 +260,15 @@ type CookieJar = {
  */
 export function setSessionCookies(jar: CookieJar, token: string, claims: SessionClaims): number {
   const expiresAt = sessionExpiresAt(claims);
-  jar.set(SESSION_COOKIE, token, sessionCookieOptions());
-  jar.set(SSO_COOKIE, token, sessionCookieOptions()); // same token, cross-service name
+  // All three from the SAME claims, so a PWA session's max-age (above) lands on
+  // every one of them — a token cookie that survives the app closing beside an
+  // expiry cookie that does not would leave SessionGuard counting down from
+  // nothing.
+  const options = sessionCookieOptions(claims);
+  jar.set(SESSION_COOKIE, token, options);
+  jar.set(SSO_COOKIE, token, options); // same token, cross-service name
   jar.set(SESSION_EXP_COOKIE, String(expiresAt), {
-    ...sessionCookieOptions(),
+    ...options,
     httpOnly: false, // read by SessionGuard — see SESSION_EXP_COOKIE
   });
   return expiresAt;
@@ -259,9 +355,10 @@ export interface MintedSession {
  */
 async function mint(claims: SignInput): Promise<MintedSession> {
   const loginAt = claims.login_at ?? Date.now();
-  const exp = expirationFor(loginAt);
-  const token = await sign({ ...claims, login_at: loginAt }, exp);
-  return { token, claims: { ...claims, login_at: loginAt, exp } as SessionClaims };
+  const full = { ...claims, login_at: loginAt };
+  const exp = expirationFor(full);
+  const token = await sign(full, exp);
+  return { token, claims: { ...full, exp } as SessionClaims };
 }
 
 /**
@@ -292,6 +389,10 @@ export function reissueSession(session: SessionClaims): Promise<MintedSession> {
     code: session.code,
     permissions: session.permissions,
     login_at: session.login_at, // never slides — that is the point
+    // Carried, never re-read from the request: which kind of client this is was
+    // settled at login. Otherwise a stolen browser cookie could be turned into a
+    // month-long one simply by asking for a refresh.
+    client: session.client,
   });
 }
 
@@ -302,10 +403,10 @@ export function reissueSession(session: SessionClaims): Promise<MintedSession> {
  * been capped at the absolute deadline, where no activity can extend it.
  */
 export async function renewSession(session: SessionClaims): Promise<MintedSession | null> {
-  const absoluteEnd = session.login_at + absoluteTimeoutMs();
+  const absoluteEnd = session.login_at + absoluteTimeoutMs(session);
   const expiresAt = sessionExpiresAt(session);
   if (expiresAt >= absoluteEnd) return null; // already at the hard cap
-  if (expiresAt - Date.now() > idleTimeoutMs() / 2) return null; // still fresh
+  if (expiresAt - Date.now() > idleTimeoutMs(session) / 2) return null; // still fresh
   return reissueSession(session);
 }
 
@@ -325,6 +426,8 @@ export interface SignInput {
   permissions: string[];
   code?: string;
   login_at?: number;
+  /** Omit for an ordinary browser session; see SessionClient. */
+  client?: SessionClient;
 }
 
 /** Sign with an already-decided `exp` (seconds). The one place jose is called. */
@@ -335,6 +438,7 @@ function sign(claims: SignInput & { login_at: number }, exp: number): Promise<st
     code: claims.code,
     permissions: claims.permissions,
     login_at: claims.login_at,
+    client: claims.client,
   })
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setSubject(claims.sub)
@@ -372,9 +476,8 @@ export async function verifySession(
     if (role !== 'teacher' && role !== 'student') return null;
     if (!payload.sub) return null;
     if (typeof payload.login_at !== 'number') return null;
-    if (Date.now() - payload.login_at > absoluteTimeoutMs()) return null;
 
-    return {
+    const claims = {
       ...payload,
       sub: payload.sub,
       role,
@@ -382,7 +485,17 @@ export async function verifySession(
         ? (payload.permissions as string[])
         : [],
       login_at: payload.login_at,
+      // Anything but the one known value is 'web': an unknown client falls back
+      // to the SHORT window, never to a long one it named for itself.
+      client: payload.client === 'pwa' ? 'pwa' : 'web',
     } as SessionClaims;
+
+    // Built first, because which cap applies is one of the claims. A `pwa` token
+    // checked while SESSION_PWA_ENABLED is off is measured against the browser
+    // cap instead and dies here — that is the kill switch working.
+    if (Date.now() - claims.login_at > absoluteTimeoutMs(claims)) return null;
+
+    return claims;
   } catch {
     return null;
   }

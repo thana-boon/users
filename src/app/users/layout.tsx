@@ -78,7 +78,7 @@ export default async function UsersLayout({
         <SessionGuard
           expiresAt={sessionExpiresAt(session)}
           expiredUrl={platformHomeUrl({ expired: '1' })}
-          idleMs={idleTimeoutMs()}
+          idleMs={idleTimeoutMs(session)}
         />
         <AppShell
           session={{ name: session.name ?? null, role: session.role, photoUrl, initial }}

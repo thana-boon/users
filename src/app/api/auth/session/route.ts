@@ -66,6 +66,13 @@ async function handler(req: NextRequest) {
      * probing on every page.
      */
     expiresAt: sessionExpiresAt(session),
+    /**
+     * Which set of session windows this token is on: `web` (short idle window,
+     * cookies that die with the browser) or `pwa` (the installed-app exception).
+     * A consumer that mints a session of its own should match it — otherwise the
+     * phone stays signed in here and gets signed out there.
+     */
+    client: session.client ?? 'web',
     session: user,
   });
 }

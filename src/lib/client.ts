@@ -46,6 +46,34 @@ export async function api<T = unknown>(
   return data as T;
 }
 
+/**
+ * Is this page running as an installed app rather than in a browser tab?
+ *
+ * What the login form sends as `client` so the server knows which session
+ * windows to use (see SessionClient in lib/jwt.ts). `display-mode: standalone`
+ * is what a manifest with `"display": "standalone"` produces once the app has
+ * been added to the home screen; iOS Safari answers the same question through
+ * `navigator.standalone`, which it has had since long before the media query.
+ *
+ * A guess by nature — a tab is a tab and cannot be told apart with certainty —
+ * which is why the answer only ever buys a longer session, never a wider one.
+ */
+export function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  const iosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone;
+  return (
+    window.matchMedia?.('(display-mode: standalone)').matches === true ||
+    window.matchMedia?.('(display-mode: fullscreen)').matches === true ||
+    window.matchMedia?.('(display-mode: minimal-ui)').matches === true ||
+    iosStandalone === true
+  );
+}
+
+/** The `client` field the auth endpoints take. See isStandalone(). */
+export function sessionClient(): 'web' | 'pwa' {
+  return isStandalone() ? 'pwa' : 'web';
+}
+
 export function jsonBody(v: unknown): RequestInit {
   return { method: 'POST', body: JSON.stringify(v) };
 }

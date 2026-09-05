@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { withBase } from '@/lib/client';
+import { sessionClient, withBase } from '@/lib/client';
 import { USERS_WRITE } from '@/lib/permissions';
 
 /**
@@ -61,7 +61,14 @@ export default function LoginForm({ next, denied, expired, signedInAs }: LoginFo
       const res = await fetch(withBase('/api/auth/teacher-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teacher_code: teacherCode.trim(), password }),
+        // `client` decides how long the session lives, not what it may do:
+        // opened as an installed app this asks for the PWA windows, in a tab it
+        // asks for the browser ones. See sessionClient().
+        body: JSON.stringify({
+          teacher_code: teacherCode.trim(),
+          password,
+          client: sessionClient(),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'เข้าสู่ระบบไม่สำเร็จ');

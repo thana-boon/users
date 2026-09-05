@@ -34,9 +34,19 @@ function warnBeforeMs(idleMs: number): number {
   return Math.min(2 * 60_000, idleMs / 4);
 }
 
-/** Refresh silently once activity is seen and less than this much time is left. */
+/**
+ * Refresh silently once activity is seen and less than this much time is left.
+ *
+ * Two thirds of the window, but never more than an hour: on a PWA session the
+ * window is measured in days, and without the ceiling "less than two thirds
+ * left" is true from the second day onwards — which would have this component
+ * posting a refresh every minute for a month, to slide a deadline that is weeks
+ * away. An hour is far more warning than the renewal needs.
+ */
+const RENEW_CEILING_MS = 60 * 60_000;
+
 function renewUnderMs(idleMs: number): number {
-  return (idleMs * 2) / 3;
+  return Math.min((idleMs * 2) / 3, RENEW_CEILING_MS);
 }
 
 /** How recently input must have happened to count as "still here". */

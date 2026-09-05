@@ -27,6 +27,18 @@ export const runtime = 'nodejs';
 const bodySchema = z.object({
   identifier: z.string().min(1),
   password: z.string().min(1),
+  /**
+   * Which kind of client is signing in — `pwa` asks for the installed-app
+   * session windows instead of the browser ones (see SessionClient in
+   * lib/jwt.ts). Optional; anything absent is a browser.
+   *
+   * Self-attested, deliberately: nothing on the wire can prove an installed app
+   * apart from a tab, and a User-Agent sniff would only be a worse guess. It is
+   * safe because it buys time and nothing else — the permissions in the token
+   * are decided by the account, not by this field — and because an admin
+   * session's cap stays short whatever it claims.
+   */
+  client: z.enum(['web', 'pwa']).optional(),
 });
 
 const INVALID = 'รหัส/อีเมล หรือรหัสผ่านไม่ถูกต้อง';
@@ -54,7 +66,7 @@ async function handler(req: NextRequest) {
       );
     }
 
-    const { identifier, password } = bodySchema.parse(await req.json());
+    const { identifier, password, client } = bodySchema.parse(await req.json());
     const id = identifier.trim();
 
     // Per-account lockout, counted per DEVICE first: five wrong guesses lock
@@ -111,6 +123,7 @@ async function handler(req: NextRequest) {
       name: `${row.firstName} ${row.lastName}`.trim(),
       code: row.studentCode,
       permissions: [],
+      client,
     });
 
     await recordAudit({
@@ -119,6 +132,7 @@ async function handler(req: NextRequest) {
       targetType: 'auth',
       targetId: row.id,
       targetLabel: row.studentCode,
+      detail: client === 'pwa' ? 'login (PWA)' : undefined,
       req,
     });
 

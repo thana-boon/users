@@ -119,7 +119,9 @@ export async function POST(req: NextRequest) {
       audience: result.audience,
       /** Same two clocks POST /api/auth/refresh reports (epoch ms). */
       expiresAt: sessionExpiresAt(claims),
-      absoluteEndsAt: claims.login_at + absoluteTimeoutMs(),
+      absoluteEndsAt: claims.login_at + absoluteTimeoutMs(claims),
+      /** `web` | `pwa` — the windows this session is on, as in ข้อ 4.10. */
+      client: claims.client ?? 'web',
     });
   } catch (err) {
     return handleError(err);
