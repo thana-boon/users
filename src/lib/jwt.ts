@@ -78,12 +78,21 @@ export const SESSION_EXP_COOKIE = 'schoolos_session_exp';
 export const SSO_COOKIE = 'sso_session';
 
 /**
- * A positive number from the environment, or null when it is unset or nonsense
- * — so every window below falls back to its documented default rather than to
- * zero (a zero window would log everyone out on the spot).
+ * A positive number, or null when the value is unset or nonsense — so every
+ * window below falls back to its documented default rather than to zero (a zero
+ * window would log everyone out on the spot).
+ *
+ * Takes the VALUE, never the variable's name. Every read below is written out
+ * as `process.env.SOMETHING` on purpose: this module is imported by the edge
+ * middleware, and the edge build substitutes those static references at build
+ * time. A `process.env[name]` lookup has no name to substitute, so it survives
+ * into the bundle and reads an environment the edge sandbox does not have —
+ * which would leave middleware quietly using the defaults while the route
+ * handlers used the configured values, and the two disagreeing about when a
+ * session ends is exactly the bug nobody can reproduce.
  */
-function envNumber(name: string): number | null {
-  const n = Number(process.env[name]);
+function positive(raw: string | undefined): number | null {
+  const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
@@ -123,8 +132,8 @@ const DAY_MS = 24 * 60 * 60_000;
  * the thing that ends the session and the absolute cap below takes over.
  */
 export function idleTimeoutMs(session?: Timed): number {
-  if (isPwa(session)) return (envNumber('SESSION_PWA_IDLE_DAYS') ?? 30) * DAY_MS;
-  return (envNumber('SESSION_IDLE_MINUTES') ?? 15) * 60_000;
+  if (isPwa(session)) return (positive(process.env.SESSION_PWA_IDLE_DAYS) ?? 30) * DAY_MS;
+  return (positive(process.env.SESSION_IDLE_MINUTES) ?? 15) * 60_000;
 }
 
 /**
@@ -144,10 +153,10 @@ export function idleTimeoutMs(session?: Timed): number {
 export function absoluteTimeoutMs(session?: Timed): number {
   if (isPwa(session)) {
     return session?.permissions?.includes(USERS_WRITE)
-      ? (envNumber('SESSION_PWA_ADMIN_HOURS') ?? 24) * 60 * 60_000
-      : (envNumber('SESSION_PWA_ABSOLUTE_DAYS') ?? 30) * DAY_MS;
+      ? (positive(process.env.SESSION_PWA_ADMIN_HOURS) ?? 24) * 60 * 60_000
+      : (positive(process.env.SESSION_PWA_ABSOLUTE_DAYS) ?? 30) * DAY_MS;
   }
-  return (envNumber('SESSION_ABSOLUTE_HOURS') ?? 8) * 60 * 60_000;
+  return (positive(process.env.SESSION_ABSOLUTE_HOURS) ?? 8) * 60 * 60_000;
 }
 
 /**
