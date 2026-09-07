@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
 import {
-  absoluteTimeoutMs,
+  absoluteEndsAt,
   clearSessionCookies,
   reissueSession,
   sessionExpiresAt,
@@ -59,8 +59,9 @@ async function handler(req: NextRequest) {
     /** Which windows this session is on — `web` or `pwa`. See GET /api/auth/session. */
     client: session.client ?? 'web',
     expiresAt: sessionExpiresAt(claims),
-    /** When the hard cap lands, whatever activity happens in between. */
-    absoluteEndsAt: session.login_at + absoluteTimeoutMs(session),
+    /** When the hard cap lands, whatever activity happens in between — null for
+     *  a session that has none (an installed app, by default). */
+    absoluteEndsAt: absoluteEndsAt(session),
   });
   setSessionCookies(res.cookies, token, claims);
   return res;

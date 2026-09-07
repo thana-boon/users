@@ -97,6 +97,17 @@ function positive(raw: string | undefined): number | null {
 }
 
 /**
+ * The longest max-age worth writing on a cookie.
+ *
+ * Chrome and the browsers built on it silently clamp any cookie expiry to 400
+ * days (RFC 6265bis), so asking for ten years quietly gets 400 anyway. We ask
+ * for the number we will actually get, and keep the session alive past it by
+ * re-writing the cookie every day of use (renewSession) rather than by naming a
+ * date the browser has already thrown away.
+ */
+const MAX_COOKIE_DAYS = 400;
+
+/**
  * Whether the PWA exception is available at all.
  *
  * SESSION_PWA_ENABLED=false switches it off school-wide, and does so for tokens
@@ -127,12 +138,17 @@ const DAY_MS = 24 * 60 * 60_000;
  * window is kept short; someone actually working never feels it.
  *
  * A PWA session is the other case entirely: the device is one person's, it
- * locks itself, and the app is closed and reopened all day. Default 30 days
- * (SESSION_PWA_IDLE_DAYS), which in practice means the idle window stops being
- * the thing that ends the session and the absolute cap below takes over.
+ * locks itself, and the app is closed and reopened all day — and the app people
+ * compare it against (Facebook, IG, LINE) never asks again at all. So the
+ * default is the longest window a cookie can actually carry, 400 days
+ * (SESSION_PWA_IDLE_DAYS), re-written on every day of use. Anyone who opens the
+ * app even once a year never sees a login screen; a phone that is put in a
+ * drawer and forgotten does eventually stop being a way in.
  */
 export function idleTimeoutMs(session?: Timed): number {
-  if (isPwa(session)) return (positive(process.env.SESSION_PWA_IDLE_DAYS) ?? 30) * DAY_MS;
+  if (isPwa(session)) {
+    return (positive(process.env.SESSION_PWA_IDLE_DAYS) ?? MAX_COOKIE_DAYS) * DAY_MS;
+  }
   return (positive(process.env.SESSION_IDLE_MINUTES) ?? 15) * 60_000;
 }
 
@@ -140,23 +156,51 @@ export function idleTimeoutMs(session?: Timed): number {
  * Hard cap measured from the ORIGINAL login. Never slides — no amount of
  * activity extends a session past it. Default 8 hours (one school day).
  *
- * For a PWA it is the cap, not the idle window, that decides how often someone
- * types their password: 30 days by default (SESSION_PWA_ABSOLUTE_DAYS).
+ * For a PWA there is no cap by default: the installed app is meant to behave
+ * like every other app on the phone, where signing in is something you do once.
+ * `Infinity` rather than a very large number so that "no cap" is a state the
+ * code can say out loud — every arithmetic use below (min against the idle end,
+ * the "already at the cap" test, the age check in verifySession) is correct with
+ * it, and the one place a finite number is required (absoluteEndsAt, which goes
+ * over the wire) asks explicitly.
  *
- * Except for an admin. A session carrying `users:write` can read every student
- * record in the school, and on a phone that is a pocket-sized copy of the whole
- * database — kept to one day by default (SESSION_PWA_ADMIN_HOURS) so a lost
- * phone stops being a way in by the next morning. Raise it deliberately, if the
- * school decides that trade differently; it is still far longer than the 8h a
- * browser gets.
+ * SESSION_PWA_ABSOLUTE_DAYS puts a cap back — a number of days, and anything
+ * else ('never', unset) means none. SESSION_PWA_ADMIN_HOURS does the same for
+ * sessions carrying `users:write` only: it is unset by default, so admins get
+ * the same forever as everyone else, but the knob is here because such a session
+ * can read every student record in the school and a lost phone is then a
+ * pocket-sized copy of the database. Set it to 24 to put the old one-day admin
+ * cap back without touching anything else.
+ *
+ * The kill switch is the answer to a phone that actually goes missing:
+ * SESSION_PWA_ENABLED=false ends every PWA session already minted, within the
+ * hour. A short cap is a worse version of that — it inconveniences 800 people
+ * daily against the day one phone is lost.
  */
 export function absoluteTimeoutMs(session?: Timed): number {
   if (isPwa(session)) {
-    return session?.permissions?.includes(USERS_WRITE)
-      ? (positive(process.env.SESSION_PWA_ADMIN_HOURS) ?? 24) * 60 * 60_000
-      : (positive(process.env.SESSION_PWA_ABSOLUTE_DAYS) ?? 30) * DAY_MS;
+    if (session?.permissions?.includes(USERS_WRITE)) {
+      const adminHours = process.env.SESSION_PWA_ADMIN_HOURS;
+      // Only an explicit number narrows the admin window; unset falls through
+      // to the same window every other PWA session gets.
+      if (adminHours?.trim()) return (positive(adminHours) ?? Infinity) * 60 * 60_000;
+    }
+    const days = positive(process.env.SESSION_PWA_ABSOLUTE_DAYS);
+    return days === null ? Infinity : days * DAY_MS;
   }
   return (positive(process.env.SESSION_ABSOLUTE_HOURS) ?? 8) * 60 * 60_000;
+}
+
+/**
+ * The moment the hard cap lands, or null when there is none — the shape the API
+ * responses want, since JSON has no way to write Infinity (it serialises as
+ * `null` anyway, but by accident rather than on purpose).
+ */
+export function absoluteEndsAt(
+  session: Pick<SessionClaims, 'client' | 'permissions' | 'login_at'>,
+): number | null {
+  const end = session.login_at + absoluteTimeoutMs(session);
+  return Number.isFinite(end) ? end : null;
 }
 
 /**
@@ -252,8 +296,13 @@ export function sessionCookieOptions(session?: SessionClaims | null): SessionCoo
     path: '/',
   };
   if (session && isPwa(session)) {
+    // Never longer than the token can live, since a cookie that outlasts its
+    // token only buys the holder a redirect to the portal — and never longer
+    // than a browser will keep one either (MAX_COOKIE_DAYS), so the number we
+    // write is the number we get. Renewal re-writes it on every day of use, so
+    // a session with no cap at all still never runs into this ceiling.
     const seconds = Math.ceil((sessionExpiresAt(session) - Date.now()) / 1000);
-    if (seconds > 0) options.maxAge = seconds;
+    if (seconds > 0) options.maxAge = Math.min(seconds, MAX_COOKIE_DAYS * 24 * 60 * 60);
   }
   return options;
 }
@@ -415,7 +464,17 @@ export async function renewSession(session: SessionClaims): Promise<MintedSessio
   const absoluteEnd = session.login_at + absoluteTimeoutMs(session);
   const expiresAt = sessionExpiresAt(session);
   if (expiresAt >= absoluteEnd) return null; // already at the hard cap
-  if (expiresAt - Date.now() > idleTimeoutMs(session) / 2) return null; // still fresh
+  const idle = idleTimeoutMs(session);
+  // How long this token has been carrying the session, derived rather than read
+  // off `iat`, so it stays the same number the deadline is built from.
+  const elapsed = idle - (expiresAt - Date.now());
+  // Halfway through the window, so a page load's burst of requests re-signs
+  // once — but at most a day apart, because the other half of a renewal is
+  // re-writing the cookie's max-age. On a 400-day window "halfway" is 200 days,
+  // and a browser that clamped the max-age would have binned the cookie long
+  // before we got around to refreshing it. Once a day of use is enough to keep
+  // an installed app signed in indefinitely, and costs one signature.
+  if (elapsed < Math.min(idle / 2, DAY_MS)) return null; // still fresh
   return reissueSession(session);
 }
 

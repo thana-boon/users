@@ -5,7 +5,7 @@ import { apiError, requireApiScope } from '@/lib/apiauth';
 import { handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { consumeHandoffCode } from '@/lib/handoff';
-import { absoluteTimeoutMs, sessionExpiresAt } from '@/lib/jwt';
+import { absoluteEndsAt, sessionExpiresAt } from '@/lib/jwt';
 
 export const runtime = 'nodejs';
 
@@ -119,7 +119,8 @@ export async function POST(req: NextRequest) {
       audience: result.audience,
       /** Same two clocks POST /api/auth/refresh reports (epoch ms). */
       expiresAt: sessionExpiresAt(claims),
-      absoluteEndsAt: claims.login_at + absoluteTimeoutMs(claims),
+      /** null when this session has no hard cap at all — see absoluteTimeoutMs. */
+      absoluteEndsAt: absoluteEndsAt(claims),
       /** `web` | `pwa` — the windows this session is on, as in ข้อ 4.10. */
       client: claims.client ?? 'web',
     });
