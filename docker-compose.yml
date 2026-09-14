@@ -103,13 +103,19 @@ services:
       # The PWA exception: a session that logged in with client:"pwa" (an app
       # installed on someone's own phone) gets these windows instead of the two
       # above, and cookies with a real max-age so closing the app does not sign
-      # them out. Admin sessions (users:write) are capped far shorter — a lost
-      # phone would otherwise be the whole school's PII. SESSION_PWA_ENABLED=false
-      # is the kill switch: pwa sessions already issued die at once.
+      # them out. SESSION_PWA_ENABLED=false is the kill switch: pwa sessions
+      # already issued die at once, which is what a phone that actually goes
+      # missing is answered with — a short cap is a worse version of it, paid for
+      # daily by everybody against the day one phone is lost.
       SESSION_PWA_ENABLED: ${SESSION_PWA_ENABLED:-true}
       SESSION_PWA_IDLE_DAYS: ${SESSION_PWA_IDLE_DAYS:-30}
       SESSION_PWA_ABSOLUTE_DAYS: ${SESSION_PWA_ABSOLUTE_DAYS:-30}
-      SESSION_PWA_ADMIN_HOURS: ${SESSION_PWA_ADMIN_HOURS:-24}
+      # Admin phones (users:write) were cut to 24 hours here, and that is the
+      # deadline that threw an admin out of an installed app once a day — out of
+      # every satellite service with it, since a consumer copies `absoluteEndsAt`
+      # verbatim at the handoff rather than re-deriving a rule it cannot see.
+      # Now the same 30 days as everyone else.
+      SESSION_PWA_ADMIN_HOURS: ${SESSION_PWA_ADMIN_HOURS:-720}
       # Where a signed-out or timed-out browser is sent. Middleware gets this
       # value from the default baked into src/lib/platform.ts, not from here —
       # the edge runtime inlines process.env at build time (same as BASE_PATH).
