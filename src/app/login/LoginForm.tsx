@@ -9,8 +9,9 @@ import { USERS_WRITE } from '@/lib/permissions';
  * The credential form itself — only ever rendered once the server has
  * established that nobody is signed in yet (see page.tsx).
  *
- * รหัสครู (teacher_code) + password -> /api/auth/teacher-login, which checks the
- * DB and issues the platform session. Access to THIS module is decided by the
+ * รหัสครู or email + password -> /api/auth/teacher-login, which checks the DB
+ * and issues the platform session. Either identifier works, the same as it does
+ * for students — staff are given both and remember whichever they use daily. Access to THIS module is decided by the
  * `users:write` permission, never by the DB role string: middleware gates on the
  * permission, so anything else here would be a second, disagreeing authority.
  */
@@ -29,7 +30,7 @@ export interface LoginFormProps {
 export default function LoginForm({ next, denied, expired, signedInAs }: LoginFormProps) {
   const router = useRouter();
 
-  const [teacherCode, setTeacherCode] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +66,7 @@ export default function LoginForm({ next, denied, expired, signedInAs }: LoginFo
         // opened as an installed app this asks for the PWA windows, in a tab it
         // asks for the browser ones. See sessionClient().
         body: JSON.stringify({
-          teacher_code: teacherCode.trim(),
+          identifier: identifier.trim(),
           password,
           client: sessionClient(),
         }),
@@ -119,14 +120,14 @@ export default function LoginForm({ next, denied, expired, signedInAs }: LoginFo
         )}
 
         <form onSubmit={signIn}>
-          <label className="form-label" htmlFor="teacher_code">รหัสครู</label>
+          <label className="form-label" htmlFor="identifier">รหัสครู หรืออีเมล</label>
           <input
-            id="teacher_code"
+            id="identifier"
             className="form-input"
             style={{ width: '100%' }}
-            value={teacherCode}
-            onChange={(e) => setTeacherCode(e.target.value)}
-            placeholder="เช่น T00001"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            placeholder="เช่น T00001 หรือ name@school.ac.th"
             autoComplete="username"
             autoFocus
           />
@@ -148,7 +149,7 @@ export default function LoginForm({ next, denied, expired, signedInAs }: LoginFo
             type="submit"
             className="btn btn-primary"
             style={{ width: '100%', marginTop: 16 }}
-            disabled={loading || !teacherCode.trim() || !password}
+            disabled={loading || !identifier.trim() || !password}
           >
             {loading ? 'กำลังเข้า…' : 'เข้าสู่ระบบ'}
           </button>

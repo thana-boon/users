@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { teachers } from '@/db/schema';
 import { issueSession, USERS_READ, USERS_WRITE } from '@/lib/jwt';
@@ -16,34 +16,47 @@ import { corsPreflight, withCors } from '@/lib/cors';
 export const runtime = 'nodejs';
 
 /**
- * Public-facing teacher login. Single identifier: teacher_code (e.g. T00005) -
- * no email fallback (teachers remember their code). A DB `teacher-admin` is
- * issued a session carrying `users:read`/`users:write`; a plain `teacher` gets a
- * valid session but is rejected by this module's RBAC.
+ * Public-facing teacher login. identifier = teacher_code (e.g. T00005) OR the
+ * teacher's email, same contract as student-login — a teacher who knows only
+ * the address we mail them was otherwise locked out of every service.
+ *
+ * A DB `teacher-admin` is issued a session carrying `users:read`/`users:write`;
+ * a plain `teacher` gets a valid session but is rejected by this module's RBAC.
  *
  * A successful login sets the platform session cookies, `sso_session` among them
  * (see lib/jwt.ts) — which is what makes this the SSO sign-in for every other
  * SchoolOS service, not just for this module.
  */
 
-const bodySchema = z.object({
-  teacher_code: z.string().min(1),
-  password: z.string().min(1),
-  /**
-   * Which kind of client is signing in — `pwa` asks for the installed-app
-   * session windows instead of the browser ones (see SessionClient in
-   * lib/jwt.ts). Optional; anything absent is a browser.
-   *
-   * Self-attested, deliberately: nothing on the wire can prove an installed app
-   * apart from a tab, and a User-Agent sniff would only be a worse guess. It is
-   * safe because it buys time and nothing else — the permissions in the token
-   * are decided by the account, not by this field — and because an admin
-   * session's cap stays short whatever it claims.
-   */
-  client: z.enum(['web', 'pwa']).optional(),
-});
+const bodySchema = z
+  .object({
+    /** รหัสครู or email. */
+    identifier: z.string().min(1).optional(),
+    /**
+     * The original field name, still accepted: the portal and at least one
+     * consumer app post it, and they are deployed separately from here.
+     */
+    teacher_code: z.string().min(1).optional(),
+    password: z.string().min(1),
+    /**
+     * Which kind of client is signing in — `pwa` asks for the installed-app
+     * session windows instead of the browser ones (see SessionClient in
+     * lib/jwt.ts). Optional; anything absent is a browser.
+     *
+     * Self-attested, deliberately: nothing on the wire can prove an installed
+     * app apart from a tab, and a User-Agent sniff would only be a worse guess.
+     * It is safe because it buys time and nothing else — the permissions in the
+     * token are decided by the account, not by this field — and because an
+     * admin session's cap stays short whatever it claims.
+     */
+    client: z.enum(['web', 'pwa']).optional(),
+  })
+  .refine((b) => Boolean(b.identifier ?? b.teacher_code), {
+    message: 'identifier is required',
+    path: ['identifier'],
+  });
 
-const INVALID = 'รหัสครู หรือรหัสผ่านไม่ถูกต้อง';
+const INVALID = 'รหัสครู/อีเมล หรือรหัสผ่านไม่ถูกต้อง';
 
 async function handler(req: NextRequest) {
   try {
@@ -69,7 +82,7 @@ async function handler(req: NextRequest) {
     }
 
     const body = bodySchema.parse(await req.json());
-    const code = body.teacher_code.trim();
+    const code = (body.identifier ?? body.teacher_code ?? '').trim();
 
     // Per-account lockout, counted per DEVICE first: five wrong guesses lock
     // the address that made them, not the teacher. See loginLockout() — keyed
@@ -84,9 +97,30 @@ async function handler(req: NextRequest) {
       );
     }
 
-    const row = await db.query.teachers.findFirst({
-      where: eq(teachers.teacherCode, code),
-    });
+    // Code or email — the same lookup as verifyTeacher() in
+    // api/public/v1/auth/verify, deliberately, so the two front doors of this
+    // IdP cannot disagree about who an identifier means.
+    //
+    // The email side is compared case-folded because it is stored raw (neither
+    // the create route nor the importer folds it). No LIMIT: `teachers.email`
+    // is indexed but not UNIQUE, so the match set can hold several rows and a
+    // findFirst could hand back an email row while hiding the code match.
+    const rows = await db
+      .select()
+      .from(teachers)
+      .where(
+        or(
+          eq(teachers.teacherCode, code),
+          sql`lower(${teachers.email}) = ${code.toLowerCase()}`,
+        ),
+      );
+
+    // A teacher_code hit always wins, so nobody can shadow another account's
+    // login by putting its code in their own email field. The email match is
+    // only used when unambiguous: a shared address fails closed rather than
+    // picking a row.
+    const row =
+      rows.find((r) => r.teacherCode === code) ?? (rows.length === 1 ? rows[0] : undefined);
 
     let valid = false;
     if (row && !row.isArchived && row.passwordEncrypted) {
@@ -172,10 +206,10 @@ function lockMessage(scope: LockScope | null, sec: number): string {
 /**
  * Why the attempt failed — for the audit row ONLY. The caller is always told
  * the same thing (INVALID), so the endpoint still cannot be used to work out
- * which teacher codes exist.
+ * which teacher codes or addresses exist.
  */
 function failureReason(row: typeof teachers.$inferSelect | undefined): string {
-  if (!row) return 'ไม่พบรหัสครูนี้';
+  if (!row) return 'ไม่พบรหัสครู/อีเมลนี้';
   if (row.isArchived) return 'บัญชีถูกเก็บถาวรแล้ว';
   if (!row.passwordEncrypted) return 'บัญชีนี้ยังไม่ได้ตั้งรหัสผ่าน';
   return 'รหัสผ่านไม่ถูกต้อง';

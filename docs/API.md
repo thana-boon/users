@@ -682,7 +682,7 @@ if (data.valid) {
 
 **ตั้งค่าฝั่ง SchoolOS ก่อนใช้** — origin ของระบบคุณต้องถูกใส่ใน `SSO_ALLOWED_ORIGINS` ของ Users service (แจ้งแอดมิน) ไม่งั้นเบราว์เซอร์จะบล็อกเพราะไม่มี CORS header กลับมา ต้องเป็น origin เป๊ะ ๆ (scheme + host + port) เช่น `http://localhost:3017` — ใช้ `*` ไม่ได้เพราะเป็น request ที่พก cookie
 
-**ล็อกอินจากระบบคุณ** — `POST /api/auth/teacher-login` (body `{teacher_code, password}`) และ `POST /api/auth/student-login` (body `{identifier, password}`) เปิด CORS ด้วยเหมือนกัน สำเร็จแล้วจะเซ็ต `sso_session` ให้เอง — ถ้าเป็น PWA บนมือถือ ให้ส่ง `client: "pwa"` ไปด้วย (ดูข้อ 4.10b)
+**ล็อกอินจากระบบคุณ** — `POST /api/auth/teacher-login` และ `POST /api/auth/student-login` (body `{identifier, password}` ทั้งคู่ — `identifier` เป็นรหัสครู/รหัสนักเรียน **หรืออีเมล** ก็ได้; ฝั่งครูยังรับชื่อฟิลด์เดิม `teacher_code` อยู่เพื่อไม่ให้แอปที่ deploy ไปแล้วพัง) เปิด CORS ด้วยเหมือนกัน สำเร็จแล้วจะเซ็ต `sso_session` ให้เอง — ถ้าเป็น PWA บนมือถือ ให้ส่ง `client: "pwa"` ไปด้วย (ดูข้อ 4.10b)
 
 > **สองเส้นทางนี้ตอบ `429` ได้ ไม่ใช่แค่ `400`** อย่าเหมาว่า non-200 = "รหัสผ่านผิด" แล้วโชว์ข้อความเดียวรวด — ผู้ใช้จะงงว่าทำไมรหัสที่ถูกกลับใช้ไม่ได้ ให้เอา `error` ที่เราส่งมาไปแสดงตรง ๆ และเคารพ header `Retry-After` (วินาที) สาเหตุมีสองแบบ
 > - **ล็อกเฉพาะเครื่องนี้** — ใส่รหัสผิดครบโควตา (ค่าเริ่มต้น 5 ครั้ง/15 นาที) ของบัญชีนั้น **จากที่อยู่ IP นั้น** รอครบเวลาแล้วใช้ได้ตามปกติ
@@ -749,7 +749,7 @@ await fetch('https://schoolos.example.ac.th/users/api/auth/teacher-login', {
   credentials: 'include',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    teacher_code: code,
+    identifier: codeOrEmail,
     password,
     // เปิดจากแอปที่ติดตั้งแล้ว = 'pwa' / เปิดในแท็บเบราว์เซอร์ = 'web' (ค่าเริ่มต้น)
     client: window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
