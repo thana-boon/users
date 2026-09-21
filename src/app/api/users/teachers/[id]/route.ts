@@ -5,8 +5,14 @@ import { db } from '@/db';
 import { teachers } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, notFound, handleError } from '@/lib/http';
-import { encrypt, maskCitizenId, tryDecrypt } from '@/lib/crypto';
+import { encrypt } from '@/lib/crypto';
 import { recordAudit } from '@/lib/audit';
+import {
+  describeLists,
+  readTeacherProfile,
+  replaceTeacherLists,
+  teacherListsSchema,
+} from '@/lib/services/teachers';
 
 export const runtime = 'nodejs';
 
@@ -17,22 +23,15 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
-    const t = await db.query.teachers.findFirst({ where: eq(teachers.id, id) });
-    if (!t) return notFound();
-    const { passwordEncrypted, citizenIdEncrypted, photoBase64, ...core } = t;
-    return ok({
-      ...core,
-      citizenIdMasked: maskCitizenId(tryDecrypt(citizenIdEncrypted)),
-      hasCitizenId: !!citizenIdEncrypted,
-      hasPassword: !!passwordEncrypted,
-      hasPhoto: !!photoBase64,
-    });
+    const profile = await readTeacherProfile(id);
+    if (!profile) return notFound();
+    return ok(profile);
   } catch (err) {
     return handleError(err);
   }
 }
 
-const patchSchema = z.object({
+const patchSchema = teacherListsSchema.extend({
   prefix: z.string().nullable().optional(),
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
@@ -63,13 +62,19 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     });
     if (!t) return notFound();
 
-    const { password, citizenId, ...rest } = body;
+    const { password, citizenId, educations, scoutQualifications, trainings, ...rest } = body;
     const set: Record<string, unknown> = { ...rest };
     if (password) set.passwordEncrypted = encrypt(password);
     // Only rewrite the encrypted citizen id when a non-empty value is supplied.
     if (citizenId && citizenId.trim()) set.citizenIdEncrypted = encrypt(citizenId.trim());
 
-    await db.update(teachers).set(set).where(eq(teachers.id, id));
+    // A PATCH carrying only lists must not run an empty `set` — Drizzle refuses
+    // an update with no columns, and the lists are the change in that case.
+    if (Object.keys(set).length) {
+      await db.update(teachers).set(set).where(eq(teachers.id, id));
+    }
+    const lists = { educations, scoutQualifications, trainings };
+    await replaceTeacherLists(id, lists);
 
     const changedRole = body.role && body.role !== t.role;
     await recordAudit({
@@ -80,7 +85,12 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       targetLabel: `${t.teacherCode} ${t.firstName} ${t.lastName}`,
       detail: changedRole
         ? `เปลี่ยน role: ${t.role} -> ${body.role}`
-        : `แก้ไข: ${Object.keys(body).join(', ')}`,
+        : `แก้ไข: ${[
+            ...Object.keys(rest),
+            ...(password ? ['รหัสผ่าน'] : []),
+            ...(citizenId?.trim() ? ['เลขบัตร ปชช.'] : []),
+            ...describeLists(lists),
+          ].join(', ')}`,
       req,
     });
     return ok({ ok: true });

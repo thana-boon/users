@@ -329,7 +329,7 @@ Endpoint เดียวที่ **ไม่ต้องมี scope** แล�
 
 ### 4.4 `GET /api/public/v1/teachers` — รายชื่อครู
 
-**Query:** `yearId` (ใช้กับฟิลด์ `homerooms`), `subjectGroup`, `role` (`teacher` \| `teacher-admin`), `status` (`active` \| `resigned` \| `all`, default `active`), `q`, `page`, `pageSize` (สูงสุด 200)
+**Query:** `yearId` (ใช้กับฟิลด์ `homerooms`), `subjectGroup`, `role` (`teacher` \| `teacher-admin`), `status` (`active` \| `resigned` \| `all`, default `active`), `q`, `include`, `page`, `pageSize` (สูงสุด 200)
 
 ```json
 {
@@ -364,6 +364,44 @@ Endpoint เดียวที่ **ไม่ต้องมี scope** แล�
 - `q` ค้นได้ทั้งชื่อ/สกุล/`teacherCode`/อีเมล
 - `phone` / `lineId` / `birthDate` เป็นข้อมูลติดต่อในทำเนียบบุคลากร มากับ `teachers:read` เหมือน `email` (null ได้ถ้ายังไม่กรอก) · `birthDate` เป็นข้อความ **พ.ศ. `ว/ด/ปปปป`** เหมือนของนักเรียน — ไม่ใช่ ISO date
 - เลขบัตร ปชช. ยังคงเป็นฟิลด์เดียวที่ต้องใช้ `teachers:pii`
+
+**`?include=qualifications`** — เพิ่ม 3 ลิสต์ต่อครูหนึ่งคน (ไม่ใส่ = ไม่ส่งมาเลย ไม่ใช่ array ว่าง):
+
+```json
+{
+  "educations": [
+    { "degreeLevel": "ปริญญาโท", "degreeName": "ศษ.ม.", "major": "บริหารการศึกษา",
+      "faculty": "ศึกษาศาสตร์", "institution": "มหาวิทยาลัยเชียงใหม่", "graduationYear": "2563" }
+  ],
+  "scoutQualifications": [
+    { "qualification": "ขั้นความรู้ชั้นสูง (A.T.C.)", "scoutType": "ลูกเสือสามัญ",
+      "trainedAt": "ค่ายลูกเสือจังหวัด", "certificateNo": "0123/2566", "issuedDate": "12/05/2566" }
+  ],
+  "trainings": [
+    { "title": "การจัดการเรียนรู้เชิงรุก", "organizer": "สพฐ.", "venue": "ออนไลน์",
+      "hours": "12", "startDate": "01/10/2567", "endDate": "02/10/2567", "certificateNo": "" }
+  ]
+}
+```
+
+- เป็น **opt-in** เพราะเป็นคิวรีเพิ่มอีก 3 ชุด และหนึ่งคนมีได้หลายสิบแถว — งาน sync รายชื่อทั่วไปไม่ต้องใช้
+- ใช้ scope `teachers:read` ธรรมดา ไม่ต้องมี `teachers:pii`: วุฒิและการอบรมเป็น "คุณวุฒิที่โรงเรียนประกาศได้" ไม่ใช่ข้อมูลอ่อนไหวแบบเลขบัตร
+- **ไม่มี `id` ของแถว** และไม่มี `sortOrder` — ทั้งลิสต์ถูกเขียนทับใหม่ทุกครั้งที่บันทึก เลข id จึงไม่คงที่ข้ามสัปดาห์ **ลำดับใน array คือลำดับที่เจ้าตัวจัดไว้** ให้ยึดลำดับแทน id
+- ทุกฟิลด์เป็น string หรือ null รวมทั้ง `hours` (ใบเกียรติบัตรเขียน "12", "12.5" ก็มี) และวันที่เป็น **พ.ศ. `ว/ด/ปปปป`**
+
+---
+
+### 4.4a `GET /api/public/v1/teachers/{id}` — ครูรายคน
+
+Scope `teachers:read` · `{id}` คือ `id` ตัวเลขที่ได้จากรายการ (ถ้ามีแต่ `teacherCode` ให้ใช้ `?q=` ที่รายการ)
+
+คืนฟิลด์เหมือนในรายการ **บวก** `gender` / `religion` / `nationality` / `ethnicity` / `exitDate`
+และ **แนบ `educations` / `scoutQualifications` / `trainings` มาเสมอ** (รายคนไม่มีอะไรต้องชั่งน้ำหนัก
+ต่างจากรายการที่ต้องคูณด้วยจำนวนแถวทั้งหน้า)
+
+- `?yearId=` ใช้กับ `homerooms` เหมือนรายการ
+- ครูที่อยู่ในถังขยะ (`is_archived`) → **404** ไม่ใช่ข้อมูลว่าง
+- เลขบัตร ปชช. ต้องมี `teachers:pii` เพิ่ม และถูก audit ทุกครั้งเหมือนเดิม
 
 ---
 

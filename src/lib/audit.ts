@@ -60,7 +60,11 @@ export interface AuditInput {
     | 'promotion'
     | 'auth'
     | 'api_key'
-    | 'backup';
+    | 'backup'
+    // School-wide switches (/users/settings) — no row id, the label names the
+    // setting. Worth a log line: "ใครเปิดให้นักเรียนแก้ข้อมูลเองตอนไหน" is the
+    // first question when unexpected edits show up.
+    | 'settings';
   targetId?: number | null;
   targetLabel?: string | null;
   detail?: string | null;

@@ -422,6 +422,96 @@ export const teachers = pgTable(
   }),
 );
 
+// -- app_settings — school-wide switches an admin flips in the UI -----
+// A key/value table rather than env vars, because these are decisions the
+// school's admin makes at 8am ("ปิดให้ครูแก้ข้อมูลไปก่อน, กำลังตรวจทะเบียน") and
+// must take effect without a redeploy. One row per setting; an absent row means
+// the code's default, so a fresh database needs no seeding.
+export const appSettings = pgTable('app_settings', {
+  key: varchar('key', { length: 64 }).primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow().$onUpdate(now),
+  /** Who flipped it last — the audit log has the full story, this is the label. */
+  updatedBy: varchar('updated_by', { length: 128 }),
+});
+
+// -- teacher qualifications (วุฒิ/การอบรม) ---------------------------
+// Three child tables rather than three more columns on `teachers`, because a
+// teacher genuinely holds MANY of each: two or three degrees, a scout warrant
+// per ประเภทลูกเสือ, and a training record that grows every term. Each row is
+// whole on its own (ไม่มี FK ไปมหาวิทยาลัย/หน่วยจัด — see subject_groups for why
+// hand-typed names stay TEXT here), so the editor can add and drop rows freely.
+//
+// `sort_order` is the order the teacher arranged them in, not a ranking: the
+// list is saved wholesale (delete + re-insert, see lib/services/teachers.ts),
+// so row ids are not stable and the position has to be stored to survive.
+
+export const teacherEducations = pgTable(
+  'teacher_educations',
+  {
+    id: serial('id').primaryKey(),
+    teacherId: integer('teacher_id')
+      .notNull()
+      .references(() => teachers.id, { onDelete: 'cascade' }),
+    sortOrder: integer('sort_order').notNull().default(0),
+
+    degreeLevel: varchar('degree_level', { length: 64 }), // ระดับ เช่น ปริญญาตรี
+    degreeName: varchar('degree_name', { length: 191 }), // ชื่อวุฒิ เช่น ค.บ. (ภาษาไทย)
+    major: varchar('major', { length: 191 }), // วิชาเอก/สาขาวิชา
+    faculty: varchar('faculty', { length: 191 }), // คณะ
+    institution: varchar('institution', { length: 191 }), // มหาวิทยาลัย/สถาบัน
+    graduationYear: varchar('graduation_year', { length: 16 }), // ปีที่สำเร็จ (พ.ศ.)
+  },
+  (t) => ({
+    teacherIdx: index('teacher_educations_teacher_idx').on(t.teacherId),
+  }),
+);
+
+export const teacherScoutQualifications = pgTable(
+  'teacher_scout_qualifications',
+  {
+    id: serial('id').primaryKey(),
+    teacherId: integer('teacher_id')
+      .notNull()
+      .references(() => teachers.id, { onDelete: 'cascade' }),
+    sortOrder: integer('sort_order').notNull().default(0),
+
+    qualification: varchar('qualification', { length: 128 }), // วุฒิ เช่น A.T.C., วูดแบดจ์ 2 ท่อน
+    scoutType: varchar('scout_type', { length: 64 }), // ประเภท เช่น ลูกเสือสามัญ
+    trainedAt: varchar('trained_at', { length: 191 }), // ค่าย/หน่วยที่จัดการฝึกอบรม
+    certificateNo: varchar('certificate_no', { length: 64 }), // เลขที่วุฒิบัตร / ท.ม.ล.
+    issuedDate: varchar('issued_date', { length: 20 }), // raw Thai dd/mm/BBBB
+  },
+  (t) => ({
+    teacherIdx: index('teacher_scout_quals_teacher_idx').on(t.teacherId),
+  }),
+);
+
+export const teacherTrainings = pgTable(
+  'teacher_trainings',
+  {
+    id: serial('id').primaryKey(),
+    teacherId: integer('teacher_id')
+      .notNull()
+      .references(() => teachers.id, { onDelete: 'cascade' }),
+    sortOrder: integer('sort_order').notNull().default(0),
+
+    title: varchar('title', { length: 255 }), // ชื่อการอบรม
+    organizer: varchar('organizer', { length: 191 }), // หน่วยงานที่จัด — "อบรมจากที่ไหน"
+    venue: varchar('venue', { length: 191 }), // สถานที่อบรม
+    // Kept as text, like gpa/weight elsewhere: the certificates say "12",
+    // "12.5" and "๑๒ ชั่วโมง", and a numeric column would refuse two of those.
+    // Nothing sums this today; when something does, it parses per row.
+    hours: varchar('hours', { length: 16 }), // จำนวนชั่วโมง
+    startDate: varchar('start_date', { length: 20 }), // raw Thai dd/mm/BBBB
+    endDate: varchar('end_date', { length: 20 }),
+    certificateNo: varchar('certificate_no', { length: 64 }), // เลขที่เกียรติบัตร
+  },
+  (t) => ({
+    teacherIdx: index('teacher_trainings_teacher_idx').on(t.teacherId),
+  }),
+);
+
 // -- homeroom_teachers (ครูประจำชั้น per ห้อง per ปีการศึกษา) --------
 // A room may have more than one homeroom teacher (ครูคู่ชั้น), so the natural
 // key is (year, grade, room, teacher) — saving a room replaces its whole
@@ -652,6 +742,38 @@ export const studentsRelations = relations(students, ({ many, one }) => ({
   leaves: many(studentLeaves),
 }));
 
+// A teacher's qualification lists, so `db.query.teachers.findFirst({ with: … })`
+// can fetch the whole profile in one round trip.
+export const teachersRelations = relations(teachers, ({ many }) => ({
+  educations: many(teacherEducations),
+  scoutQualifications: many(teacherScoutQualifications),
+  trainings: many(teacherTrainings),
+}));
+
+export const teacherEducationsRelations = relations(teacherEducations, ({ one }) => ({
+  teacher: one(teachers, {
+    fields: [teacherEducations.teacherId],
+    references: [teachers.id],
+  }),
+}));
+
+export const teacherScoutQualificationsRelations = relations(
+  teacherScoutQualifications,
+  ({ one }) => ({
+    teacher: one(teachers, {
+      fields: [teacherScoutQualifications.teacherId],
+      references: [teachers.id],
+    }),
+  }),
+);
+
+export const teacherTrainingsRelations = relations(teacherTrainings, ({ one }) => ({
+  teacher: one(teachers, {
+    fields: [teacherTrainings.teacherId],
+    references: [teachers.id],
+  }),
+}));
+
 export const studentLeavesRelations = relations(studentLeaves, ({ one }) => ({
   student: one(students, {
     fields: [studentLeaves.studentId],
@@ -724,6 +846,13 @@ export type Student = typeof students.$inferSelect;
 export type NewStudent = typeof students.$inferInsert;
 export type Teacher = typeof teachers.$inferSelect;
 export type NewTeacher = typeof teachers.$inferInsert;
+export type AppSetting = typeof appSettings.$inferSelect;
+export type TeacherEducation = typeof teacherEducations.$inferSelect;
+export type NewTeacherEducation = typeof teacherEducations.$inferInsert;
+export type TeacherScoutQualification = typeof teacherScoutQualifications.$inferSelect;
+export type NewTeacherScoutQualification = typeof teacherScoutQualifications.$inferInsert;
+export type TeacherTraining = typeof teacherTrainings.$inferSelect;
+export type NewTeacherTraining = typeof teacherTrainings.$inferInsert;
 export type Worker = typeof workers.$inferSelect;
 export type NewWorker = typeof workers.$inferInsert;
 export type Enrollment = typeof enrollments.$inferSelect;

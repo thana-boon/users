@@ -45,6 +45,38 @@ export const TEACHER_COLUMNS: string[] = [
 ];
 
 /**
+ * วุฒิการศึกษา / วุฒิลูกเสือ / การอบรม — three EXTRA sheets in the same
+ * teachers workbook, one row per certificate.
+ *
+ * Extra sheets rather than more columns on the main sheet, because a teacher
+ * holds any number of each: "วุฒิ1, วุฒิ2, วุฒิ3" columns would cap the answer
+ * at whatever number was guessed here and leave the fourth degree nowhere to go.
+ * One row per certificate has no cap, sorts and filters in Excel, and is what a
+ * secretary typing from a stack of certificates actually wants.
+ *
+ * `รหัสครูผู้สอน` is the join back to the main sheet. Import replaces a
+ * teacher's whole list for a sheet that mentions them and leaves everyone else
+ * alone — see the import route.
+ */
+export const TEACHER_EDUCATION_SHEET = 'วุฒิการศึกษา';
+export const TEACHER_EDUCATION_COLUMNS: string[] = [
+  'รหัสครูผู้สอน', 'ชื่อ-นามสกุล', 'ระดับการศึกษา', 'ชื่อวุฒิ/หลักสูตร',
+  'วิชาเอก/สาขาวิชา', 'คณะ', 'มหาวิทยาลัย/สถาบัน', 'ปีที่สำเร็จ (พ.ศ.)',
+];
+
+export const TEACHER_SCOUT_SHEET = 'วุฒิลูกเสือ';
+export const TEACHER_SCOUT_COLUMNS: string[] = [
+  'รหัสครูผู้สอน', 'ชื่อ-นามสกุล', 'วุฒิ/ขั้นการฝึกอบรม', 'ประเภทลูกเสือ',
+  'หน่วย/ค่ายที่จัดอบรม', 'เลขที่วุฒิบัตร', 'วันที่ได้รับวุฒิ',
+];
+
+export const TEACHER_TRAINING_SHEET = 'การอบรม';
+export const TEACHER_TRAINING_COLUMNS: string[] = [
+  'รหัสครูผู้สอน', 'ชื่อ-นามสกุล', 'ชื่อการอบรม', 'หน่วยงานที่จัด', 'สถานที่อบรม',
+  'จำนวนชั่วโมง', 'วันที่เริ่ม', 'วันที่สิ้นสุด', 'เลขที่เกียรติบัตร',
+];
+
+/**
  * อาจารย์พิเศษ — a short sheet, because the row IS the whole record: they hold
  * no account, no เลขบัตร ปชช. and no password, so there is nothing here that a
  * spreadsheet left on a shared drive could leak. `กลุ่มสาระ` must match a name
@@ -91,7 +123,22 @@ export async function buildTeacherTemplate(): Promise<Buffer> {
   ws.columns = TEACHER_COLUMNS.map((h) => ({ header: h, key: h, width: 20 }));
   styleHeader(ws, true);
   ws.views = [{ state: 'frozen', ySplit: 1 }];
+  addQualificationSheets(wb);
   return toBuffer(wb);
+}
+
+/** The three qualification sheets, header-only. Shared by template and export. */
+function addQualificationSheets(wb: ExcelJS.Workbook) {
+  for (const [name, cols] of [
+    [TEACHER_EDUCATION_SHEET, TEACHER_EDUCATION_COLUMNS],
+    [TEACHER_SCOUT_SHEET, TEACHER_SCOUT_COLUMNS],
+    [TEACHER_TRAINING_SHEET, TEACHER_TRAINING_COLUMNS],
+  ] as const) {
+    const ws = wb.addWorksheet(name);
+    ws.columns = cols.map((h) => ({ header: h, key: h, width: 24 }));
+    styleHeader(ws, true);
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+  }
 }
 
 export async function buildSpecialTeacherTemplate(): Promise<Buffer> {
@@ -208,6 +255,10 @@ export interface TeacherExportRow {
   passwordEncrypted: string | null;
   gradeTaught: string | null;
   subjectGroup: string | null;
+  /** The three repeatable lists, each exported to its own sheet. */
+  educations?: Record<string, unknown>[];
+  scoutQualifications?: Record<string, unknown>[];
+  trainings?: Record<string, unknown>[];
 }
 
 export async function buildTeacherExport(rows: TeacherExportRow[]): Promise<Buffer> {
@@ -231,6 +282,45 @@ export async function buildTeacherExport(rows: TeacherExportRow[]): Promise<Buff
   });
   styleHeader(ws, true);
   ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+  // One sheet per list. `ชื่อ-นามสกุล` rides along purely so a human reading
+  // the sheet knows whose row this is; the import ignores it and joins on
+  // รหัสครูผู้สอน, which is the only identifier that cannot be ambiguous.
+  addQualificationSheets(wb);
+  const name = (t: TeacherExportRow) => `${t.prefix ?? ''}${t.firstName} ${t.lastName}`.trim();
+
+  const eduWs = wb.getWorksheet(TEACHER_EDUCATION_SHEET)!;
+  for (const t of rows) {
+    for (const e of t.educations ?? []) {
+      eduWs.addRow([
+        t.teacherCode, name(t), val(e.degreeLevel), val(e.degreeName), val(e.major),
+        val(e.faculty), val(e.institution), val(e.graduationYear),
+      ]);
+    }
+  }
+
+  const scoutWs = wb.getWorksheet(TEACHER_SCOUT_SHEET)!;
+  for (const t of rows) {
+    for (const s of t.scoutQualifications ?? []) {
+      scoutWs.addRow([
+        t.teacherCode, name(t), val(s.qualification), val(s.scoutType), val(s.trainedAt),
+        // A certificate number is written as text: they carry leading zeros and
+        // slashes, and Excel would turn "0123/2566" into something else.
+        String(s.certificateNo ?? ''), val(s.issuedDate),
+      ]);
+    }
+  }
+
+  const trainWs = wb.getWorksheet(TEACHER_TRAINING_SHEET)!;
+  for (const t of rows) {
+    for (const r of t.trainings ?? []) {
+      trainWs.addRow([
+        t.teacherCode, name(t), val(r.title), val(r.organizer), val(r.venue),
+        val(r.hours), val(r.startDate), val(r.endDate), String(r.certificateNo ?? ''),
+      ]);
+    }
+  }
+
   return toBuffer(wb);
 }
 
@@ -266,11 +356,9 @@ export async function buildSpecialTeacherExport(rows: SpecialTeacherExportRow[])
 }
 
 // -- Import (read rows back to arrays) -----------------------------
-export async function readSheetRows(buf: Buffer): Promise<unknown[][]> {
-  const wb = new ExcelJS.Workbook();
-  // exceljs typings predate the Buffer<ArrayBufferLike> generic; cast is safe.
-  await wb.xlsx.load(buf as unknown as ExcelJS.Buffer);
-  const ws = wb.worksheets[0];
+
+/** One worksheet's data rows as dense 0-indexed arrays (header row dropped). */
+function sheetRows(ws: ExcelJS.Worksheet): unknown[][] {
   const out: unknown[][] = [];
   ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber === 1) return; // skip header
@@ -286,4 +374,34 @@ export async function readSheetRows(buf: Buffer): Promise<unknown[][]> {
     out.push(arr);
   });
   return out;
+}
+
+export async function readSheetRows(buf: Buffer): Promise<unknown[][]> {
+  const wb = new ExcelJS.Workbook();
+  // exceljs typings predate the Buffer<ArrayBufferLike> generic; cast is safe.
+  await wb.xlsx.load(buf as unknown as ExcelJS.Buffer);
+  return sheetRows(wb.worksheets[0]);
+}
+
+/**
+ * The first sheet AND any named extra sheets, in one load — the teachers
+ * workbook carries วุฒิ/ลูกเสือ/การอบรม beside the roster.
+ *
+ * A requested sheet that is not in the file is simply absent from the result,
+ * and the import treats absent as "do not touch": someone who exports, edits
+ * the roster and re-imports must not have every teacher's วุฒิ deleted because
+ * their copy of the file had no such tab.
+ */
+export async function readTeacherWorkbook(
+  buf: Buffer,
+  extraSheets: readonly string[],
+): Promise<{ main: unknown[][]; extra: Record<string, unknown[][]> }> {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf as unknown as ExcelJS.Buffer);
+  const extra: Record<string, unknown[][]> = {};
+  for (const name of extraSheets) {
+    const ws = wb.getWorksheet(name);
+    if (ws) extra[name] = sheetRows(ws);
+  }
+  return { main: sheetRows(wb.worksheets[0]), extra };
 }

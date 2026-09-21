@@ -14,6 +14,11 @@ import { Combo } from '@/components/Combo';
 import { SubjectGroupSelect } from '@/components/SubjectGroupSelect';
 import { DateField } from '@/components/DateField';
 import {
+  EMPTY_LISTS,
+  QualificationSections,
+  type QualificationLists,
+} from '@/components/QualificationSections';
+import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
   STAFF_PREFIX_OPTIONS,
 } from '@/lib/options';
@@ -31,6 +36,8 @@ interface Detail {
   exitDate: string | null; exitReason: string | null; exitAcademicYearId: number | null;
 }
 
+type DetailWithLists = Detail & Partial<QualificationLists>;
+
 export default function TeacherDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -41,9 +48,22 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
   const [form, setForm] = useState<Partial<Detail> & { password?: string; citizenId?: string }>({});
   const [busy, setBusy] = useState(false);
   const [showResign, setShowResign] = useState(false);
+  // The three repeatable lists, held apart from `form` because they are arrays
+  // the RepeatList editor replaces wholesale rather than fields it sets.
+  const [lists, setLists] = useState<QualificationLists>(EMPTY_LISTS);
 
   function load() {
-    api<Detail>(`/api/users/teachers/${id}`).then((x) => { setD(x); setForm(x); }).catch((e) => setError(e.message));
+    api<DetailWithLists>(`/api/users/teachers/${id}`)
+      .then((x) => {
+        setD(x);
+        setForm(x);
+        setLists({
+          educations: x.educations ?? [],
+          scoutQualifications: x.scoutQualifications ?? [],
+          trainings: x.trainings ?? [],
+        });
+      })
+      .catch((e) => setError(e.message));
   }
   useEffect(load, [id]);
 
@@ -67,6 +87,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
         gender: form.gender, religion: form.religion,
         nationality: form.nationality, ethnicity: form.ethnicity,
         role: form.role,
+        ...lists,
       };
       if (form.password) payload.password = form.password;
       if (form.citizenId && form.citizenId.trim()) payload.citizenId = form.citizenId.trim();
@@ -201,6 +222,20 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
             <p className="form-hint">พิมพ์เลขใหม่แล้วกด “บันทึก” ด้านบน — ระบบจะเข้ารหัสและบันทึกการแก้ไข</p>
           </div>
         </div>
+      </div>
+
+      {/* วุฒิการศึกษา / วุฒิลูกเสือ / การอบรม — the same editor the teacher gets
+          on /users/me. Saved by the same “บันทึก” as the fields above, so the
+          button is repeated at the bottom rather than the page having two. */}
+      <QualificationSections lists={lists} onChange={setLists} />
+
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn btn-primary btn-sm" onClick={save} disabled={busy}>
+          {busy ? 'กำลังบันทึก…' : 'บันทึก'}
+        </button>
+        <span className="muted" style={{ fontSize: 12 }}>
+          บันทึกทั้งข้อมูลด้านบนและวุฒิ/การอบรมทั้งหมดพร้อมกัน
+        </span>
       </div>
 
       {showResign && (

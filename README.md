@@ -101,6 +101,11 @@ seed จะตั้ง `T00116` + `T00241` เป็น `teacher-admin` ให�
 Normalize: identity อยู่ใน `students` ครั้งเดียว, ชั้น/ห้องอยู่ต่อปีการศึกษาใน `enrollments`
 (unique `student_id + academic_year_id`). ตารางลูก: `student_addresses` (4 ประเภท), `guardians`
 (guardian/father/mother), `previous_schools`, `student_health`, `teachers`, `audit_logs`.
+ฝั่งครูมีตารางลูกที่ "เพิ่มได้ไม่จำกัด" อีก 3 ตาราง (ครูคนหนึ่งจบหลายใบ / มีหลายวุฒิ / อบรมทุกเทอม):
+`teacher_educations` (วุฒิการศึกษา — ระดับ/ชื่อวุฒิ/วิชาเอก/คณะ/สถาบัน/ปีที่จบ),
+`teacher_scout_qualifications` (วุฒิทางลูกเสือ), `teacher_trainings` (การผ่านอบรม — ชื่อ/หน่วยงานที่จัด/ชั่วโมง).
+ทั้งสามบันทึกแบบ **แทนทั้งชุด** (ลบแล้วใส่ใหม่ใน transaction เดียว) จึงเก็บ `sort_order` ไว้เอง —
+ดู `src/lib/services/teachers.ts`.
 `academic_years`/`enrollments` ใช้ **soft-delete** (`is_archived`) — ไม่ hard-delete เพื่อคง `enrollment_id`
 ที่ระบบปลายน้ำ (เช่น ScoreBridge) อ้างถึง.
 
@@ -124,6 +129,22 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
   ของ service นั้นเอาไปแลกตัวตนที่ `POST /api/public/v1/auth/handoff/redeem` ด้วย API key
   ที่มี scope `auth:handoff` + ระบุ audience ตรงกัน (`src/lib/handoff.ts`, `docs/API.md` ข้อ 4.11).
 - Middleware (edge) verify token แบบ **fail-closed** และรับเฉพาะ `teacher-admin` บน `/users/**` และ `/api/users/**`.
+- **ข้อยกเว้นเดียว — หน้าข้อมูลของตัวเอง**: `/users/me` และ `/api/users/me/**` ขอแค่ session ที่ล็อกอินอยู่
+  (ครู **หรือ** นักเรียน ไม่ต้องมี `users:write`) เพราะ "เจ้าของระเบียน" คือสิทธิ์ในตัวมันเอง และทุก route
+  หาแถวจาก `sub` ในโทเคน **ไม่มี id ใน URL** ให้ชี้ไปที่คนอื่นได้. ใครก็ตามที่ล็อกอินแล้วเปิด `/users/*`
+  แต่ไม่มีสิทธิ์แอดมิน จะถูกพาไป `/users/me` แทนหน้า login.
+  - หน้าเดียวกันแต่แยกฟอร์มตาม role ที่ **เซิร์ฟเวอร์** ตอบมา (`audience` จาก `GET /api/users/me`)
+  - ฟิลด์ที่แก้เองได้/ต้องให้แอดมินแก้ อยู่ที่เดียว: `SELF_EDITABLE` ใน `src/lib/services/teachers.ts`
+    และ `STUDENT_SELF_EDITABLE` ใน `src/lib/services/student-self.ts` (API บังคับด้วย zod `.strict()`
+    และ UI อ่านไปตัดสินใจว่าจะ disable ช่องไหน) — ครู: เบอร์/ไลน์/เพศ-ศาสนา-สัญชาติ-เชื้อชาติ/รูป/วุฒิ/อบรม ·
+    นักเรียน: เบอร์/ชื่อเล่น/**ข้อมูลสุขภาพ**/**ที่อยู่ปัจจุบัน+ผู้ติดต่อฉุกเฉิน**
+  - **สวิตช์เปิด-ปิดรายกลุ่ม** ที่ `/users/settings` (ตาราง `app_settings`, ดู `src/lib/services/settings.ts`):
+    ปิดแล้ว GET ยังอ่านได้ (หน้าจะขึ้นเหตุผล) แต่ PATCH ตอบ 403. ค่าเริ่มต้น: ครู **เปิด** นักเรียน **ปิด**
+  - เปลี่ยนรหัสผ่านตัวเอง (`POST /api/users/me/password`, ต้องยืนยันรหัสเดิม) **ไม่ขึ้นกับสวิตช์** —
+    มันเป็นมาตรการความปลอดภัย ไม่ใช่การแก้ระเบียน
+  - คนที่ลาออก/จบการศึกษาแล้ว: ดูได้ แก้ไม่ได้ ไม่ว่าสวิตช์จะเปิดหรือปิด
+  - ครูที่เป็น `teacher-admin` สลับโหมดได้สองทาง: เมนูผู้ใช้ → "ข้อมูลของฉัน (โหมดครู)" และปุ่ม
+    "สลับเป็นโหมดผู้ดูแล" บนหัวหน้า `/users/me`
 - Login API สาธารณะสำหรับนักเรียน/ครู (`/api/auth/{student,teacher}-login`) — decrypt แล้วเทียบรหัสผ่าน,
   มี rate-limit + lockout, ออก JWT ตาม role จริง. token `teacher`/`student` ผ่าน login ได้แต่ถูกโมดูลนี้ปฏิเสธ.
   - **Lockout นับแยกราย IP** (`LOGIN_LOCKOUT_MAX_FAILS`, ค่าเริ่มต้น 5) — ใส่ผิดครบจำนวนจะล็อกเฉพาะ
@@ -172,7 +193,9 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 /users/students                รายการ/ค้นหา/กรอง + เพิ่ม/นำเข้า/ส่งออก
 /users/students/[id]           รายละเอียด/แก้ไข/reveal ข้อมูลอ่อนไหว
 /users/teachers                รายการครู + จัดการ role
-/users/teachers/[id]           รายละเอียด/แก้ไข/เปลี่ยน role/reveal
+/users/teachers/[id]           รายละเอียด/แก้ไข/เปลี่ยน role/reveal + วุฒิ/ลูกเสือ/การอบรม
+/users/me                      ข้อมูลของฉัน — ครูและนักเรียนทุกคนเข้าได้ (ไม่ต้องเป็นแอดมิน)
+/users/settings                ตั้งค่าระบบ — เปิด-ปิดให้ครู/นักเรียนแก้ข้อมูลตนเอง
 /users/academic-years          ตั้งปีปัจจุบัน / เก็บถาวร (soft-delete)
 /users/audit                   บันทึกการใช้งาน (audit log)
 /users/backups                 สำรอง/กู้คืนข้อมูลทั้งฐานข้อมูล
@@ -182,9 +205,13 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 /api/users/backups/{,upload,[file],[file]/restore}
 /api/users/students/{export,template,import,[id],[id]/reveal}
 /api/users/teachers/{export,template,import,[id],[id]/reveal}
+/api/users/me                  ระเบียนของตัวเอง (GET/PATCH) — ครูทุกคน
+/api/users/me/{photo,password} รูปของตัวเอง / เปลี่ยนรหัสผ่าน (ต้องยืนยันรหัสผ่านเดิม)
+/api/users/settings            สวิตช์ระดับโรงเรียน (แอดมินเท่านั้น)
 
 /api/public/v1/{me,students,teachers,academic-years,homerooms,auth/verify}
 /api/public/v1/students/[id]   รายคน + ประวัติทุกปี (ไม่ผูกกับปีการศึกษา)
+/api/public/v1/teachers/[id]   ครูรายคน + วุฒิ/ลูกเสือ/การอบรม
 /api/public/v1/{students,teachers}/{[id]/photo,photos}
 ```
 
@@ -201,6 +228,13 @@ Normalize: identity อยู่ใน `students` ครั้งเดียว
 - ครู: `Password` ใน CSV เป็น plain text → **encrypt ตอน import**; นำเข้าใหม่เป็น `role=teacher` เสมอ
   (การเลื่อนเป็น teacher-admin ทำผ่าน UI). หมายเหตุ: สคริปต์ `npm run seed:teachers` ตั้ง
   `T00116` และ `T00241` เป็น `teacher-admin` ให้อัตโนมัติ (ที่เหลือเป็น `teacher`).
+- **ไฟล์ครูมี 4 ชีต**: `teachers` (11 คอลัมน์เดิม) + `วุฒิการศึกษา` / `วุฒิลูกเสือ` / `การอบรม`
+  ชีตละ **1 แถวต่อ 1 ใบ** ต่อกับชีตหลักด้วยคอลัมน์ `รหัสครูผู้สอน` (คอลัมน์ `ชื่อ-นามสกุล` มีไว้ให้คนอ่าน
+  ระบบไม่ใช้ตอน import). เลือกทำเป็นชีตแยกเพราะครูหนึ่งคนมีได้ไม่จำกัด — ถ้าทำเป็นคอลัมน์ `วุฒิ1/วุฒิ2`
+  ใบที่เกินจำนวนที่เดาไว้จะไม่มีที่ลง.
+  - **กติกาตอน import**: ชีตที่ **ไม่มี** ในไฟล์ = ไม่แตะอะไรเลย · ครูที่ **มีชื่อ** ในชีต = แทนที่ลิสต์นั้นทั้งชุด
+    (export → แก้เบอร์โทรในไฟล์ที่ไม่มีชีตพวกนี้ → re-import จึงไม่ลบวุฒิของใคร).
+  - แถวที่ชี้ไปยังรหัสครูที่ไม่มีทั้งในไฟล์และในระบบ ถูกรายงานเป็น error รายแถว (พร้อมชื่อชีต) ไม่เงียบหาย.
 
 ---
 

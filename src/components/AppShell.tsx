@@ -27,6 +27,7 @@ import {
   IconDatabase,
   IconSpecialTeacher,
   IconSubjectGroup,
+  IconSettings,
 } from './Icons';
 
 interface SessionInfo {
@@ -131,6 +132,19 @@ function UserMenu({ session, onLogout }: { session: SessionInfo; onLogout: () =>
             <div style={{ fontWeight: 600 }}>{name}</div>
             <div className="muted mono" style={{ fontSize: 11 }}>{session.role}</div>
           </div>
+          {/* The other half of the mode switch (/users/me has the way back).
+              Everyone who can see this shell is an admin, so it is always
+              offered: an admin is a teacher too, with a record of their own. */}
+          {/* A plain <a>, not <Link>: /users/me is served by a rewrite onto a
+              different root layout (src/app/me), so switching mode is a real
+              page load rather than a client-side navigation inside this shell. */}
+          <a
+            href="/users/me"
+            role="menuitem"
+            className="user-menu-item user-menu-item-plain"
+          >
+            <IconTeachers width={16} height={16} /> ข้อมูลของฉัน (โหมดครู)
+          </a>
           <button type="button" role="menuitem" className="user-menu-item" onClick={onLogout}>
             <IconLogout width={16} height={16} /> ออกจากระบบ
           </button>
@@ -175,6 +189,7 @@ const NAV: NavNode[] = [
   },
   { href: '/users/academic-years', label: 'ปีการศึกษา', Icon: IconCalendar },
   { href: '/users/archive', label: 'ถังขยะ', Icon: IconTrash },
+  { href: '/users/settings', label: 'ตั้งค่าระบบ', Icon: IconSettings },
   { href: '/users/api-manager', label: 'API Manager', Icon: IconKey },
   { href: '/users/backups', label: 'สำรอง/กู้คืนข้อมูล', Icon: IconDatabase },
   { href: '/users/audit', label: 'บันทึกการใช้งาน', Icon: IconAudit },
@@ -369,6 +384,10 @@ export function AppShell({
           transition: background var(--transition-fast);
         }
         .user-menu-item:hover { background: var(--color-error-bg); }
+        /* The menu's non-destructive entry: same row, ordinary text colour, so
+           ออกจากระบบ stays the only red thing in the menu. */
+        .user-menu-item-plain { color: var(--skdw-dark); }
+        .user-menu-item-plain:hover { background: var(--skdw-bg); }
         .bottom-nav { display: none; }
         @media (max-width: 900px) {
           .sidebar-desktop { display: none; }

@@ -22,12 +22,18 @@ const nextConfig = {
   serverExternalPackages: ['exceljs', 'mysql2'],
   eslint: { ignoreDuringBuilds: true },
   async rewrites() {
-    // The gateway only routes /users/* to this app, so the login page must be
-    // reachable UNDER /users. The page itself stays at src/app/login — moving
-    // it under src/app/users/ would put it inside the auth-redirecting users
-    // layout (infinite loop). This alias serves it at /users/login.
-    const loginAlias = [{ source: '/users/login', destination: '/login' }];
-    if (!basePath) return loginAlias;
+    // The gateway only routes /users/* to this app, so these pages must be
+    // reachable UNDER /users while living OUTSIDE src/app/users:
+    //   /users/login -> src/app/login. Inside src/app/users it would sit under
+    //     the auth-redirecting users layout (infinite loop).
+    //   /users/me    -> src/app/me. Same reason, different gate: the teacher's
+    //     own page is for any signed-in teacher, and src/app/users/layout.tsx
+    //     redirects anyone without `users:write` away before it can render.
+    const aliases = [
+      { source: '/users/login', destination: '/login' },
+      { source: '/users/me', destination: '/me' },
+    ];
+    if (!basePath) return aliases;
     return {
       // Un-prefix asset/API/public-file requests that arrive via the gateway.
       // beforeFiles = wins over the filesystem, and middleware has already
@@ -38,11 +44,17 @@ const nextConfig = {
         { source: `${basePath}/icon.png`, destination: '/icon.png' },
         { source: `${basePath}/mediapipe/:path*`, destination: '/mediapipe/:path*' },
       ],
-      afterFiles: loginAlias,
+      afterFiles: aliases,
     };
   },
   async redirects() {
-    return [{ source: '/login', destination: '/users/login', permanent: false }];
+    // The canonical paths are the /users/* ones (that is all the gateway
+    // serves); the bare ones exist only because the files do. A rewrite does
+    // not re-run redirects, so /users/me -> /me above is unaffected.
+    return [
+      { source: '/login', destination: '/users/login', permanent: false },
+      { source: '/me', destination: '/users/me', permanent: false },
+    ];
   },
 };
 

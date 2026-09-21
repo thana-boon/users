@@ -4,7 +4,16 @@ import { useState } from 'react';
 import { withBase } from '@/lib/client';
 import { useToast } from './Toast';
 
-interface Issue { row: number; studentCode?: string; teacherCode?: string; specialTeacherCode?: string; errors: string[] }
+interface Issue {
+  row: number;
+  studentCode?: string;
+  teacherCode?: string;
+  specialTeacherCode?: string;
+  errors: string[];
+  /** Set when the row is on one of the teachers workbook's extra sheets —
+   *  without it, "แถว 4" is ambiguous across four tabs. */
+  sheet?: string;
+}
 interface Report {
   totalRows: number; valid: number; invalid: number;
   committed?: number; created?: number; updated?: number; issues: Issue[];
@@ -22,7 +31,10 @@ const KIND_LABEL: Record<ImportKind, string> = {
 /** What the ตรวจสอบ step looks for, per sheet — shown under the file picker. */
 const KIND_HINT: Record<ImportKind, string> = {
   students: 'ระบบจะตรวจสอบก่อน (เลขบัตร 13 หลัก, รหัสซ้ำ) และแสดงแถวที่ผิดก่อนบันทึกจริง',
-  teachers: 'ระบบจะตรวจสอบก่อน (เลขบัตร 13 หลัก, รหัสซ้ำ) และแสดงแถวที่ผิดก่อนบันทึกจริง',
+  teachers:
+    'ระบบจะตรวจสอบก่อน (เลขบัตร 13 หลัก, รหัสซ้ำ) และแสดงแถวที่ผิดก่อนบันทึกจริง — ' +
+    'ถ้าไฟล์มีชีต “วุฒิการศึกษา/วุฒิลูกเสือ/การอบรม” ระบบจะแทนที่รายการของครูที่มีชื่ออยู่ในชีตนั้น ' +
+    'ครูที่ไม่มีชื่อในชีต (หรือไฟล์ที่ไม่มีชีตนั้น) ข้อมูลเดิมจะไม่ถูกแตะต้อง',
   'special-teachers':
     'ระบบจะตรวจสอบก่อน (รหัสซ้ำ, กลุ่มสาระต้องตรงกับรายการในหน้ากลุ่มสาระ) และแสดงแถวที่ผิดก่อนบันทึกจริง',
 };
@@ -102,7 +114,10 @@ export function ImportDialog({
                     <tbody>
                       {report.issues.map((it, i) => (
                         <tr key={i}>
-                          <td className="mono">{it.row}</td>
+                          <td className="mono" style={{ whiteSpace: 'nowrap' }}>
+                            {it.sheet ? <span className="muted">{it.sheet} · </span> : null}
+                            {it.row}
+                          </td>
                           <td className="mono">{it.studentCode ?? it.teacherCode ?? it.specialTeacherCode ?? '-'}</td>
                           <td style={{ color: 'var(--color-error)', fontSize: 13 }}>{it.errors.join(', ')}</td>
                         </tr>

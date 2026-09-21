@@ -1,0 +1,72 @@
+import type { NextRequest } from 'next/server';
+import { z } from 'zod';
+import { requireTeacherAdmin } from '@/lib/rbac';
+import { ok, handleError } from '@/lib/http';
+import { recordAudit } from '@/lib/audit';
+import { readSelfEditSettings, setSelfEdit } from '@/lib/services/settings';
+
+export const runtime = 'nodejs';
+
+/**
+ * GET   /api/users/settings — the school-wide switches.
+ * PATCH /api/users/settings — flip one or both.
+ *
+ * Admin-only, like the rest of /api/users. The switches themselves are read by
+ * the self-service routes through services/settings.ts, which caches them for a
+ * few seconds; flipping one clears that cache, so the admin who flipped it sees
+ * the effect on their next request rather than on the next TTL.
+ */
+
+const patchSchema = z
+  .object({
+    selfEditTeachers: z.boolean().optional(),
+    selfEditStudents: z.boolean().optional(),
+  })
+  .strict()
+  .refine((b) => b.selfEditTeachers !== undefined || b.selfEditStudents !== undefined, {
+    message: 'ต้องระบุอย่างน้อยหนึ่งค่า',
+  });
+
+export async function GET(req: NextRequest) {
+  const guard = await requireTeacherAdmin(req);
+  if (!guard.ok) return guard.response;
+  try {
+    const selfEdit = await readSelfEditSettings();
+    return ok({ selfEditTeachers: selfEdit.teacher, selfEditStudents: selfEdit.student });
+  } catch (err) {
+    return handleError(err);
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  const guard = await requireTeacherAdmin(req);
+  if (!guard.ok) return guard.response;
+  try {
+    const body = patchSchema.parse(await req.json());
+    const actor = guard.session.name ?? guard.session.sub;
+    const changed: string[] = [];
+
+    if (body.selfEditTeachers !== undefined) {
+      await setSelfEdit('teacher', body.selfEditTeachers, actor);
+      changed.push(`ครูแก้ข้อมูลตนเอง: ${body.selfEditTeachers ? 'เปิด' : 'ปิด'}`);
+    }
+    if (body.selfEditStudents !== undefined) {
+      await setSelfEdit('student', body.selfEditStudents, actor);
+      changed.push(`นักเรียนแก้ข้อมูลตนเอง: ${body.selfEditStudents ? 'เปิด' : 'ปิด'}`);
+    }
+
+    await recordAudit({
+      session: guard.session,
+      action: 'update',
+      targetType: 'settings',
+      targetLabel: 'ตั้งค่าระบบ',
+      detail: changed.join(', '),
+      req,
+    });
+
+    const selfEdit = await readSelfEditSettings();
+    return ok({ selfEditTeachers: selfEdit.teacher, selfEditStudents: selfEdit.student });
+  } catch (err) {
+    return handleError(err);
+  }
+}

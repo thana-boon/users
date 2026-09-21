@@ -7,6 +7,11 @@ import { ok, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { tryDecrypt } from '@/lib/crypto';
 import { resolveActiveYearId } from '@/lib/services/students';
+import {
+  noQualifications,
+  readQualificationsFor,
+  type PublicQualifications,
+} from '@/lib/services/teachers';
 
 export const runtime = 'nodejs';
 
@@ -26,7 +31,14 @@ export const runtime = 'nodejs';
  * the requested year (`?yearId=`, default: active year). Additive field; the
  * room-centric view lives at /api/public/v1/homerooms.
  *
- * Query: ?subjectGroup= ?role= ?status= ?q= ?yearId= ?page= ?pageSize= (max 200)
+ * `?include=qualifications` adds วุฒิการศึกษา / วุฒิลูกเสือ / การผ่านอบรม to each
+ * row. Opt-in rather than always on: they are three extra queries and can be a
+ * dozen rows per teacher, and the common "มาดึงรายชื่อไป" integration wants
+ * neither. They ride the plain `teachers:read` scope — a professional
+ * qualification is a credential the school publishes, not personal data like
+ * เลขบัตร ปชช. For one teacher with the lists always included, see ./[id].
+ *
+ * Query: ?subjectGroup= ?role= ?status= ?q= ?yearId= ?include= ?page= ?pageSize= (max 200)
  */
 export async function GET(req: NextRequest) {
   const guard = await requireApiScope(req, 'teachers:read');
@@ -41,6 +53,12 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, Number(sp.get('page') ?? '1') || 1);
     const pageSize = Math.min(200, Math.max(1, Number(sp.get('pageSize') ?? '50') || 50));
     const yearId = sp.get('yearId') ? Number(sp.get('yearId')) : await resolveActiveYearId();
+    // Comma-separated, so more opt-in blocks can be added later without a new
+    // parameter each time.
+    const include = new Set(
+      (sp.get('include') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+    );
+    const withQualifications = include.has('qualifications');
 
     const withPii = actorHasScope(guard.actor, 'teachers:pii');
 
@@ -119,6 +137,11 @@ export async function GET(req: NextRequest) {
       homeroomsOf.set(a.teacherId, list);
     }
 
+    // Three more queries, only when asked for — see ?include= above.
+    const quals = withQualifications
+      ? await readQualificationsFor(ids)
+      : new Map<number, PublicQualifications>();
+
     const data = rows.map((r) => {
       const { citizenIdEncrypted, ...rest } = r;
       return {
@@ -127,6 +150,7 @@ export async function GET(req: NextRequest) {
         homerooms: homeroomsOf.get(r.id) ?? [],
         photoUrl: r.hasPhoto ? `/api/public/v1/teachers/${r.id}/photo` : null,
         ...(withPii ? { citizenId: tryDecrypt(citizenIdEncrypted) } : {}),
+        ...(withQualifications ? (quals.get(r.id) ?? noQualifications()) : {}),
       };
     });
 

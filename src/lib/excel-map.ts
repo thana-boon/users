@@ -330,3 +330,100 @@ export function parseSpecialTeacherRow(r: unknown[]): ParsedSpecialTeacher | nul
     phone: g(r, 6),
   };
 }
+
+// -- ครู: วุฒิการศึกษา / วุฒิลูกเสือ / การอบรม (extra sheets) ---------
+/**
+ * One row per certificate, joined back to the roster by รหัสครูผู้สอน (column
+ * 0). Column 1 is ชื่อ-นามสกุล, written by the export for the human reading the
+ * sheet and deliberately ignored here — a name cannot identify a teacher
+ * unambiguously and the code always can.
+ *
+ * A row whose only filled cell is the teacher code carries no certificate, so
+ * it is skipped rather than stored as an empty record. That is what lets a
+ * secretary leave a spare blank row under each teacher while typing.
+ */
+
+export interface ParsedQualificationRow<T> {
+  teacherCode: string;
+  row: T;
+}
+
+/** True when every value but the teacher code and name is blank. */
+function allBlank(row: Record<string, string | null>): boolean {
+  return Object.values(row).every((v) => v === null || v === '');
+}
+
+function qualRow<T extends Record<string, string | null>>(
+  r: unknown[],
+  build: () => T,
+): ParsedQualificationRow<T> | null {
+  const teacherCode = cleanStr(r[0]).trim();
+  if (!teacherCode) return null;
+  const row = build();
+  if (allBlank(row)) return null;
+  return { teacherCode, row };
+}
+
+export interface ParsedEducation {
+  degreeLevel: string | null;
+  degreeName: string | null;
+  major: string | null;
+  faculty: string | null;
+  institution: string | null;
+  graduationYear: string | null;
+}
+
+export function parseTeacherEducationRow(r: unknown[]): ParsedQualificationRow<ParsedEducation> | null {
+  // 0:รหัสครู 1:ชื่อ-นามสกุล 2:ระดับ 3:ชื่อวุฒิ 4:วิชาเอก 5:คณะ 6:สถาบัน 7:ปีที่สำเร็จ
+  return qualRow(r, () => ({
+    degreeLevel: g(r, 2),
+    degreeName: g(r, 3),
+    major: g(r, 4),
+    faculty: g(r, 5),
+    institution: g(r, 6),
+    graduationYear: g(r, 7),
+  }));
+}
+
+export interface ParsedScoutQualification {
+  qualification: string | null;
+  scoutType: string | null;
+  trainedAt: string | null;
+  certificateNo: string | null;
+  issuedDate: string | null;
+}
+
+export function parseTeacherScoutRow(r: unknown[]): ParsedQualificationRow<ParsedScoutQualification> | null {
+  // 0:รหัสครู 1:ชื่อ-นามสกุล 2:วุฒิ 3:ประเภท 4:หน่วย/ค่าย 5:เลขที่วุฒิบัตร 6:วันที่ได้รับ
+  return qualRow(r, () => ({
+    qualification: g(r, 2),
+    scoutType: g(r, 3),
+    trainedAt: g(r, 4),
+    certificateNo: g(r, 5),
+    issuedDate: g(r, 6),
+  }));
+}
+
+export interface ParsedTraining {
+  title: string | null;
+  organizer: string | null;
+  venue: string | null;
+  hours: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  certificateNo: string | null;
+}
+
+export function parseTeacherTrainingRow(r: unknown[]): ParsedQualificationRow<ParsedTraining> | null {
+  // 0:รหัสครู 1:ชื่อ-นามสกุล 2:ชื่อการอบรม 3:หน่วยงาน 4:สถานที่ 5:ชั่วโมง
+  // 6:วันที่เริ่ม 7:วันที่สิ้นสุด 8:เลขที่เกียรติบัตร
+  return qualRow(r, () => ({
+    title: g(r, 2),
+    organizer: g(r, 3),
+    venue: g(r, 4),
+    hours: g(r, 5),
+    startDate: g(r, 6),
+    endDate: g(r, 7),
+    certificateNo: g(r, 8),
+  }));
+}

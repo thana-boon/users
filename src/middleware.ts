@@ -6,6 +6,7 @@ import {
   renewSession,
   setSessionCookies,
   USERS_WRITE,
+  type ResolvedSession,
 } from '@/lib/jwt';
 import { platformHomeUrl, publicOrigin } from '@/lib/platform';
 
@@ -15,6 +16,10 @@ import { platformHomeUrl, publicOrigin } from '@/lib/platform';
  * Protected surfaces (this module needs the `users:write` permission):
  *   /users/**            - UI
  *   /api/users/**        - REST API
+ *
+ * Self-service (any valid session — teacher OR student, no `users:write`):
+ *   /users/me            - own record (rewritten to src/app/me)
+ *   /api/users/me/**     - own record, own photo, own password
  *
  * Public:
  *   /api/auth/**         - login endpoints
@@ -49,11 +54,24 @@ export async function middleware(req: NextRequest) {
     if (path.startsWith(`${base}/api/`)) path = path.slice(base.length);
   }
 
+  // The self-service surface: the signed-in person's own record, teacher or
+  // student. Under /users like everything else (the gateway routes nothing else
+  // here), but gated on merely being signed in rather than on `users:write` —
+  // the record IS the authorisation, and the routes take no id, so nobody can
+  // aim them at anyone else. Matched exactly, or as a path segment, so
+  // /api/users/meta (an admin-only route that merely starts with the same
+  // letters) stays protected.
+  const isSelfService =
+    path === '/users/me' ||
+    path === '/api/users/me' ||
+    path.startsWith('/api/users/me/');
+
   const isProtectedUi =
     (path === '/users' || path.startsWith('/users/')) &&
-    path !== '/users/login'; // public: the login page lives under /users too
-  const isProtectedApi = path.startsWith('/api/users');
-  if (!isProtectedUi && !isProtectedApi) return NextResponse.next();
+    path !== '/users/login' && // public: the login page lives under /users too
+    !isSelfService;
+  const isProtectedApi = path.startsWith('/api/users') && !isSelfService;
+  if (!isProtectedUi && !isProtectedApi && !isSelfService) return NextResponse.next();
 
   // Either cookie counts, so a user who signed in through another SchoolOS
   // service arrives here already authenticated instead of meeting a second
@@ -62,6 +80,18 @@ export async function middleware(req: NextRequest) {
     req.cookies,
     req.headers.get('authorization'),
   );
+
+  if (isSelfService) {
+    // Both audiences: a teacher's staff record and a student's own record are
+    // the same page, told apart by the role inside the token.
+    if (resolved) return upkeep(resolved);
+    if (path.startsWith('/api/')) {
+      return NextResponse.json({ error: 'ต้องเข้าสู่ระบบก่อนใช้งาน' }, { status: 401 });
+    }
+    // Nobody is signed in: out to the portal, which is the one place a sign-in
+    // that works for the whole platform lives.
+    return NextResponse.redirect(platformHomeUrl({ next: pathname }));
+  }
 
   if (!resolved || !hasPermission(resolved.session, USERS_WRITE)) {
     if (isProtectedApi) {
@@ -82,20 +112,34 @@ export async function middleware(req: NextRequest) {
 
     // Signed in, but this account cannot enter the module. NOT the portal: that
     // answers a question they have already answered, and would leave them
-    // clicking back and forth with nothing telling them why. The login page says
-    // who they are signed in as and offers an admin sign-in instead.
+    // clicking back and forth with nothing telling them why.
     //
     // Absolute, and NOT off req.nextUrl: behind the gateway this app thinks it
     // lives at https://0.0.0.0:3002 (its bind address), which is what broke the
     // logout redirect — see publicOrigin(). Middleware cannot answer with a bare
     // path the way that route now does; Next re-parses the Location header with
     // no base and throws on a relative one.
-    const url = new URL('/users/login', publicOrigin(req.headers, req.nextUrl.origin));
-    url.searchParams.set('next', pathname);
-    url.searchParams.set('denied', '1');
-    return NextResponse.redirect(url);
+    const origin = publicOrigin(req.headers, req.nextUrl.origin);
+
+    // An ordinary teacher — or a student — is not a rejected admin: there IS a
+    // page in this app for them, and it is the one they came to find. Send them
+    // to their own record rather than to a login form that can only tell them
+    // no. (No loop: /users/me is the self-service branch above, which every
+    // signed-in session passes.)
+    return NextResponse.redirect(new URL('/users/me', origin));
   }
 
+  return upkeep(resolved);
+}
+
+/**
+ * The half of every allowed request that is about the session rather than the
+ * route: re-home an SSO token in this app's own cookies, and slide the idle
+ * window. Shared by the admin gate and the self-service one so a teacher
+ * working only in their own page keeps their session alive exactly as an admin
+ * does.
+ */
+async function upkeep(resolved: ResolvedSession) {
   const { session, token, source } = resolved;
 
   const res = NextResponse.next();

@@ -126,6 +126,50 @@ export const EXIT_REASON_OPTIONS = [
   'อื่น ๆ',
 ] as const;
 
+/**
+ * ระดับวุฒิการศึกษา — for the repeatable วุฒิการศึกษา list on a teacher
+ * (teacher_educations.degree_level). A teacher with several degrees files one
+ * row per certificate, so this is the level of THAT certificate, not of the
+ * person.
+ */
+export const DEGREE_LEVEL_OPTIONS = [
+  'ปริญญาเอก',
+  'ปริญญาโท',
+  'ประกาศนียบัตรบัณฑิต',
+  'ปริญญาตรี',
+  'อนุปริญญา',
+  'ปวส.',
+  'ปวช.',
+  'มัธยมศึกษาตอนปลาย',
+] as const;
+
+/**
+ * วุฒิทางลูกเสือ — ขั้นการฝึกอบรมผู้บังคับบัญชาลูกเสือ, in the order they are
+ * earned. Free text still passes (Combo), because the older warrants are spelled
+ * a dozen ways on the certificates themselves.
+ */
+export const SCOUT_QUALIFICATION_OPTIONS = [
+  'ขั้นความรู้เบื้องต้น (B.T.C.)',
+  'ขั้นความรู้ชั้นสูง (A.T.C.)',
+  'วูดแบดจ์ 2 ท่อน (W.B.)',
+  'ผู้ช่วยผู้ให้การฝึกอบรม 3 ท่อน (A.L.T.)',
+  'ผู้ให้การฝึกอบรม 4 ท่อน (L.T.)',
+  'ผู้ตรวจการลูกเสือ',
+  'ขั้นผู้ช่วยหัวหน้าผู้ให้การฝึกอบรม (A.L.T.C.)',
+  'ขั้นหัวหน้าผู้ให้การฝึกอบรม (L.T.C.)',
+] as const;
+
+/** ประเภทลูกเสือที่วุฒินั้นครอบคลุม. */
+export const SCOUT_TYPE_OPTIONS = [
+  'ลูกเสือสำรอง',
+  'ลูกเสือสามัญ',
+  'ลูกเสือสามัญรุ่นใหญ่',
+  'ลูกเสือวิสามัญ',
+  'เนตรนารี',
+  'ยุวกาชาด',
+  'ผู้บำเพ็ญประโยชน์',
+] as const;
+
 /** เหตุผลการลาออก/พ้นสภาพของครูและคนงาน. */
 export const STAFF_EXIT_REASON_OPTIONS = [
   'ลาออก',
