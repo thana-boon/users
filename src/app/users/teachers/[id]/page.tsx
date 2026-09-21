@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
+import { useNotice } from '@/components/Notice';
+import { SensitiveLock } from '@/components/SensitiveLock';
 import { RevealButton } from '@/components/RevealButton';
 import { EmploymentStatusDialog } from '@/components/EmploymentStatusDialog';
 import { PhotoCard } from '@/components/PhotoCard';
@@ -43,6 +45,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
+  const notice = useNotice();
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Detail> & { password?: string; citizenId?: string }>({});
@@ -51,6 +54,8 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
   // The three repeatable lists, held apart from `form` because they are arrays
   // the RepeatList editor replaces wholesale rather than fields it sets.
   const [lists, setLists] = useState<QualificationLists>(EMPTY_LISTS);
+  // เลขบัตร / รหัสผ่าน start locked on every visit — see SensitiveLock.
+  const [unlocked, setUnlocked] = useState(false);
 
   function load() {
     api<DetailWithLists>(`/api/users/teachers/${id}`)
@@ -89,13 +94,20 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
         role: form.role,
         ...lists,
       };
-      if (form.password) payload.password = form.password;
-      if (form.citizenId && form.citizenId.trim()) payload.citizenId = form.citizenId.trim();
+      // Locked means the encrypted fields never reach the payload, not merely
+      // that the inputs were greyed out.
+      const sensitiveSent = unlocked && Boolean(form.password || form.citizenId?.trim());
+      if (unlocked && form.password) payload.password = form.password;
+      if (unlocked && form.citizenId && form.citizenId.trim()) payload.citizenId = form.citizenId.trim();
       await api(`/api/users/teachers/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-      toast('บันทึกแล้ว', 'success');
       setForm((s) => ({ ...s, password: '', citizenId: '' }));
+      setUnlocked(false);
       load();
-    } catch (e) { toast((e as Error).message, 'error'); }
+      notice({
+        message: 'บันทึกข้อมูลครูเรียบร้อยแล้ว',
+        detail: sensitiveSent ? 'รวมถึงข้อมูลอ่อนไหวที่ปลดล็อกไว้' : undefined,
+      });
+    } catch (e) { notice({ kind: 'error', message: (e as Error).message }); }
     finally { setBusy(false); }
   }
 
@@ -196,7 +208,6 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
             </select>
             <p className="form-hint">การเปลี่ยนเป็น teacher-admin ให้สิทธิ์เข้าโมดูลนี้</p>
           </div>
-          <div><label className="form-label">ตั้งรหัสผ่านใหม่ (เว้นว่าง=ไม่เปลี่ยน)</label><input className="form-input" value={form.password ?? ''} onChange={set('password')} /></div>
         </div>
 
         <div className="row" style={{ gap: 8, marginTop: 16 }}>
@@ -204,6 +215,8 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {/* Sensitive data. ตั้งรหัสผ่านใหม่ lives here rather than with the ordinary
+          fields above: it belongs beside ดูรหัสผ่าน, and behind the same lock. */}
       <div className="card">
         <h2 className="section-title">ข้อมูลอ่อนไหว (การดูจะถูกบันทึก)</h2>
         <div className="grid-2" style={{ gap: 16, alignItems: 'center' }}>
@@ -217,9 +230,26 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
             {d.hasPassword ? <RevealButton endpoint={`/api/users/teachers/${id}/reveal`} field="password" label="ดูรหัสผ่าน" /> : <span className="muted">ไม่มี</span>}
           </div>
           <div style={{ gridColumn: '1 / -1' }}>
-            <label className="form-label">แก้ไขเลขบัตรประชาชน (เว้นว่าง=ไม่เปลี่ยน)</label>
-            <input className="form-input mono" value={form.citizenId ?? ''} onChange={set('citizenId')} placeholder="เลข 13 หลัก" />
-            <p className="form-hint">พิมพ์เลขใหม่แล้วกด “บันทึก” ด้านบน — ระบบจะเข้ารหัสและบันทึกการแก้ไข</p>
+            <SensitiveLock
+              unlocked={unlocked}
+              onChange={(next) => {
+                setUnlocked(next);
+                // Locking throws away what was typed, so nothing half-entered
+                // survives to the next บันทึก.
+                if (!next) setForm((s) => ({ ...s, password: '', citizenId: '' }));
+              }}
+            />
+            <div className="grid-2" style={{ gap: 12 }}>
+              <div>
+                <label className="form-label">แก้ไขเลขบัตรประชาชน (เว้นว่าง=ไม่เปลี่ยน)</label>
+                <input className="form-input mono" value={form.citizenId ?? ''} onChange={set('citizenId')} placeholder="เลข 13 หลัก" disabled={!unlocked} />
+              </div>
+              <div>
+                <label className="form-label">ตั้งรหัสผ่านใหม่ (เว้นว่าง=ไม่เปลี่ยน)</label>
+                <input className="form-input" value={form.password ?? ''} onChange={set('password')} disabled={!unlocked} />
+              </div>
+            </div>
+            <p className="form-hint">พิมพ์ค่าใหม่แล้วกด “บันทึก” ด้านล่าง — ระบบจะเข้ารหัสและบันทึกการแก้ไข</p>
           </div>
         </div>
       </div>

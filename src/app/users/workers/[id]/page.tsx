@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
+import { useNotice } from '@/components/Notice';
+import { SensitiveLock } from '@/components/SensitiveLock';
 import { RevealButton } from '@/components/RevealButton';
 import { EmploymentStatusDialog } from '@/components/EmploymentStatusDialog';
 import { PhotoCard } from '@/components/PhotoCard';
@@ -24,11 +26,14 @@ export default function WorkerDetailPage({ params }: { params: Promise<{ id: str
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
+  const notice = useNotice();
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Detail> & { citizenId?: string }>({});
   const [busy, setBusy] = useState(false);
   const [showResign, setShowResign] = useState(false);
+  // เลขบัตรประชาชน starts locked on every visit — see SensitiveLock.
+  const [unlocked, setUnlocked] = useState(false);
 
   function load() {
     api<Detail>(`/api/users/workers/${id}`).then((x) => { setD(x); setForm(x); }).catch((e) => setError(e.message));
@@ -51,12 +56,19 @@ export default function WorkerDetailPage({ params }: { params: Promise<{ id: str
         prefix: form.prefix, firstName: form.firstName, lastName: form.lastName,
         position: form.position, phone: form.phone,
       };
-      if (form.citizenId && form.citizenId.trim()) payload.citizenId = form.citizenId.trim();
+      // Locked means the encrypted field never reaches the payload, not merely
+      // that the input was greyed out.
+      const sensitiveSent = Boolean(unlocked && form.citizenId?.trim());
+      if (sensitiveSent) payload.citizenId = form.citizenId!.trim();
       await api(`/api/users/workers/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-      toast('บันทึกแล้ว', 'success');
       setForm((s) => ({ ...s, citizenId: '' }));
+      setUnlocked(false);
       load();
-    } catch (e) { toast((e as Error).message, 'error'); }
+      notice({
+        message: 'บันทึกข้อมูลคนงานเรียบร้อยแล้ว',
+        detail: sensitiveSent ? 'รวมถึงเลขบัตรประชาชนที่ปลดล็อกไว้' : undefined,
+      });
+    } catch (e) { notice({ kind: 'error', message: (e as Error).message }); }
     finally { setBusy(false); }
   }
 
@@ -151,8 +163,17 @@ export default function WorkerDetailPage({ params }: { params: Promise<{ id: str
             {d.hasCitizenId && <div style={{ marginTop: 4 }}><RevealButton endpoint={`/api/users/workers/${id}/reveal`} field="citizen_id" label="แสดงเลขเต็ม" /></div>}
           </div>
           <div style={{ gridColumn: '1 / -1' }}>
+            <SensitiveLock
+              unlocked={unlocked}
+              onChange={(next) => {
+                setUnlocked(next);
+                // Locking throws away what was typed, so nothing half-entered
+                // survives to the next บันทึก.
+                if (!next) setForm((s) => ({ ...s, citizenId: '' }));
+              }}
+            />
             <label className="form-label">แก้ไขเลขบัตรประชาชน (เว้นว่าง=ไม่เปลี่ยน)</label>
-            <input className="form-input mono" value={form.citizenId ?? ''} onChange={set('citizenId')} placeholder="เลข 13 หลัก" />
+            <input className="form-input mono" value={form.citizenId ?? ''} onChange={set('citizenId')} placeholder="เลข 13 หลัก" disabled={!unlocked} />
             <p className="form-hint">พิมพ์เลขใหม่แล้วกด “บันทึก” ด้านบน — ระบบจะเข้ารหัสและบันทึกการแก้ไข</p>
           </div>
         </div>

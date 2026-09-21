@@ -7,6 +7,8 @@ import { api, withBase } from '@/lib/client';
 import { cropToFace, preloadFaceDetector } from '@/lib/face-crop';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
+import { useNotice } from '@/components/Notice';
+import { SensitiveLock } from '@/components/SensitiveLock';
 import { RevealButton } from '@/components/RevealButton';
 import { IconBack, IconEdit, IconTrash } from '@/components/Icons';
 import { formatThaiDate, ageFromThaiDate } from '@/lib/thai';
@@ -100,13 +102,21 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function TInput({ label, value, onChange }: { label: string; value: string | null | undefined; onChange: (v: string) => void }) {
+function TInput({ label, value, onChange, disabled = false }: { label: string; value: string | null | undefined; onChange: (v: string) => void; disabled?: boolean }) {
   return (
     <div>
       <label className="form-label">{label}</label>
-      <input className="form-input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+      <input className="form-input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} />
     </div>
   );
+}
+
+/** Drop the three encrypted guardian fields unless the lock is open. */
+function withoutSensitive(g: Dict | undefined, unlocked: boolean): Dict {
+  if (!g) return {};
+  if (unlocked) return g;
+  const { citizenId: _c, incomeMonthly: _m, incomeYearly: _y, ...rest } = g;
+  return rest;
 }
 
 const hasAny = (d: Dict) => Object.values(d).some((v) => v !== null && v !== undefined && String(v).trim() !== '');
@@ -116,6 +126,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
+  const notice = useNotice();
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -133,6 +144,8 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const [addrs, setAddrs] = useState<Record<string, Dict>>({});
   const [guards, setGuards] = useState<Record<string, Dict>>({});
   const [sensitive, setSensitive] = useState<{ citizenId: string; password: string }>({ citizenId: '', password: '' });
+  // เลขบัตร / รหัสผ่าน / รายได้ผู้ปกครอง start locked on every edit — see SensitiveLock.
+  const [unlocked, setUnlocked] = useState(false);
 
   function load() {
     api<Detail>(`/api/users/students/${id}`).then((x) => setD(x)).catch((e) => setError(e.message));
@@ -162,6 +175,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     for (const g of d.guardians) gm[g.guardianType] = pick(g as unknown as Dict, GUARDIAN_FIELDS);
     setGuards(gm);
     setSensitive({ citizenId: '', password: '' });
+    setUnlocked(false);
     setEditing(true);
   }
 
@@ -183,8 +197,10 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     try {
       const payload = {
         ...core,
-        citizenId: sensitive.citizenId || undefined,
-        password: sensitive.password || undefined,
+        // Locked means the encrypted fields are not merely greyed out — they
+        // never reach the payload, so a stale keystroke cannot be saved.
+        citizenId: (unlocked && sensitive.citizenId) || undefined,
+        password: (unlocked && sensitive.password) || undefined,
         health,
         previousSchool: prev,
         addresses: ADDRESS_TYPES
@@ -192,14 +208,18 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           .map((t) => ({ ...addrs[t], addressType: t })),
         guardians: GUARDIAN_TYPES
           .filter((t) => guards[t] && hasAny(guards[t]))
-          .map((t) => ({ ...guards[t], guardianType: t })),
+          .map((t) => ({ ...withoutSensitive(guards[t], unlocked), guardianType: t })),
       };
       await api(`/api/users/students/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-      toast('บันทึกข้อมูลเรียบร้อยแล้ว', 'success');
       setEditing(false);
+      setUnlocked(false);
       load();
+      notice({
+        message: 'บันทึกข้อมูลนักเรียนเรียบร้อยแล้ว',
+        detail: unlocked ? 'รวมถึงข้อมูลอ่อนไหวที่ปลดล็อกไว้' : undefined,
+      });
     } catch (e) {
-      toast((e as Error).message, 'error');
+      notice({ kind: 'error', message: (e as Error).message });
     } finally {
       setBusy(false);
     }
@@ -461,10 +481,27 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
         ) : (
-          <div className="grid-2" style={{ gap: 12 }}>
-            <TInput label="เลขบัตรประชาชน (เว้นว่าง = ไม่เปลี่ยน)" value={sensitive.citizenId} onChange={(v) => setSensitive((s) => ({ ...s, citizenId: v }))} />
-            <TInput label="รหัสผ่าน (เว้นว่าง = ไม่เปลี่ยน)" value={sensitive.password} onChange={(v) => setSensitive((s) => ({ ...s, password: v }))} />
-          </div>
+          <>
+            <SensitiveLock
+              unlocked={unlocked}
+              onChange={(next) => {
+                setUnlocked(next);
+                // Locking throws away what was typed, here and in the guardian
+                // cards, so nothing half-entered survives to the next บันทึก.
+                if (!next) {
+                  setSensitive({ citizenId: '', password: '' });
+                  setGuards((s) => Object.fromEntries(
+                    Object.entries(s).map(([t, g]) => [t, withoutSensitive(g, false)]),
+                  ));
+                }
+              }}
+              hint="ใช้กับเลขบัตรประชาชน รหัสผ่าน และเลขบัตร/รายได้ของผู้ปกครองด้านล่าง"
+            />
+            <div className="grid-2" style={{ gap: 12 }}>
+              <TInput label="เลขบัตรประชาชน (เว้นว่าง = ไม่เปลี่ยน)" value={sensitive.citizenId} onChange={(v) => setSensitive((s) => ({ ...s, citizenId: v }))} disabled={!unlocked} />
+              <TInput label="รหัสผ่าน (เว้นว่าง = ไม่เปลี่ยน)" value={sensitive.password} onChange={(v) => setSensitive((s) => ({ ...s, password: v }))} disabled={!unlocked} />
+            </div>
+          </>
         )}
       </div>
 
@@ -493,9 +530,14 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                 ) : (
                   <div className="stack" style={{ gap: 8, marginTop: 8 }}>
                     {GUARDIAN_FIELDS.map((f) => <TInput key={f.k} label={f.label} value={guards[t]?.[f.k]} onChange={setG(t, f.k)} />)}
-                    <TInput label="เลขบัตร ปชช. (เว้นว่าง=ไม่เปลี่ยน)" value={guards[t]?.citizenId} onChange={setG(t, 'citizenId')} />
-                    <TInput label="รายได้/เดือน (เว้นว่าง=ไม่เปลี่ยน)" value={guards[t]?.incomeMonthly} onChange={setG(t, 'incomeMonthly')} />
-                    <TInput label="รายได้/ปี (เว้นว่าง=ไม่เปลี่ยน)" value={guards[t]?.incomeYearly} onChange={setG(t, 'incomeYearly')} />
+                    <TInput label="เลขบัตร ปชช. (เว้นว่าง=ไม่เปลี่ยน)" value={guards[t]?.citizenId} onChange={setG(t, 'citizenId')} disabled={!unlocked} />
+                    <TInput label="รายได้/เดือน (เว้นว่าง=ไม่เปลี่ยน)" value={guards[t]?.incomeMonthly} onChange={setG(t, 'incomeMonthly')} disabled={!unlocked} />
+                    <TInput label="รายได้/ปี (เว้นว่าง=ไม่เปลี่ยน)" value={guards[t]?.incomeYearly} onChange={setG(t, 'incomeYearly')} disabled={!unlocked} />
+                    {!unlocked && (
+                      <p className="form-hint" style={{ marginTop: -2 }}>
+                        สามช่องนี้เป็นข้อมูลอ่อนไหว — ปลดล็อกได้ที่การ์ด “ข้อมูลอ่อนไหว”
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

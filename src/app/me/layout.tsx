@@ -9,6 +9,7 @@ import { MeShell } from '@/components/MeShell';
 import { SessionGuard } from '@/components/SessionGuard';
 import { ToastProvider } from '@/components/Toast';
 import { ConfirmProvider } from '@/components/Confirm';
+import { NoticeProvider } from '@/components/Notice';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,22 +65,24 @@ export default async function MeLayout({ children }: { children: React.ReactNode
   return (
     <ToastProvider>
       <ConfirmProvider>
-        <SessionGuard
-          expiresAt={sessionExpiresAt(session)}
-          expiredUrl={platformHomeUrl({ expired: '1' })}
-          idleMs={idleTimeoutMs(session)}
-        />
-        <MeShell
-          name={name}
-          initial={(firstName || name).trim().slice(0, 1)}
-          hasPhoto={hasPhoto}
-          // The mode switch is for admins only — a plain teacher or a student
-          // has no other mode to be in, so the button is simply absent.
-          isAdmin={hasPermission(session, USERS_WRITE)}
-          signedOutUrl={platformHomeUrl()}
-        >
-          {children}
-        </MeShell>
+        <NoticeProvider>
+          <SessionGuard
+            expiresAt={sessionExpiresAt(session)}
+            expiredUrl={platformHomeUrl({ expired: '1' })}
+            idleMs={idleTimeoutMs(session)}
+          />
+          <MeShell
+            name={name}
+            initial={(firstName || name).trim().slice(0, 1)}
+            hasPhoto={hasPhoto}
+            // The mode switch is for admins only — a plain teacher or a student
+            // has no other mode to be in, so the button is simply absent.
+            isAdmin={hasPermission(session, USERS_WRITE)}
+            signedOutUrl={platformHomeUrl()}
+          >
+            {children}
+          </MeShell>
+        </NoticeProvider>
       </ConfirmProvider>
     </ToastProvider>
   );

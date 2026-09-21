@@ -15,6 +15,7 @@ import { AppShell } from '@/components/AppShell';
 import { SessionGuard } from '@/components/SessionGuard';
 import { ToastProvider } from '@/components/Toast';
 import { ConfirmProvider } from '@/components/Confirm';
+import { NoticeProvider } from '@/components/Notice';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,19 +74,21 @@ export default async function UsersLayout({
   return (
     <ToastProvider>
       <ConfirmProvider>
-        {/* Seeded from the server so the countdown is right on first paint,
-            before any cookie has been read. */}
-        <SessionGuard
-          expiresAt={sessionExpiresAt(session)}
-          expiredUrl={platformHomeUrl({ expired: '1' })}
-          idleMs={idleTimeoutMs(session)}
-        />
-        <AppShell
-          session={{ name: session.name ?? null, role: session.role, photoUrl, initial }}
-          signedOutUrl={platformHomeUrl()}
-        >
-          {children}
-        </AppShell>
+        <NoticeProvider>
+          {/* Seeded from the server so the countdown is right on first paint,
+              before any cookie has been read. */}
+          <SessionGuard
+            expiresAt={sessionExpiresAt(session)}
+            expiredUrl={platformHomeUrl({ expired: '1' })}
+            idleMs={idleTimeoutMs(session)}
+          />
+          <AppShell
+            session={{ name: session.name ?? null, role: session.role, photoUrl, initial }}
+            signedOutUrl={platformHomeUrl()}
+          >
+            {children}
+          </AppShell>
+        </NoticeProvider>
       </ConfirmProvider>
     </ToastProvider>
   );

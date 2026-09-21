@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/client';
-import { useToast } from '@/components/Toast';
+import { useNotice } from '@/components/Notice';
 import { PhotoCard } from '@/components/PhotoCard';
 import { Combo } from '@/components/Combo';
 import {
@@ -53,7 +53,7 @@ export interface TeacherMe {
 }
 
 export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => void }) {
-  const toast = useToast();
+  const notice = useNotice();
   const [form, setForm] = useState({
     phone: me.phone,
     lineId: me.lineId,
@@ -79,10 +79,10 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
       // Exactly the fields the server allows — nothing else is even assembled,
       // so a stray key cannot ride along and turn the save into a 400.
       await api('/api/users/me', { method: 'PATCH', body: JSON.stringify({ ...form, ...lists }) });
-      toast('บันทึกข้อมูลของคุณแล้ว', 'success');
       reload();
+      notice({ message: 'ข้อมูลติดต่อและวุฒิ/การอบรมของคุณถูกบันทึกแล้ว' });
     } catch (e) {
-      toast((e as Error).message, 'error');
+      notice({ kind: 'error', message: (e as Error).message });
     } finally {
       setBusy(false);
     }

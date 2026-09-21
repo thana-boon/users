@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/client';
-import { useToast } from '@/components/Toast';
+import { useNotice } from '@/components/Notice';
 import { ClosedNotice, Field, Locked, SaveBar, Section } from './parts';
 import { PasswordCard } from './PasswordCard';
 
@@ -88,7 +88,7 @@ const STATUS_LABEL: Record<StudentMe['status'], string> = {
 };
 
 export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => void }) {
-  const toast = useToast();
+  const notice = useNotice();
   const [contact, setContact] = useState({
     phone: me.phone,
     nickname: me.nickname,
@@ -116,10 +116,10 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
           currentAddress: pick(address, ADDRESS_KEYS),
         }),
       });
-      toast('บันทึกข้อมูลของคุณแล้ว', 'success');
       reload();
+      notice({ message: 'ข้อมูลติดต่อ สุขภาพ และที่อยู่ปัจจุบันของคุณถูกบันทึกแล้ว' });
     } catch (e) {
-      toast((e as Error).message, 'error');
+      notice({ kind: 'error', message: (e as Error).message });
     } finally {
       setBusy(false);
     }
