@@ -68,10 +68,26 @@ const ADDR_EXTRA: Record<string, { k: string; label: string }[]> = {
   birth_place: [{ k: 'hospitalName', label: 'สถานที่เกิด / โรงพยาบาล' }],
   current: [
     { k: 'livingWith', label: 'อาศัยอยู่กับ' }, { k: 'livingWithLastname', label: 'นามสกุลผู้อาศัย' },
-    { k: 'houseType', label: 'ประเภทที่พัก' }, { k: 'emergencyPhone', label: 'โทรฉุกเฉิน' },
+    { k: 'houseType', label: 'ประเภทที่พัก' },
+    // NOTE: emergencyPhone is deliberately NOT here. It is stored on this row
+    // like the rest, but it is shown and edited up in the identity block at the
+    // top of the page — it is the number someone opens this page to find in a
+    // hurry, and it was buried four cards down under ที่อยู่ปัจจุบัน. The
+    // editor there writes through `setA('current', 'emergencyPhone')`, so it is
+    // the same state and the same saved column; only the placement moved.
     { k: 'emergencyEmail', label: 'อีเมลฉุกเฉิน' }, { k: 'nearbyFriendName', label: 'เพื่อนบ้านใกล้เคียง' },
     { k: 'nearbyFriendLastname', label: 'นามสกุลเพื่อนบ้าน' }, { k: 'nearbyFriendPhone', label: 'โทรเพื่อนบ้าน' },
   ],
+};
+
+/**
+ * Columns that live on an address row but are RENDERED somewhere else on this
+ * page. They are missing from ADDR_FIELDS/ADDR_EXTRA on purpose, so they must be
+ * added back when seeding the edit state — the save sends the whole address row,
+ * and a column the form never loaded would be written back as null.
+ */
+const ADDR_LIFTED: Record<string, { k: string; label: string }[]> = {
+  current: [{ k: 'emergencyPhone', label: 'เบอร์ติดต่อฉุกเฉิน' }],
 };
 
 const GUARDIAN_FIELDS: { k: string; label: string }[] = [
@@ -169,7 +185,15 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     setHealth(pick(d.health, HEALTH_FIELDS));
     setPrev(pick(d.previousSchool, PREV_FIELDS));
     const am: Record<string, Dict> = {};
-    for (const a of d.addresses) am[a.addressType] = pick(a, [...ADDR_FIELDS, ...(ADDR_EXTRA[a.addressType] ?? [])]);
+    for (const a of d.addresses) {
+      am[a.addressType] = pick(a, [
+        ...ADDR_FIELDS,
+        ...(ADDR_EXTRA[a.addressType] ?? []),
+        // Without this, เบอร์ฉุกเฉิน would be absent from the payload and the
+        // API's "write every address column" loop would blank it on every save.
+        ...(ADDR_LIFTED[a.addressType] ?? []),
+      ]);
+    }
     setAddrs(am);
     const gm: Record<string, Dict> = {};
     for (const g of d.guardians) gm[g.guardianType] = pick(g as unknown as Dict, GUARDIAN_FIELDS);
@@ -351,6 +375,9 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                 <Field label="สัญชาติ" value={d.nationality} />
                 <Field label="เชื้อชาติ" value={d.ethnicity} />
                 <Field label="เบอร์โทร" value={d.phone} />
+                {/* Lifted out of ที่อยู่ปัจจุบัน — see ADDR_EXTRA. The number the
+                    office reaches for first belongs beside the child's own. */}
+                <Field label="เบอร์ติดต่อฉุกเฉิน" value={addrByType.current?.emergencyPhone as string} />
                 <Field label="อีเมล" value={d.email} />
                 <Field label="วันที่เข้าเรียน" value={formatThaiDate(d.admissionDate)} />
                 <Field label="จำนวนพี่น้อง" value={d.siblingsTotal} />
@@ -372,6 +399,13 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                 <Combo label="สัญชาติ" value={core.nationality} onChange={setC('nationality')} options={NATIONALITY_OPTIONS} />
                 <Combo label="เชื้อชาติ" value={core.ethnicity} onChange={setC('ethnicity')} options={ETHNICITY_OPTIONS} />
                 <TInput label="เบอร์โทร" value={core.phone} onChange={setC('phone')} />
+                {/* Writes to ที่อยู่ปัจจุบัน, which is where the column lives —
+                    the same state the address card edits, just surfaced here. */}
+                <TInput
+                  label="เบอร์ติดต่อฉุกเฉิน"
+                  value={addrs.current?.emergencyPhone}
+                  onChange={setA('current', 'emergencyPhone')}
+                />
                 <TInput label="อีเมล" value={core.email} onChange={setC('email')} />
                 <DateField label="วันที่เข้าเรียน" value={core.admissionDate} onChange={setC('admissionDate')} />
               </div>
