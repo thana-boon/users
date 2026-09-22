@@ -12,6 +12,7 @@ import {
   completions,
 } from '@/db/schema';
 import { encrypt } from '@/lib/crypto';
+import { normalizePhone } from '@/lib/phone';
 import { keyStageOf } from '@/lib/grades';
 import type { ParsedStudent } from '@/lib/excel-map';
 import type { StudentStatus } from '@/db/schema';
@@ -53,7 +54,10 @@ export async function upsertStudentFull(
       siblingsTotal: c.siblingsTotal,
       siblingOrder: c.siblingOrder,
       hasSiblingInSchool: c.hasSiblingInSchool,
-      phone: c.phone,
+      // Trimmed of the trailing '-' the source spreadsheets carry — see
+      // lib/phone.ts. The import is where the mess came from, so it is the
+      // first place that has to stop making it.
+      phone: normalizePhone(c.phone),
       email: c.email,
       passwordEncrypted: encrypt(c.plainPassword),
       admissionDate: c.admissionDate,
@@ -110,17 +114,17 @@ export async function upsertStudentFull(
           district: a.district ?? null,
           province: a.province ?? null,
           postalCode: a.postalCode ?? null,
-          phone: a.phone ?? null,
+          phone: normalizePhone(a.phone),
           houseRegCode: a.houseRegCode ?? null,
           hospitalName: a.hospitalName ?? null,
           livingWith: a.livingWith ?? null,
           livingWithLastname: a.livingWithLastname ?? null,
           houseType: a.houseType ?? null,
           emergencyEmail: a.emergencyEmail ?? null,
-          emergencyPhone: a.emergencyPhone ?? null,
+          emergencyPhone: normalizePhone(a.emergencyPhone),
           nearbyFriendName: a.nearbyFriendName ?? null,
           nearbyFriendLastname: a.nearbyFriendLastname ?? null,
-          nearbyFriendPhone: a.nearbyFriendPhone ?? null,
+          nearbyFriendPhone: normalizePhone(a.nearbyFriendPhone),
         })),
       );
     }
@@ -150,9 +154,9 @@ export async function upsertStudentFull(
           district: gd.district ?? null,
           province: gd.province ?? null,
           postalCode: gd.postalCode ?? null,
-          homePhone: gd.homePhone ?? null,
-          mobilePhone: gd.mobilePhone ?? null,
-          workPhone: gd.workPhone ?? null,
+          homePhone: normalizePhone(gd.homePhone),
+          mobilePhone: normalizePhone(gd.mobilePhone),
+          workPhone: normalizePhone(gd.workPhone),
           familyStatus: gd.familyStatus ?? null,
           education: gd.education ?? null,
           occupation: gd.occupation ?? null,
@@ -203,6 +207,27 @@ function norm(v: unknown): string | null {
   if (v === undefined || v === null) return null;
   const s = String(v).trim();
   return s === '' ? null : s;
+}
+
+/**
+ * Every column in this module that holds a phone number, by the field name the
+ * update input uses. One list, consulted by {@link normField}, so a phone
+ * arriving through the admin editor gets the same trailing-separator trim as
+ * one arriving through the import or the self-service page.
+ */
+const PHONE_FIELDS = new Set([
+  'phone',
+  'emergencyPhone',
+  'nearbyFriendPhone',
+  'homePhone',
+  'mobilePhone',
+  'workPhone',
+]);
+
+/** {@link norm}, plus the phone rule when the field is a phone. */
+function normField(key: string, v: unknown): string | null {
+  const s = norm(v);
+  return PHONE_FIELDS.has(key) ? normalizePhone(s) : s;
 }
 
 export interface StudentUpdateInput {
@@ -261,7 +286,7 @@ export async function updateStudentAggregate(id: number, data: StudentUpdateInpu
     // -- identity --
     const coreSet: Record<string, unknown> = {};
     for (const k of IDENTITY_FIELDS) {
-      if (data[k] !== undefined) coreSet[k] = norm(data[k]);
+      if (data[k] !== undefined) coreSet[k] = normField(k, data[k]);
     }
     if (data.citizenId) coreSet.citizenIdEncrypted = encrypt(data.citizenId);
     if (data.password) coreSet.passwordEncrypted = encrypt(data.password);
@@ -310,7 +335,7 @@ export async function updateStudentAggregate(id: number, data: StudentUpdateInpu
       for (const a of data.addresses) {
         if (!a.addressType) continue;
         const vals: Record<string, string | null> = {};
-        for (const k of ADDRESS_FIELDS) vals[k] = norm(a[k]);
+        for (const k of ADDRESS_FIELDS) vals[k] = normField(k, a[k]);
         await tx.insert(studentAddresses)
           .values({ studentId: id, addressType: a.addressType as 'household' | 'birth_place' | 'current' | 'hometown', ...vals })
           .onConflictDoUpdate({
@@ -325,7 +350,7 @@ export async function updateStudentAggregate(id: number, data: StudentUpdateInpu
       for (const g of data.guardians) {
         if (!g.guardianType) continue;
         const vals: Record<string, unknown> = {};
-        for (const k of GUARDIAN_FIELDS) vals[k] = norm(g[k]);
+        for (const k of GUARDIAN_FIELDS) vals[k] = normField(k, g[k]);
         if (g.citizenId) vals.citizenIdEncrypted = encrypt(g.citizenId);
         if (g.incomeMonthly) vals.incomeMonthlyEncrypted = encrypt(g.incomeMonthly);
         if (g.incomeYearly) vals.incomeYearlyEncrypted = encrypt(g.incomeYearly);

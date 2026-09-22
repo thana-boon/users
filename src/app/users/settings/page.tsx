@@ -3,15 +3,22 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import { useToast } from '@/components/Toast';
-import { IconStudents, IconTeachers } from '@/components/Icons';
+import { IconLock, IconStudents, IconTeachers } from '@/components/Icons';
 
 /**
  * ตั้งค่าระบบ — the school-wide switches.
  *
- * Today that is one question asked of two audiences: may ครู / นักเรียน edit
+ * Two of them are one question asked of two audiences: may ครู / นักเรียน edit
  * their own record right now? Kept separate because the school opens the two
  * windows at different times — staff file their new วุฒิ in May, pupils update
  * ข้อมูลสุขภาพ in the first week of term.
+ *
+ * The third is stacked on top of those and covers one field —
+ * เลขบัตรประชาชน. It is shown last and reads differently on purpose: it is the
+ * only switch here that puts a decrypted value in someone's browser, so the
+ * card says who it affects, what it unlocks, and that every look is logged.
+ * When both audience windows are shut it grants nothing, and the card says so
+ * rather than sitting there looking effective.
  *
  * Each switch takes effect within a few seconds everywhere (see the cache in
  * services/settings.ts), and closing a window never locks anyone out of
@@ -21,6 +28,7 @@ import { IconStudents, IconTeachers } from '@/components/Icons';
 interface Settings {
   selfEditTeachers: boolean;
   selfEditStudents: boolean;
+  selfEditSensitive: boolean;
 }
 
 export default function SettingsPage() {
@@ -46,7 +54,9 @@ export default function SettingsPage() {
         body: JSON.stringify({ [key]: next }),
       });
       setS(res);
-      toast(next ? 'เปิดให้แก้ไขข้อมูลตนเองแล้ว' : 'ปิดการแก้ไขข้อมูลตนเองแล้ว', 'success');
+      const what =
+        key === 'selfEditSensitive' ? 'การดู/แก้ไขเลขบัตรประชาชนของตนเอง' : 'การแก้ไขข้อมูลตนเอง';
+      toast(`${next ? 'เปิด' : 'ปิด'}${what}แล้ว`, 'success');
     } catch (e) {
       toast((e as Error).message, 'error');
     } finally {
@@ -83,12 +93,32 @@ export default function SettingsPage() {
         closedText="ขณะนี้นักเรียนเปิดดูข้อมูลของตนเองได้อย่างเดียว แก้ไขไม่ได้ — ชื่อ-สกุล วันเกิด เลขบัตร ที่อยู่ตามทะเบียนบ้าน ผู้ปกครอง ชั้น/ห้อง และรูปติดบัตร เป็นของผู้ดูแลเสมอไม่ว่าสวิตช์นี้จะเปิดหรือปิด"
       />
 
+      <SwitchCard
+        title="ให้ครูและนักเรียนดู/แก้ไขเลขบัตรประชาชนของตนเองได้"
+        Icon={IconLock}
+        on={s.selfEditSensitive}
+        busy={busy === 'selfEditSensitive'}
+        onToggle={(v) => toggle('selfEditSensitive', v)}
+        openText="ที่หน้า “ข้อมูลของฉัน” จะมีปุ่มให้กดดูเลขบัตรประชาชนของตนเองแบบเต็ม และแก้ไขได้ถ้ากรอกผิด — การกดดูทุกครั้งถูกบันทึกใน “บันทึกการใช้งาน” ว่าใครดูของใครเมื่อไหร่"
+        closedText="ขณะนี้ทุกคนเห็นเลขบัตรประชาชนของตนเองเป็นแบบปิดบัง (1-XXXX-XXXXX-XX-1) และแก้ไขไม่ได้ ต้องให้ฝ่ายธุรการแก้ให้"
+        extra={
+          s.selfEditSensitive && !s.selfEditTeachers && !s.selfEditStudents
+            ? 'สวิตช์นี้ยังไม่มีผลกับใคร เพราะหน้าต่างแก้ไขข้อมูลตนเองของทั้งครูและนักเรียนปิดอยู่ทั้งคู่ — เปิดอย่างน้อยหนึ่งอันข้างบนก่อน'
+            : undefined
+        }
+        danger
+      />
+
       <div className="card">
         <h2 className="section-title">หมายเหตุ</h2>
         <ul className="muted" style={{ fontSize: 13, margin: 0, paddingInlineStart: 20, lineHeight: 1.9 }}>
           <li>การแก้ไขทุกครั้งถูกบันทึกใน “บันทึกการใช้งาน” ว่าเป็นการแก้ไขข้อมูลตนเอง</li>
           <li>การเปลี่ยนรหัสผ่านของตนเอง <b>ทำได้เสมอ</b> แม้ปิดสวิตช์ (ต้องยืนยันรหัสผ่านเดิม)</li>
           <li>ครู/นักเรียนที่ลาออกหรือจบการศึกษาแล้ว ดูข้อมูลได้แต่แก้ไม่ได้ ไม่ว่าสวิตช์จะเปิดหรือปิด</li>
+          <li>
+            สวิตช์เลขบัตรประชาชนเป็น <b>สวิตช์ซ้อน</b> — ต้องเปิดหน้าต่างแก้ไขของกลุ่มนั้นด้วย
+            จึงจะบันทึกการแก้ไขได้ (แต่ “กดดูของตนเอง” ทำได้ทันทีที่เปิดสวิตช์นี้)
+          </li>
         </ul>
       </div>
     </div>
@@ -96,7 +126,7 @@ export default function SettingsPage() {
 }
 
 function SwitchCard({
-  title, Icon, on, busy, onToggle, openText, closedText,
+  title, Icon, on, busy, onToggle, openText, closedText, extra, danger = false,
 }: {
   title: string;
   Icon: typeof IconTeachers;
@@ -105,6 +135,10 @@ function SwitchCard({
   onToggle: (next: boolean) => void;
   openText: string;
   closedText: string;
+  /** A line shown under the description when this switch needs another one on. */
+  extra?: string;
+  /** Colours the "on" badge as a warning: this one exposes a decrypted value. */
+  danger?: boolean;
 }) {
   return (
     <div className="card">
@@ -115,7 +149,10 @@ function SwitchCard({
           </span>
           <div>
             <div style={{ fontWeight: 600 }}>{title}</div>
-            <span className={`badge ${on ? 'badge-success' : 'badge-muted'}`} style={{ marginTop: 6 }}>
+            <span
+              className={`badge ${on ? (danger ? 'badge-warning' : 'badge-success') : 'badge-muted'}`}
+              style={{ marginTop: 6 }}
+            >
               {on ? 'เปิดอยู่' : 'ปิดอยู่'}
             </span>
           </div>
@@ -133,6 +170,11 @@ function SwitchCard({
       <p className="muted" style={{ fontSize: 13, margin: '12px 0 0', lineHeight: 1.8 }}>
         {on ? openText : closedText}
       </p>
+      {extra && (
+        <div className="alert alert-info" style={{ marginTop: 10, fontSize: 13 }}>
+          {extra}
+        </div>
+      )}
     </div>
   );
 }

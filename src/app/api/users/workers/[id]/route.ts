@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { phoneField } from '@/lib/phone';
 import { db } from '@/db';
 import { workers } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
@@ -36,7 +37,7 @@ const patchSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   position: z.string().nullable().optional(),
-  phone: z.string().nullable().optional(),
+  phone: phoneField,
   citizenId: z.string().optional(), // blank = keep
 });
 

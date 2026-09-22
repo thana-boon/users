@@ -9,6 +9,7 @@ import {
   SCOPE_LABEL_TH,
   PII_SCOPES,
   AUTH_SCOPES,
+  WRITE_SCOPES,
   AUDIENCE_PATTERN,
   needsAudience,
   type ApiScope,
@@ -134,6 +135,7 @@ export function ApiKeyDialog({
               {API_SCOPES.map((s) => {
                 const pii = PII_SCOPES.includes(s);
                 const auth = AUTH_SCOPES.includes(s);
+                const write = WRITE_SCOPES.includes(s);
                 return (
                   <label
                     key={s}
@@ -160,7 +162,8 @@ export function ApiKeyDialog({
                         {pii && ' · ถอดรหัสข้อมูลอ่อนไหว'}
                       </span>
                     </span>
-                    {pii && <span className="badge badge-warning" style={{ marginLeft: 'auto' }}>PII</span>}
+                    {write && <span className="badge badge-error" style={{ marginLeft: 'auto' }}>WRITE</span>}
+                    {pii && !write && <span className="badge badge-warning" style={{ marginLeft: 'auto' }}>PII</span>}
                     {auth && <span className="badge badge-navy" style={{ marginLeft: 'auto' }}>AUTH</span>}
                   </label>
                 );
@@ -170,6 +173,13 @@ export function ApiKeyDialog({
               <div className="alert alert-warning" style={{ marginTop: 10, fontSize: 13 }}>
                 สิทธิ์ PII จะส่ง<strong>เลขบัตรประชาชน</strong>ออกไปให้ระบบอื่น
                 ทุกครั้งที่มีการดึงจะถูกบันทึกใน “บันทึกการใช้งาน” — ให้เฉพาะระบบที่จำเป็นจริง ๆ
+              </div>
+            )}
+            {scopes.some((s) => WRITE_SCOPES.includes(s as ApiScope)) && (
+              <div className="alert alert-error" style={{ marginTop: 10, fontSize: 13 }}>
+                สิทธิ์ WRITE ให้ระบบอื่น<strong>เขียนข้อมูลกลับเข้าฐานข้อมูลของเรา</strong>
+                ขณะนี้มีอย่างเดียวคือเบอร์/ผู้ติดต่อฉุกเฉิน — เขียนทับของเดิมได้
+                แต่แตะข้อมูลอื่นไม่ได้เลย และทุกครั้งถูกบันทึกว่า key ไหนเขียนของใคร
               </div>
             )}
             {scopes.some((s) => AUTH_SCOPES.includes(s as ApiScope)) && (

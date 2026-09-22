@@ -2,7 +2,9 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { students, studentAddresses, studentHealth } from '@/db/schema';
-import { maskCitizenId, tryDecrypt } from '@/lib/crypto';
+import { encrypt, maskCitizenId, tryDecrypt } from '@/lib/crypto';
+import { isValidCitizenId } from '@/lib/thai';
+import { normalizePhone, normalizePhoneFields } from '@/lib/phone';
 
 /**
  * What a STUDENT may see and change about themselves — the twin of
@@ -23,8 +25,14 @@ import { maskCitizenId, tryDecrypt } from '@/lib/crypto';
  *     which is a registry fact copied from the house registration document.
  *
  * LOCKED, and why:
- *  - ชื่อ/นามสกุล/คำนำหน้า/วันเกิด/เพศ/ศาสนา/สัญชาติ/เชื้อชาติ/เลขบัตร ปชช. —
+ *  - ชื่อ/นามสกุล/คำนำหน้า/วันเกิด/เพศ/ศาสนา/สัญชาติ/เชื้อชาติ —
  *    printed on official documents and taken from the papers at admission.
+ *  - เลขบัตร ปชช. — locked by DEFAULT, and the one lock the school can lift:
+ *    with the sensitive switch on at /users/settings the student may reveal and
+ *    correct their own. It stays off the everyday list because it is encrypted
+ *    at rest, so a typo is invisible the moment it is saved. The gate lives in
+ *    the route (api/users/me), which refuses a payload naming `citizenId`
+ *    outright while the switch is off rather than dropping the key quietly.
  *  - email — a login identifier (api/auth/student-login accepts it).
  *  - ชั้น/ห้อง/เลขที่/สถานะ — decided by the school, not claimed by the pupil.
  *  - ผู้ปกครอง — a record ABOUT someone else, and the one the school acts on in
@@ -36,8 +44,15 @@ import { maskCitizenId, tryDecrypt } from '@/lib/crypto';
 
 const nstr = z.string().nullable().optional();
 
-/** The student's own scalar fields. */
+/** The student's own scalar fields, always available while the window is open. */
 export const STUDENT_SELF_EDITABLE = ['phone', 'nickname', 'nicknameEn'] as const;
+
+/**
+ * The extra field the sensitive switch unlocks. Reported separately from
+ * STUDENT_SELF_EDITABLE so the page can grey it independently — the everyday
+ * fields and this one are governed by two different switches.
+ */
+export const STUDENT_SENSITIVE_EDITABLE = ['citizenId'] as const;
 
 /** Every column of `student_health` — the whole block is the student's own. */
 export const healthSchema = z.object({
@@ -82,12 +97,24 @@ export const studentSelfPatchSchema = z
     phone: nstr,
     nickname: nstr,
     nicknameEn: nstr,
+    // Accepted only when the school has opened the sensitive switch; the route
+    // refuses the whole request before parsing if it has not. '' clears it.
+    citizenId: z
+      .string()
+      .nullable()
+      .optional()
+      .refine((v) => v == null || v.trim() === '' || isValidCitizenId(v), {
+        message: 'เลขบัตรประชาชนไม่ถูกต้อง (ต้องเป็น 13 หลักและผ่านการตรวจหลักสุดท้าย)',
+      }),
     health: healthSchema.optional(),
     currentAddress: currentAddressSchema.optional(),
   })
   .strict();
 
 export type StudentSelfPatch = z.infer<typeof studentSelfPatchSchema>;
+
+/** The phone-ish columns of ที่อยู่ปัจจุบัน — trimmed of stray separators on save. */
+const ADDRESS_PHONE_KEYS = ['phone', 'emergencyPhone', 'nearbyFriendPhone'] as const;
 
 /** '' means "cleared", which is null in the database. */
 function blankToNull<T extends Record<string, unknown>>(row: T): T {
@@ -106,14 +133,25 @@ export async function applyStudentSelfPatch(
   studentId: number,
   body: StudentSelfPatch,
 ): Promise<string[]> {
-  const { health, currentAddress, ...scalars } = body;
+  const { health, currentAddress, citizenId, ...rest } = body;
   const changed: string[] = [];
 
   await db.transaction(async (tx) => {
-    const set = blankToNull(scalars);
+    // `phone` is normalized rather than stored as typed: this is the column the
+    // import left with a trailing '-' on almost every row, and a self-edit is
+    // the cheapest place to stop one coming back. See lib/phone.ts.
+    const scalars = 'phone' in rest ? { ...rest, phone: normalizePhone(rest.phone) } : rest;
+    const set: Record<string, unknown> = blankToNull(scalars);
+    // Encrypted on the way in, like every other write of this column. An empty
+    // string means the student cleared it, which is a null ciphertext.
+    if (citizenId !== undefined) {
+      set.citizenIdEncrypted = citizenId && citizenId.trim() ? encrypt(citizenId.trim()) : null;
+    }
     if (Object.keys(set).length) {
       await tx.update(students).set(set).where(eq(students.id, studentId));
-      changed.push(...Object.keys(set));
+      changed.push(
+        ...Object.keys(set).map((k) => (k === 'citizenIdEncrypted' ? 'เลขบัตรประชาชน' : k)),
+      );
     }
 
     if (health) {
@@ -128,7 +166,9 @@ export async function applyStudentSelfPatch(
     }
 
     if (currentAddress) {
-      const values = blankToNull(currentAddress);
+      const values = blankToNull(
+        normalizePhoneFields(currentAddress, ADDRESS_PHONE_KEYS),
+      );
       await tx
         .insert(studentAddresses)
         .values({ studentId, addressType: 'current', ...values })

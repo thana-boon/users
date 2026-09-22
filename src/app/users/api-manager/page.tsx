@@ -5,7 +5,7 @@ import { api, jsonBody, BASE_PATH } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { IconSearch, IconPlus, IconKey } from '@/components/Icons';
 import { ApiKeyDialog, RevealDialog, type ApiKeyFormValue } from '@/components/ApiKeyDialog';
-import { SCOPE_LABEL_TH, PII_SCOPES, type ApiScope } from '@/lib/api-scopes';
+import { SCOPE_LABEL_TH, PII_SCOPES, WRITE_SCOPES, type ApiScope } from '@/lib/api-scopes';
 
 /**
  * API Manager — ออก/ตรวจสอบ/เพิกถอน API key ที่ให้ระบบอื่นมาดึงรายชื่อ
@@ -204,7 +204,15 @@ export default function ApiManagerPage() {
                       {r.scopes.map((s) => (
                         <span
                           key={s}
-                          className={`badge ${PII_SCOPES.includes(s as ApiScope) ? 'badge-warning' : 'badge-purple'}`}
+                          // A write scope reads as louder than a PII one on
+                          // purpose: it is the only kind that changes our data.
+                          className={`badge ${
+                            WRITE_SCOPES.includes(s as ApiScope)
+                              ? 'badge-error'
+                              : PII_SCOPES.includes(s as ApiScope)
+                                ? 'badge-warning'
+                                : 'badge-purple'
+                          }`}
                           title={SCOPE_LABEL_TH[s as ApiScope] ?? s}
                           style={{ fontSize: 11 }}
                         >

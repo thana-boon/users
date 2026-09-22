@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { and, eq, ilike, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { phoneField } from '@/lib/phone';
 import { db } from '@/db';
 import { students, enrollments } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
@@ -122,7 +123,7 @@ const createSchema = z.object({
   religion: z.string().optional().nullable(),
   nationality: z.string().optional().nullable(),
   ethnicity: z.string().optional().nullable(),
-  phone: z.string().optional().nullable(),
+  phone: phoneField,
   email: z.string().optional().nullable(),
   citizenId: z.string().optional().nullable(),
   // Trimmed on the way in so a password can never be STORED with edge

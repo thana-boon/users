@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { phoneField } from '@/lib/phone';
 import { db } from '@/db';
 import { specialTeachers } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
@@ -40,7 +41,7 @@ const patchSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   subjectGroup: z.string().nullable().optional(),
-  phone: z.string().nullable().optional(),
+  phone: phoneField,
 });
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {

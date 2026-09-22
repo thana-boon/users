@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { api } from '@/lib/client';
 import { useNotice } from '@/components/Notice';
-import { ClosedNotice, Field, Locked, SaveBar, Section } from './parts';
+import { CitizenIdField, ClosedNotice, Field, Locked, SaveBar, Section } from './parts';
 import { PasswordCard } from './PasswordCard';
 
 /**
@@ -51,6 +51,9 @@ export interface StudentMe {
   audience: 'student';
   canEdit: boolean;
   closedReason: string | null;
+  /** The audience window AND the school-wide sensitive switch, both true. */
+  canEditSensitive: boolean;
+  sensitiveClosedReason: string | null;
   id: number;
   studentCode: string;
   prefix: string | null;
@@ -96,6 +99,9 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
   });
   const [health, setHealth] = useState<Health>(me.health ?? {});
   const [address, setAddress] = useState<CurrentAddress>(me.currentAddress ?? {});
+  // `undefined` until the student actually unlocks and types — the key stays
+  // out of the payload entirely, which is what the server reads as "no change".
+  const [citizenId, setCitizenId] = useState<string | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
   const ro = !me.canEdit;
@@ -112,6 +118,10 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
         method: 'PATCH',
         body: JSON.stringify({
           ...contact,
+          // Present only when unlocked. While the school's sensitive switch is
+          // off the server answers 403 to the mere presence of this key, so it
+          // must not ride along "just in case".
+          ...(citizenId === undefined ? {} : { citizenId }),
           health: pick(health, HEALTH_KEYS),
           currentAddress: pick(address, ADDRESS_KEYS),
         }),
@@ -222,7 +232,11 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
 
       <Section
         title="ข้อมูลทะเบียน"
-        badge={<span className="badge badge-muted">ผู้ดูแลระบบแก้ไขให้เท่านั้น</span>}
+        badge={
+          <span className={`badge ${me.canEditSensitive ? 'badge-warning' : 'badge-muted'}`}>
+            {me.canEditSensitive ? 'แก้ได้เฉพาะเลขบัตรประชาชน' : 'ผู้ดูแลระบบแก้ไขให้เท่านั้น'}
+          </span>
+        }
         hint="ข้อมูลส่วนนี้มาจากเอกสารตอนสมัครเรียนและใช้ออกเอกสารทางการ (ปพ.) หากไม่ถูกต้องให้แจ้งครูประจำชั้นหรือฝ่ายธุรการ"
       >
         <Locked label="คำนำหน้า" value={me.prefix} />
@@ -232,7 +246,12 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
         <Locked label="ชื่อ (อังกฤษ)" value={me.firstNameEn} />
         <Locked label="นามสกุล (อังกฤษ)" value={me.lastNameEn} />
         <Locked label="วันเดือนปีเกิด" value={me.birthDate} />
-        <Locked label="เลขบัตรประชาชน" value={me.citizenIdMasked} />
+        <CitizenIdField
+          masked={me.citizenIdMasked}
+          canEdit={me.canEditSensitive}
+          closedReason={me.sensitiveClosedReason}
+          onChange={setCitizenId}
+        />
         <Locked label="เพศ" value={me.gender} />
         <Locked label="ศาสนา" value={me.religion} />
         <Locked label="สัญชาติ" value={me.nationality} />

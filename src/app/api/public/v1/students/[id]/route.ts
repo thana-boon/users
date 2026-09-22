@@ -2,11 +2,12 @@ import type { NextRequest } from 'next/server';
 import { asc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { students, enrollments, academicYears } from '@/db/schema';
-import { requireApiScope, actorHasScope, apiError } from '@/lib/apiauth';
+import { requireApiScope, actorHasScope, apiError, insufficientScope } from '@/lib/apiauth';
 import { ok, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { tryDecrypt } from '@/lib/crypto';
 import { resolveActiveYearId } from '@/lib/services/students';
+import { readContactsFor, readHealthFor } from '@/lib/services/student-extras';
 
 export const runtime = 'nodejs';
 
@@ -39,6 +40,12 @@ export const runtime = 'nodejs';
  *
  * The photo blob is not inlined, matching the list route: `hasPhoto` /
  * `photoUrl` point at ./photo, which is gated by `students:photo`.
+ *
+ * `?include=health,contact` attaches the same two opt-in blocks the list route
+ * offers, behind the same additive scopes (`students:health` /
+ * `students:contact`) and audited the same way. This is the endpoint an
+ * emergency screen actually calls — one child, everything needed to act — so it
+ * takes the blocks by id without needing to know which year they are enrolled in.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await requireApiScope(req, 'students:read');
@@ -51,6 +58,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const withPii = actorHasScope(guard.actor, 'students:pii');
+
+    const include = new Set(
+      (req.nextUrl.searchParams.get('include') ?? '')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean),
+    );
+    const wantHealth = include.has('health');
+    const wantContact = include.has('contact');
+    if (wantHealth && !actorHasScope(guard.actor, 'students:health')) {
+      return insufficientScope('students:health');
+    }
+    if (wantContact && !actorHasScope(guard.actor, 'students:contact')) {
+      return insufficientScope('students:contact');
+    }
 
     const [rows, enrolled, activeYearId, years] = await Promise.all([
       db
@@ -122,15 +144,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const { citizenIdEncrypted, isArchived, exitType, exitDate, exitAcademicYearId, ...core } = row;
 
-    if (withPii) {
+    // Fetched only after the 404 above, so a probe for a nonexistent id never
+    // costs two extra queries.
+    const [healthById, contactById] = await Promise.all([
+      wantHealth ? readHealthFor([row.id]) : null,
+      wantContact ? readContactsFor([row.id]) : null,
+    ]);
+
+    if (withPii || wantHealth || wantContact) {
+      const blocks = [
+        withPii ? 'เลขบัตรประชาชน' : null,
+        wantHealth ? 'ข้อมูลสุขภาพ' : null,
+        wantContact ? 'ผู้ติดต่อฉุกเฉิน' : null,
+      ].filter(Boolean);
       await recordAudit({
         session: guard.actor.kind === 'session' ? guard.actor.session : null,
         actorLabel: guard.actor.label,
         actorRole: guard.actor.kind === 'key' ? 'api_key' : undefined,
-        action: 'reveal_citizen_id',
+        // Same rule as the list route: only call it a citizen-id reveal when
+        // one was actually returned.
+        action: withPii ? 'reveal_citizen_id' : 'api_read',
         targetType: 'student',
         targetId: row.id,
-        targetLabel: `public API · ${row.studentCode} ${row.firstName} ${row.lastName}`,
+        targetLabel: `public API · ${row.studentCode} ${row.firstName} ${row.lastName} · ${blocks.join(' + ')}`,
         detail: `GET /api/public/v1/students/${row.id}`,
         req,
       });
@@ -149,6 +185,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         classNumber: current?.classNumber ?? null,
         photoUrl: row.hasPhoto ? `/api/public/v1/students/${row.id}/photo` : null,
         ...(withPii ? { citizenId: tryDecrypt(citizenIdEncrypted) } : {}),
+        ...(healthById ? { health: healthById.get(row.id) ?? null } : {}),
+        ...(contactById ? { contact: contactById.get(row.id) ?? null } : {}),
         exit:
           exitType || exitDate || exitAcademicYearId
             ? {

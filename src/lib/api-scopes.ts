@@ -18,6 +18,21 @@
  * split per audience for the same reason: a system that only serves students
  * must not be able to test passwords against staff accounts.
  *
+ * `students:health` and `students:contact` are two more additive blocks on the
+ * student feed, each behind its own scope and each audited like `:pii`. They
+ * exist because ข้อมูลสุขภาพ and เบอร์ติดต่อฉุกเฉิน are the two things a sibling
+ * system genuinely needs in an emergency — and are also the two a roster feed
+ * has no business shipping to everyone who asked for a list of names. Split so
+ * the ห้องพยาบาล system can hold health without contacts, and a calling system
+ * can hold contacts without a child's allergies and chronic illnesses.
+ *
+ * `students:contact:write` is the ONLY write scope on this surface, and it
+ * writes exactly one thing: the emergency contact block on ที่อยู่ปัจจุบัน. It
+ * exists because the school collects those numbers through another system's
+ * form, and re-typing them here is how they go stale. It cannot create a
+ * student, cannot touch ทะเบียนบ้าน, and cannot reach any other column — see
+ * the route for the full list of what it may set.
+ *
  * `auth:handoff` is the odd one out: it tests no password at all. It lets a
  * consumer's SERVER redeem a one-time code the user's browser already collected
  * from us, turning "this browser has a SchoolOS session" into something a
@@ -30,6 +45,9 @@ export const API_SCOPES = [
   'students:read',
   'students:pii',
   'students:photo',
+  'students:health',
+  'students:contact',
+  'students:contact:write',
   'teachers:read',
   'teachers:pii',
   'teachers:photo',
@@ -60,6 +78,9 @@ export const SCOPE_LABEL_TH: Record<ApiScope, string> = {
   'students:read': 'อ่านรายชื่อนักเรียน',
   'students:pii': 'อ่านเลขบัตร ปชช. นักเรียน',
   'students:photo': 'ดึงรูปนักเรียน',
+  'students:health': 'อ่านข้อมูลสุขภาพนักเรียน (น้ำหนัก ส่วนสูง กรุ๊ปเลือด การแพ้ โรคประจำตัว)',
+  'students:contact': 'อ่านเบอร์/ผู้ติดต่อฉุกเฉินของนักเรียน',
+  'students:contact:write': 'เขียนเบอร์/ผู้ติดต่อฉุกเฉินกลับเข้าระบบ',
   'teachers:read': 'อ่านรายชื่อครู',
   'teachers:pii': 'อ่านเลขบัตร ปชช. ครู',
   'teachers:photo': 'ดึงรูปครู',
@@ -80,6 +101,13 @@ export const SCOPE_LABEL_TH: Record<ApiScope, string> = {
  */
 export const PII_SCOPES: ApiScope[] = [
   'students:pii',
+  // Health is health information about a child: allergies, chronic and serious
+  // illness. Flagged exactly like a citizen id, and for a stronger reason.
+  'students:health',
+  // An emergency contact names and reaches a third person — usually a parent —
+  // who never dealt with the integration asking for it.
+  'students:contact',
+  'students:contact:write',
   'teachers:pii',
   'workers:pii',
   'students:photo',
@@ -93,6 +121,14 @@ export const PII_SCOPES: ApiScope[] = [
  * but sensitive enough to warrant their own flag in the manager UI.
  */
 export const AUTH_SCOPES: ApiScope[] = ['auth:students', 'auth:teachers', 'auth:handoff'];
+
+/**
+ * Scopes that let a key CHANGE data. Flagged separately in the manager UI,
+ * because "this key can read the roster" and "this key can write into our
+ * database" are the two facts an admin issuing a key must not confuse. Every
+ * write is audited with the key's name.
+ */
+export const WRITE_SCOPES: ApiScope[] = ['students:contact:write'];
 
 /** Scopes whose key must also name the system it acts for (`handoffAudience`). */
 export const AUDIENCE_BOUND_SCOPES: ApiScope[] = ['auth:handoff'];

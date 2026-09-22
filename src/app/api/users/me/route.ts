@@ -5,8 +5,11 @@ import { teachers } from '@/db/schema';
 import { requireSelf } from '@/lib/rbac';
 import { ok, notFound, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
+import { encrypt } from '@/lib/crypto';
+import { normalizePhone } from '@/lib/phone';
 import {
   SELF_EDITABLE,
+  SENSITIVE_EDITABLE,
   describeLists,
   readTeacherProfile,
   replaceTeacherLists,
@@ -14,11 +17,17 @@ import {
 } from '@/lib/services/teachers';
 import {
   STUDENT_SELF_EDITABLE,
+  STUDENT_SENSITIVE_EDITABLE,
   applyStudentSelfPatch,
   readStudentProfile,
   studentSelfPatchSchema,
 } from '@/lib/services/student-self';
-import { selfEditClosedMessage, selfEditEnabled } from '@/lib/services/settings';
+import {
+  selfEditClosedMessage,
+  selfEditEnabled,
+  sensitiveClosedMessage,
+  sensitiveSelfEditEnabled,
+} from '@/lib/services/settings';
 
 export const runtime = 'nodejs';
 
@@ -41,6 +50,12 @@ export const runtime = 'nodejs';
  * On top of the per-field policy sits the school-wide switch an admin flips at
  * /users/settings: with the window closed, GET still answers (so the page can
  * show the record and say why it is read-only) and PATCH is refused.
+ *
+ * A SECOND switch sits on top of that one and governs a single field,
+ * เลขบัตรประชาชน. It is additive: with it on AND the audience window open, the
+ * person may reveal their own number (GET ./reveal, audited per click) and save
+ * a correction here. With it off, `citizenId` in the payload is a 403 rather
+ * than a dropped key — the page must never be able to look like it saved.
  */
 
 export async function GET(req: NextRequest) {
@@ -48,7 +63,10 @@ export async function GET(req: NextRequest) {
   if (!guard.ok) return guard.response;
   try {
     const { audience, person } = guard;
-    const windowOpen = await selfEditEnabled(audience);
+    const [windowOpen, sensitiveOpen] = await Promise.all([
+      selfEditEnabled(audience),
+      sensitiveSelfEditEnabled(),
+    ]);
     // Editing is off for anyone who has left, whatever the school-wide switch
     // says — see SelfPerson.active.
     const canEdit = windowOpen && person.active;
@@ -66,6 +84,14 @@ export async function GET(req: NextRequest) {
       // below enforces — so a locked field can never look editable.
       editableFields: audience === 'teacher' ? SELF_EDITABLE : STUDENT_SELF_EDITABLE,
       canEdit,
+      // The sensitive field rides its own flag, because it is its own switch.
+      // Both must be true for the page to offer the reveal/edit control, and
+      // `canEdit` alone has never meant "may touch เลขบัตรประชาชน".
+      sensitiveFields: audience === 'teacher' ? SENSITIVE_EDITABLE : STUDENT_SENSITIVE_EDITABLE,
+      canEditSensitive: canEdit && sensitiveOpen,
+      // Shown to a person whose record IS editable but whose id is still
+      // locked, so the page can explain the one greyed field among many.
+      sensitiveClosedReason: sensitiveOpen ? null : sensitiveClosedMessage(),
       // Told apart on purpose: "the school closed the window" and "you have
       // left" are different facts and the page says the right one.
       closedReason: canEdit
@@ -94,11 +120,25 @@ export async function PATCH(req: NextRequest) {
       return Response.json({ error: selfEditClosedMessage(audience) }, { status: 403 });
     }
 
+    // Read once: `req.json()` is a stream and the body is needed twice here.
+    const raw: unknown = await req.json();
+    // The sensitive gate, checked before the schema so a payload naming
+    // `citizenId` while the switch is off is told exactly why, rather than
+    // failing the generic 400 the .strict() schemas produce for locked fields.
+    if (
+      raw !== null &&
+      typeof raw === 'object' &&
+      'citizenId' in raw &&
+      !(await sensitiveSelfEditEnabled())
+    ) {
+      return Response.json({ error: sensitiveClosedMessage() }, { status: 403 });
+    }
+
     const label = `${person.code} ${person.firstName} ${person.lastName}`;
     const changed =
       audience === 'teacher'
-        ? await patchTeacher(person.id, await req.json())
-        : await patchStudent(person.id, await req.json());
+        ? await patchTeacher(person.id, raw)
+        : await patchStudent(person.id, raw);
 
     await recordAudit({
       session: guard.session,
@@ -119,14 +159,24 @@ export async function PATCH(req: NextRequest) {
 
 async function patchTeacher(id: number, raw: unknown): Promise<string[]> {
   const body = selfPatchSchema.parse(raw);
-  const { educations, scoutQualifications, trainings, ...scalars } = body;
+  const { educations, scoutQualifications, trainings, citizenId, ...rest } = body;
+
+  // Same trailing-separator cleanup the student side does — see lib/phone.ts.
+  const scalars: Record<string, unknown> =
+    'phone' in rest ? { ...rest, phone: normalizePhone(rest.phone) } : { ...rest };
+  if (citizenId !== undefined) {
+    scalars.citizenIdEncrypted = citizenId && citizenId.trim() ? encrypt(citizenId.trim()) : null;
+  }
 
   if (Object.keys(scalars).length) {
     await db.update(teachers).set(scalars).where(eq(teachers.id, id));
   }
   const lists = { educations, scoutQualifications, trainings };
   await replaceTeacherLists(id, lists);
-  return [...Object.keys(scalars), ...describeLists(lists)];
+  const named = Object.keys(scalars).map((k) =>
+    k === 'citizenIdEncrypted' ? 'เลขบัตรประชาชน' : k,
+  );
+  return [...named, ...describeLists(lists)];
 }
 
 async function patchStudent(id: number, raw: unknown): Promise<string[]> {

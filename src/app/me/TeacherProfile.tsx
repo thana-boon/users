@@ -12,7 +12,7 @@ import {
 import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
 } from '@/lib/options';
-import { ClosedNotice, Field, Locked, SaveBar, Section } from './parts';
+import { CitizenIdField, ClosedNotice, Field, Locked, SaveBar, Section } from './parts';
 import { PasswordCard } from './PasswordCard';
 
 /**
@@ -27,6 +27,9 @@ export interface TeacherMe {
   audience: 'teacher';
   canEdit: boolean;
   closedReason: string | null;
+  /** The teacher window AND the school-wide sensitive switch, both true. */
+  canEditSensitive: boolean;
+  sensitiveClosedReason: string | null;
   id: number;
   teacherCode: string;
   prefix: string | null;
@@ -68,6 +71,9 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
     trainings: me.trainings ?? [],
   });
   const [hasPhoto, setHasPhoto] = useState(me.hasPhoto);
+  // `undefined` until the teacher unlocks and types — see CitizenIdField. The
+  // key stays out of the payload, which is how the server reads "no change".
+  const [citizenId, setCitizenId] = useState<string | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
   const ro = !me.canEdit;
@@ -78,7 +84,16 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
     try {
       // Exactly the fields the server allows — nothing else is even assembled,
       // so a stray key cannot ride along and turn the save into a 400.
-      await api('/api/users/me', { method: 'PATCH', body: JSON.stringify({ ...form, ...lists }) });
+      await api('/api/users/me', {
+        method: 'PATCH',
+        // The id key is present only when unlocked: with the school's sensitive
+        // switch off, the server answers 403 to its mere presence.
+        body: JSON.stringify({
+          ...form,
+          ...lists,
+          ...(citizenId === undefined ? {} : { citizenId }),
+        }),
+      });
       reload();
       notice({ message: 'ข้อมูลติดต่อและวุฒิ/การอบรมของคุณถูกบันทึกแล้ว' });
     } catch (e) {
@@ -145,7 +160,11 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
 
       <Section
         title="ข้อมูลทะเบียน"
-        badge={<span className="badge badge-muted">ผู้ดูแลระบบแก้ไขให้เท่านั้น</span>}
+        badge={
+          <span className={`badge ${me.canEditSensitive ? 'badge-warning' : 'badge-muted'}`}>
+            {me.canEditSensitive ? 'แก้ได้เฉพาะเลขบัตรประชาชน' : 'ผู้ดูแลระบบแก้ไขให้เท่านั้น'}
+          </span>
+        }
         hint="ข้อมูลส่วนนี้ใช้ในเอกสารราชการและใช้เข้าสู่ระบบ หากไม่ถูกต้องกรุณาแจ้งฝ่ายธุรการ/ผู้ดูแลระบบเพื่อแก้ไขให้"
       >
         <Locked label="คำนำหน้า" value={me.prefix} />
@@ -153,7 +172,12 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
         <Locked label="ชื่อ" value={me.firstName} />
         <Locked label="นามสกุล" value={me.lastName} />
         <Locked label="วันเดือนปีเกิด" value={me.birthDate} />
-        <Locked label="เลขบัตรประชาชน" value={me.citizenIdMasked} />
+        <CitizenIdField
+          masked={me.citizenIdMasked}
+          canEdit={me.canEditSensitive}
+          closedReason={me.sensitiveClosedReason}
+          onChange={setCitizenId}
+        />
         <Locked label="กลุ่มสาระที่สอน" value={me.subjectGroup} />
         <Locked label="ชั้นที่สอน" value={me.gradeTaught} />
       </Section>

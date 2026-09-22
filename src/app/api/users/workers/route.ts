@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { and, eq, ilike, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { phoneField } from '@/lib/phone';
 import { db } from '@/db';
 import { workers } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
@@ -70,7 +71,7 @@ const createSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   position: z.string().nullable().optional(),
-  phone: z.string().nullable().optional(),
+  phone: phoneField,
   citizenId: z.string().nullable().optional(),
 });
 

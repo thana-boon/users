@@ -13,6 +13,7 @@ import type {
   TeacherTraining,
 } from '@/db/schema';
 import { maskCitizenId, tryDecrypt } from '@/lib/crypto';
+import { isValidCitizenId } from '@/lib/thai';
 
 /**
  * A teacher's profile as both front doors read and write it: the admin route
@@ -261,9 +262,14 @@ export function noQualifications(): PublicQualifications {
  *    set their own role would be an admin.
  *  - email — it is a LOGIN identifier (api/auth/teacher-login accepts it in
  *    place of the code), so editing it is editing a credential.
- *  - ชื่อ-นามสกุล-คำนำหน้า, วันเกิด, เลขบัตร ปชช. — the registry identity these
- *    records exist to be. They do change (marriage, ยศ), but through the office
- *    that also has to change them on every official document, not here.
+ *  - ชื่อ-นามสกุล-คำนำหน้า, วันเกิด — the registry identity these records exist
+ *    to be. They do change (marriage, ยศ), but through the office that also has
+ *    to change them on every official document, not here.
+ *  - เลขบัตร ปชช. — locked by DEFAULT, and the one lock the school can lift.
+ *    With the sensitive switch on at /users/settings a teacher may reveal and
+ *    correct their own; see SENSITIVE_EDITABLE. It is not in the everyday list
+ *    because it is encrypted at rest, so a typo is invisible once saved, and
+ *    because every reveal of it is worth an audit row of its own.
  *  - กลุ่มสาระ / ชั้นที่สอน — an assignment the school makes, not a fact about
  *    the person.
  *  - employmentStatus / exit* / isArchived — the lifecycle. Nobody resigns
@@ -283,6 +289,14 @@ export const SELF_EDITABLE = [
 
 export type SelfEditableField = (typeof SELF_EDITABLE)[number];
 
+/**
+ * The extra field the school-wide sensitive switch unlocks. Kept apart from
+ * SELF_EDITABLE because a different switch governs it: the page must be able to
+ * grey this one while the rest stay editable, and the /me route reports the two
+ * lists separately for exactly that reason.
+ */
+export const SENSITIVE_EDITABLE = ['citizenId'] as const;
+
 /** The scalar half of a self-service PATCH — nothing outside SELF_EDITABLE. */
 export const selfPatchSchema = z
   .object({
@@ -292,6 +306,15 @@ export const selfPatchSchema = z
     religion: nstr,
     nationality: nstr,
     ethnicity: nstr,
+    // Accepted only when the sensitive switch is on; api/users/me refuses the
+    // whole request before it reaches here if it is not. '' clears the field.
+    citizenId: z
+      .string()
+      .nullable()
+      .optional()
+      .refine((v) => v == null || v.trim() === '' || isValidCitizenId(v), {
+        message: 'เลขบัตรประชาชนไม่ถูกต้อง (ต้องเป็น 13 หลักและผ่านการตรวจหลักสุดท้าย)',
+      }),
   })
   .merge(teacherListsSchema)
   // A payload naming a locked field is a bug or an attempt; either way it is
