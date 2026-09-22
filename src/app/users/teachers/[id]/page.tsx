@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { PhoneInput } from '@/components/PhoneInput';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
@@ -186,7 +187,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
           <div><label className="form-label">อีเมล</label><input className="form-input" value={form.email ?? ''} onChange={set('email')} /></div>
           <div><label className="form-label">ชื่อ</label><input className="form-input" value={form.firstName ?? ''} onChange={set('firstName')} /></div>
           <div><label className="form-label">นามสกุล</label><input className="form-input" value={form.lastName ?? ''} onChange={set('lastName')} /></div>
-          <div><label className="form-label">เบอร์โทร</label><input className="form-input" value={form.phone ?? ''} onChange={set('phone')} placeholder="เช่น 0812345678" /></div>
+          <PhoneInput label="เบอร์โทร" value={form.phone} onChange={setV('phone')} />
           <div><label className="form-label">ไอดีไลน์</label><input className="form-input" value={form.lineId ?? ''} onChange={set('lineId')} placeholder="เช่น teacher.somchai" /></div>
           <DateField label="วันเดือนปีเกิด" value={form.birthDate} onChange={setV('birthDate')} />
           <Combo label="เพศ" value={form.gender} onChange={setV('gender')} options={GENDER_OPTIONS} />

@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { PhoneInput } from '@/components/PhoneInput';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
@@ -45,6 +46,8 @@ export default function WorkerDetailPage({ params }: { params: Promise<{ id: str
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((s) => ({ ...s, [k]: e.target.value }));
+  /** The same setter for controls that hand back a value rather than an event. */
+  const setV = (k: string) => (v: string) => setForm((s) => ({ ...s, [k]: v }));
 
   const initials = `${d.firstName?.[0] ?? ''}${d.lastName?.[0] ?? ''}`.trim();
   const resigned = d.employmentStatus === 'resigned';
@@ -143,7 +146,7 @@ export default function WorkerDetailPage({ params }: { params: Promise<{ id: str
 
         <div className="grid-2" style={{ gap: 12 }}>
           <div><label className="form-label">คำนำหน้า</label><input className="form-input" value={form.prefix ?? ''} onChange={set('prefix')} /></div>
-          <div><label className="form-label">เบอร์โทร</label><input className="form-input" value={form.phone ?? ''} onChange={set('phone')} /></div>
+          <PhoneInput label="เบอร์โทร" value={form.phone} onChange={setV('phone')} />
           <div><label className="form-label">ชื่อ</label><input className="form-input" value={form.firstName ?? ''} onChange={set('firstName')} /></div>
           <div><label className="form-label">นามสกุล</label><input className="form-input" value={form.lastName ?? ''} onChange={set('lastName')} /></div>
           <div style={{ gridColumn: '1 / -1' }}><label className="form-label">ตำแหน่ง/หน้าที่</label><input className="form-input" value={form.position ?? ''} onChange={set('position')} placeholder="เช่น นักการภารโรง" /></div>

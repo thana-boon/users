@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api, jsonBody, withBase } from '@/lib/client';
 import { useToast } from '@/components/Toast';
+import { PhoneInput } from '@/components/PhoneInput';
 import { useConfirm } from '@/components/Confirm';
 import { Combo } from '@/components/Combo';
 import { SubjectGroupSelect, SubjectGroupFilter } from '@/components/SubjectGroupSelect';
@@ -332,10 +333,7 @@ function SpecialTeacherDialog({
             onChange={setV('subjectGroup')}
             hint="กลุ่มสาระที่อาจารย์พิเศษคนนี้สังกัด — ใช้รายการเดียวกับครูประจำ แก้ไขได้ที่หน้า “กลุ่มสาระ”"
           />
-          <div>
-            <label className="form-label">เบอร์โทร</label>
-            <input className="form-input" value={f.phone} onChange={set('phone')} placeholder="เช่น 0812345678" />
-          </div>
+          <PhoneInput label="เบอร์โทร" value={f.phone} onChange={setV('phone')} />
           <p className="form-hint">อาจารย์พิเศษไม่มีบัญชีเข้าสู่ระบบ จึงไม่ต้องกรอกรหัสผ่านหรืออีเมล</p>
         </div>
         <div className="row-between card-pad" style={{ paddingTop: 0 }}>

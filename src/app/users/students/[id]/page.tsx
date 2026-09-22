@@ -16,6 +16,7 @@ import { StatusDialog } from '@/components/StatusDialog';
 import { ReinstateDialog } from '@/components/ReinstateDialog';
 import { Combo } from '@/components/Combo';
 import { DateField } from '@/components/DateField';
+import { PhoneInput, isPhoneKey } from '@/components/PhoneInput';
 import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
   STUDENT_PREFIX_OPTIONS,
@@ -398,10 +399,10 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                 <Combo label="ศาสนา" value={core.religion} onChange={setC('religion')} options={RELIGION_OPTIONS} />
                 <Combo label="สัญชาติ" value={core.nationality} onChange={setC('nationality')} options={NATIONALITY_OPTIONS} />
                 <Combo label="เชื้อชาติ" value={core.ethnicity} onChange={setC('ethnicity')} options={ETHNICITY_OPTIONS} />
-                <TInput label="เบอร์โทร" value={core.phone} onChange={setC('phone')} />
+                <PhoneInput label="เบอร์โทร" value={core.phone} onChange={setC('phone')} />
                 {/* Writes to ที่อยู่ปัจจุบัน, which is where the column lives —
                     the same state the address card edits, just surfaced here. */}
-                <TInput
+                <PhoneInput
                   label="เบอร์ติดต่อฉุกเฉิน"
                   value={addrs.current?.emergencyPhone}
                   onChange={setA('current', 'emergencyPhone')}
@@ -563,7 +564,13 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 ) : (
                   <div className="stack" style={{ gap: 8, marginTop: 8 }}>
-                    {GUARDIAN_FIELDS.map((f) => <TInput key={f.k} label={f.label} value={guards[t]?.[f.k]} onChange={setG(t, f.k)} />)}
+                    {GUARDIAN_FIELDS.map((f) =>
+                      isPhoneKey(f.k) ? (
+                        <PhoneInput key={f.k} label={f.label} value={guards[t]?.[f.k]} onChange={setG(t, f.k)} />
+                      ) : (
+                        <TInput key={f.k} label={f.label} value={guards[t]?.[f.k]} onChange={setG(t, f.k)} />
+                      ),
+                    )}
                     <TInput label="เลขบัตร ปชช. (เว้นว่าง=ไม่เปลี่ยน)" value={guards[t]?.citizenId} onChange={setG(t, 'citizenId')} disabled={!unlocked} />
                     <TInput label="รายได้/เดือน (เว้นว่าง=ไม่เปลี่ยน)" value={guards[t]?.incomeMonthly} onChange={setG(t, 'incomeMonthly')} disabled={!unlocked} />
                     <TInput label="รายได้/ปี (เว้นว่าง=ไม่เปลี่ยน)" value={guards[t]?.incomeYearly} onChange={setG(t, 'incomeYearly')} disabled={!unlocked} />
@@ -596,7 +603,16 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 ) : (
                   <div className="grid-2" style={{ gap: 8 }}>
-                    {fields.map((f) => <TInput key={f.k} label={f.label} value={addrs[t]?.[f.k]} onChange={setA(t, f.k)} />)}
+                    {fields.map((f) =>
+                      // Same treatment for the phone columns buried in the
+                      // address/guardian field maps — an input that refuses a
+                      // dash is worth nothing if only two of the nine do.
+                      isPhoneKey(f.k) ? (
+                        <PhoneInput key={f.k} label={f.label} value={addrs[t]?.[f.k]} onChange={setA(t, f.k)} />
+                      ) : (
+                        <TInput key={f.k} label={f.label} value={addrs[t]?.[f.k]} onChange={setA(t, f.k)} />
+                      ),
+                    )}
                   </div>
                 )}
               </div>

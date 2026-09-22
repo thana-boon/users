@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { api } from '@/lib/client';
 import { useNotice } from '@/components/Notice';
+import { PhoneInput } from '@/components/PhoneInput';
 import { CitizenIdField, ClosedNotice, Field, Locked, SaveBar, Section } from './parts';
 import { PasswordCard } from './PasswordCard';
 
@@ -188,7 +189,7 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
       {ro && me.closedReason && <ClosedNotice reason={me.closedReason} />}
 
       <Section title="ข้อมูลติดต่อ" hint={ro ? undefined : 'ส่วนนี้แก้ไขเองได้'}>
-        <Field label="เบอร์โทรของฉัน" value={contact.phone} onChange={setC('phone')} placeholder="เช่น 0812345678" disabled={ro} />
+        <PhoneInput label="เบอร์โทรของฉัน" value={contact.phone} onChange={setC('phone')} disabled={ro} />
         <Field label="ชื่อเล่น" value={contact.nickname} onChange={setC('nickname')} disabled={ro} />
         <Field label="ชื่อเล่น (อังกฤษ)" value={contact.nicknameEn} onChange={setC('nicknameEn')} disabled={ro} />
       </Section>
@@ -219,15 +220,15 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
         <Field label="อำเภอ/เขต" value={address.district} onChange={setA('district')} disabled={ro} />
         <Field label="จังหวัด" value={address.province} onChange={setA('province')} disabled={ro} />
         <Field label="รหัสไปรษณีย์" value={address.postalCode} onChange={setA('postalCode')} disabled={ro} />
-        <Field label="เบอร์โทรศัพท์บ้าน" value={address.phone} onChange={setA('phone')} disabled={ro} />
+        <PhoneInput label="เบอร์โทรศัพท์บ้าน" value={address.phone} onChange={setA('phone')} disabled={ro} />
         <Field label="ลักษณะบ้าน" value={address.houseType} onChange={setA('houseType')} placeholder="เช่น บ้านตนเอง, บ้านเช่า" disabled={ro} />
         <Field label="ปัจจุบันอาศัยอยู่กับ (ชื่อ)" value={address.livingWith} onChange={setA('livingWith')} disabled={ro} />
         <Field label="นามสกุล" value={address.livingWithLastname} onChange={setA('livingWithLastname')} disabled={ro} />
-        <Field label="เบอร์ติดต่อฉุกเฉิน" value={address.emergencyPhone} onChange={setA('emergencyPhone')} hint="เบอร์ที่โรงเรียนจะโทรหาเป็นอันดับแรก" disabled={ro} />
+        <PhoneInput label="เบอร์ติดต่อฉุกเฉิน" value={address.emergencyPhone} onChange={setA('emergencyPhone')} hint="เบอร์ที่โรงเรียนจะโทรหาเป็นอันดับแรก" disabled={ro} />
         <Field label="อีเมลติดต่อฉุกเฉิน" value={address.emergencyEmail} onChange={setA('emergencyEmail')} disabled={ro} />
         <Field label="เพื่อนใกล้บ้าน (ชื่อ)" value={address.nearbyFriendName} onChange={setA('nearbyFriendName')} disabled={ro} />
         <Field label="นามสกุล" value={address.nearbyFriendLastname} onChange={setA('nearbyFriendLastname')} disabled={ro} />
-        <Field label="เบอร์โทรเพื่อนใกล้บ้าน" value={address.nearbyFriendPhone} onChange={setA('nearbyFriendPhone')} disabled={ro} />
+        <PhoneInput label="เบอร์โทรเพื่อนใกล้บ้าน" value={address.nearbyFriendPhone} onChange={setA('nearbyFriendPhone')} disabled={ro} />
       </Section>
 
       <Section

@@ -13,11 +13,13 @@
  * can see at the end of a table cell. The same trailing junk turned up in a few
  * guardian and address columns, so every phone column in the database is swept.
  *
- * WHAT IT DOES, exactly: `normalizePhone` from src/lib/phone.ts — trim the
- * separators at the two ends, and nothing else. Digits are never added, removed
- * or reordered; inner dashes (`02-123-4567`) are how people write a number and
- * are left alone. A cell holding only punctuation ('-') becomes NULL, because a
- * separator on its own is not a number and should not look like data.
+ * WHAT IT DOES, exactly: `normalizePhone` from src/lib/phone.ts — keep the
+ * digits, drop everything else. `0812345678-` becomes `0812345678` and
+ * `089-885-0863` becomes `0898850863`. Digits are never added, removed or
+ * reordered, so a 9-digit landline and an 11-digit typo both survive as they
+ * are, minus punctuation; the script prints them but does not guess at them. A
+ * cell holding only punctuation ('-') becomes NULL, because it is not a number
+ * and should not look like data.
  *
  * Idempotent: a second run finds nothing to do, which is also what makes the
  * dry run trustworthy — the count it prints is the count the apply will change.

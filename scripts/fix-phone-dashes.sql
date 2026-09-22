@@ -1,13 +1,17 @@
--- ลบอักขระคั่นที่ค้างหัว-ท้ายเบอร์โทร (เช่น "0812345678-" ที่ติดมาจากการ import ครั้งแรก)
+-- ทำให้ช่องเบอร์โทรเก็บเฉพาะตัวเลข — ตัดอักขระแปลกปลอมทิ้ง
+-- (เช่น "0812345678-" ที่ติดมาจากการ import ครั้งแรก)
 --
 -- ใช้เมื่อรัน `npm run fix:phones` ไม่ได้ — เช่นบนเซิร์ฟเวอร์ production ที่มีแต่
 -- pgAdmin / Portainer console ไม่มี Node
 --
--- ทำอะไร: ตัดอักขระคั่น (เว้นวรรค - . , ; : / |) ที่หัวและท้ายเท่านั้น
+-- ทำอะไร: เก็บเฉพาะตัวเลข ที่เหลือตัดทิ้งหมด
 --   '0812345678-'   -> '0812345678'
---   ' 02-123-4567 ' -> '02-123-4567'   (ขีดตรงกลางไม่ถูกแตะ — คนเขียนเบอร์แบบนี้)
---   '-'             -> NULL            (มีแต่เครื่องหมาย ไม่ใช่เบอร์)
--- ไม่เพิ่ม ไม่ลบ ไม่สลับตัวเลขใด ๆ — กติกาเดียวกับ normalizePhone() ใน src/lib/phone.ts
+--   '089-885-0863'  -> '0898850863'
+--   ' 02-123-4567 ' -> '021234567'
+--   '-' / 'ไม่มี'    -> NULL            (ไม่มีตัวเลขเลย = ไม่มีเบอร์)
+-- ไม่เพิ่ม ไม่ลบ ไม่สลับตัวเลขใด ๆ — เบอร์ 9 หลักหรือ 11 หลักยังอยู่ตามเดิม
+-- (แค่ไม่มีเครื่องหมาย) สคริปต์ไม่เดาแทนคน — กติกาเดียวกับ normalizePhone()
+-- ใน src/lib/phone.ts เป๊ะ ๆ
 --
 -- รันซ้ำได้ไม่เสียหาย รอบที่สองจะแก้ 0 แถว
 --
@@ -16,29 +20,28 @@
 --   2. พอใจแล้วค่อยรัน "ขั้นที่ 2"
 --   3. รัน "ขั้นที่ 3" เพื่อตรวจว่าสะอาดแล้ว
 
--- ตัวคั่นที่ถือว่าเป็น "ขยะหัวท้าย" ใช้ชุดเดียวกันทุกที่ในไฟล์นี้
--- POSIX class [[:space:]] ครอบคลุมทั้ง space / tab / newline
+-- "แปลกปลอม" = อะไรก็ตามที่ไม่ใช่ตัวเลข 0-9
 
 
 -- ==========================================================
 -- ขั้นที่ 1 — ดูก่อน (อ่านอย่างเดียว ไม่เขียนอะไรทั้งสิ้น)
 -- ==========================================================
-select 'students.phone'                     as คอลัมน์, count(*) as ต้องแก้ from students           where phone               ~ '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$'
-union all select 'student_addresses.phone',               count(*) from student_addresses where phone               ~ '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$'
-union all select 'student_addresses.emergency_phone',     count(*) from student_addresses where emergency_phone     ~ '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$'
-union all select 'student_addresses.nearby_friend_phone', count(*) from student_addresses where nearby_friend_phone ~ '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$'
-union all select 'guardians.home_phone',                  count(*) from guardians        where home_phone          ~ '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$'
-union all select 'guardians.mobile_phone',                count(*) from guardians        where mobile_phone        ~ '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$'
-union all select 'guardians.work_phone',                  count(*) from guardians        where work_phone          ~ '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$'
-union all select 'teachers.phone',                        count(*) from teachers         where phone               ~ '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$'
-union all select 'workers.phone',                         count(*) from workers          where phone               ~ '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$'
-union all select 'special_teachers.phone',                count(*) from special_teachers where phone               ~ '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$';
+select 'students.phone'                     as คอลัมน์, count(*) as ต้องแก้ from students           where phone               ~ '[^0-9]'
+union all select 'student_addresses.phone',               count(*) from student_addresses where phone               ~ '[^0-9]'
+union all select 'student_addresses.emergency_phone',     count(*) from student_addresses where emergency_phone     ~ '[^0-9]'
+union all select 'student_addresses.nearby_friend_phone', count(*) from student_addresses where nearby_friend_phone ~ '[^0-9]'
+union all select 'guardians.home_phone',                  count(*) from guardians        where home_phone          ~ '[^0-9]'
+union all select 'guardians.mobile_phone',                count(*) from guardians        where mobile_phone        ~ '[^0-9]'
+union all select 'guardians.work_phone',                  count(*) from guardians        where work_phone          ~ '[^0-9]'
+union all select 'teachers.phone',                        count(*) from teachers         where phone               ~ '[^0-9]'
+union all select 'workers.phone',                         count(*) from workers          where phone               ~ '[^0-9]'
+union all select 'special_teachers.phone',                count(*) from special_teachers where phone               ~ '[^0-9]';
 
 -- ตัวอย่างค่าที่จะเปลี่ยน (ดูให้สบายใจก่อนเขียนจริง)
 select id, student_code, phone as ก่อน,
-       nullif(regexp_replace(phone, '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$', '', 'g'), '') as หลัง
+       nullif(regexp_replace(phone, '[^0-9]', '', 'g'), '') as หลัง
 from students
-where phone ~ '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$'
+where phone ~ '[^0-9]'
 order by id
 limit 20;
 
@@ -61,7 +64,7 @@ create table if not exists _phone_fix_backup (
 do $$
 declare
   r record;
-  sep constant text := '^[[:space:]\-.,;:/|]+|[[:space:]\-.,;:/|]+$';
+  sep constant text := '[^0-9]';
 begin
   for r in
     select * from (values
@@ -107,8 +110,8 @@ commit;
 -- ==========================================================
 -- ขั้นที่ 3 — ตรวจหลังแก้ (ควรได้ 0 ทุกบรรทัด ยกเว้นบรรทัดสุดท้าย)
 -- ==========================================================
-select 'ยังลงท้ายด้วยอักขระที่ไม่ใช่ตัวเลข' as ตรวจ, count(*) as จำนวน
-from students where phone ~ '[^0-9]$'
+select 'ยังมีอักขระที่ไม่ใช่ตัวเลขหลงเหลือ' as ตรวจ, count(*) as จำนวน
+from students where phone ~ '[^0-9]'
 union all
 select 'เบอร์นักเรียนที่ยังมีค่า (ต้องเท่าเดิม ไม่ควรหาย)', count(*)
 from students where phone is not null and phone <> '';

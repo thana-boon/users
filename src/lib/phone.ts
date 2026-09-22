@@ -1,42 +1,81 @@
 /**
  * Phone-number tidying — one rule, applied wherever a phone number is written.
  *
- * WHY this exists: the first student import came out of a spreadsheet whose
- * phone column was "เบอร์โทร-" style free text, and almost every row landed in
- * Postgres with a trailing "-" — `0812345678-`. Harmless to look at, poison to
- * use: another system dialling that string, or matching it against its own
- * copy, fails on a character nobody can see at the end of a table cell.
+ * THE RULE: a phone number is stored as DIGITS ONLY. Everything else in the
+ * field is punctuation people typed for readability, or junk an import dragged
+ * in, and neither survives the save.
  *
- * The rule is deliberately conservative — TRIM the separators at the two ends
- * and nothing else:
+ *   '0812345678-'   → '0812345678'   ← the trailing dash the first import left
+ *   '089-8850863'   → '0898850863'
+ *   ' 02-123-4567 ' → '021234567'
+ *   '081 234 5678'  → '0812345678'
+ *   'ไม่มี'          → null
+ *   '-'             → null           ← punctuation alone is not a number
  *
- *   '0812345678-'   → '0812345678'
- *   ' 02-123-4567 ' → '02-123-4567'   ← inner dashes are how people write it
- *   '-'             → null            ← a separator alone is not a number
- *   '081 234 5678'  → '081 234 5678'  ← spacing is the owner's business
+ * WHY digits only, rather than the gentler "trim the ends" rule this started
+ * as. A phone number is not prose; it is an identifier that other systems
+ * dial, match against their own copy, and send SMS to. Every extra character
+ * is a way for two systems holding the SAME number to disagree about it —
+ * `089-8850863` and `0898850863` are one number and two strings. Storing the
+ * digits makes the comparison work and leaves formatting to whoever displays
+ * it, which is where formatting belongs.
  *
- * Digits are never added, removed or reordered. A number stored wrong stays
- * wrong and stays visible; this only removes the punctuation the import left
- * dangling. Reformatting to a canonical 0XX-XXX-XXXX would silently rewrite
- * เบอร์บ้าน, เบอร์ต่างประเทศ and "081xxxxxxx / 089xxxxxxx" alike, and a records
- * module has no business guessing at those.
+ * WHAT THIS IS SAFE TO DO, and how we know. The worry with digits-only is a
+ * cell holding TWO numbers — `0812345678 / 0898765432` would fuse into one
+ * 20-digit non-number, silently. The school's data was surveyed across all
+ * eight phone columns before this rule was adopted: no such cell exists, and
+ * exactly one value carried an inner separator at all. If a future import
+ * brings some in, they must be split BEFORE loading, not fixed here.
+ *
+ * WHAT THIS DELIBERATELY DOES NOT DO: guess. A 9-digit landline, an 11-digit
+ * typo and a leading zero Excel ate are all left exactly as they are, minus
+ * punctuation. Padding, truncating or "correcting" them would bury a data-entry
+ * error under a value that looks right. {@link phoneLooksOdd} flags them for a
+ * human instead.
+ *
+ * The one cost: a `+66` international prefix loses its `+`. No number in the
+ * school's data has one, and a primary school dialling abroad from this field
+ * is not a case worth keeping a hole open for.
  */
 
 import { z } from 'zod';
 
-/** Separators people put around a Thai phone number. */
-const EDGE_SEPARATORS = /^[\s\-.,;:/|]+|[\s\-.,;:/|]+$/g;
-
 /**
- * Trim the separators off both ends. Returns null for anything that holds no
- * digit at all, so '-' and '' both mean "no number on file" rather than a
- * string that looks like data.
+ * Keep the digits, drop everything else. Returns null when nothing is left, so
+ * '-', 'ไม่มี' and '' all mean "no number on file" rather than a string that
+ * looks like data to everything downstream.
  */
 export function normalizePhone(value: string | null | undefined): string | null {
   if (value == null) return null;
-  const trimmed = value.replace(EDGE_SEPARATORS, '');
-  if (!trimmed || !/\d/.test(trimmed)) return null;
-  return trimmed;
+  const digits = value.replace(/\D/g, '');
+  return digits === '' ? null : digits;
+}
+
+/**
+ * Thai phone numbers that are not suspicious: 9 digits (เบอร์บ้าน, 02-xxx-xxxx
+ * and 0xx-xxx-xxx) or 10 (มือถือ, 08x/09x/06x).
+ *
+ * Used for a WARNING, never to refuse a save. A number outside this range is
+ * usually a real mistake — a leading zero Excel ate, a finger slip, or a
+ * เลขบัตรประชาชน pasted into the wrong box — but the office may have a reason
+ * for it, and a records module that rejected the value would just get a blank
+ * field instead of a wrong one. Showing the doubt is more useful than winning
+ * the argument.
+ */
+export function phoneLooksOdd(value: string | null | undefined): boolean {
+  const digits = normalizePhone(value);
+  if (!digits) return false;
+  return digits.length !== 9 && digits.length !== 10;
+}
+
+/** What to say about an odd-looking number. Null when it looks fine. */
+export function phoneWarning(value: string | null | undefined): string | null {
+  const digits = normalizePhone(value);
+  if (!digits || !phoneLooksOdd(digits)) return null;
+  if (digits.length === 13) {
+    return 'เลข 13 หลัก — ใช่เลขบัตรประชาชนที่ใส่ผิดช่องหรือเปล่า?';
+  }
+  return `มี ${digits.length} หลัก (ปกติเบอร์บ้าน 9 หลัก มือถือ 10 หลัก) — ตรวจอีกครั้ง`;
 }
 
 /** True if `normalizePhone` would change this value — used by the cleanup script's dry run. */

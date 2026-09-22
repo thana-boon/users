@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { api } from '@/lib/client';
 import { useNotice } from '@/components/Notice';
+import { PhoneInput } from '@/components/PhoneInput';
 import { PhotoCard } from '@/components/PhotoCard';
 import { Combo } from '@/components/Combo';
 import {
@@ -139,7 +140,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
       {ro && me.closedReason && <ClosedNotice reason={me.closedReason} />}
 
       <Section title="ข้อมูลติดต่อ" hint={ro ? undefined : 'ส่วนนี้แก้ไขเองได้'}>
-        <Field label="เบอร์โทร" value={form.phone} onChange={setV('phone')} placeholder="เช่น 0812345678" disabled={ro} />
+        <PhoneInput label="เบอร์โทร" value={form.phone} onChange={setV('phone')} disabled={ro} />
         <Field label="ไอดีไลน์" value={form.lineId} onChange={setV('lineId')} placeholder="เช่น teacher.somchai" disabled={ro} />
         {ro ? (
           <>
