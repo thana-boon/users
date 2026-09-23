@@ -88,6 +88,7 @@ const patchSchema = z.object({
   nationality: nstr,
   ethnicity: nstr,
   phone: nstr,
+  additionalPhone: nstr,
   email: nstr,
   admissionDate: nstr,
   citizenId: nstr,

@@ -26,12 +26,19 @@
  * the ห้องพยาบาล system can hold health without contacts, and a calling system
  * can hold contacts without a child's allergies and chronic illnesses.
  *
- * `students:contact:write` is the ONLY write scope on this surface, and it
- * writes exactly one thing: the emergency contact block on ที่อยู่ปัจจุบัน. It
- * exists because the school collects those numbers through another system's
- * form, and re-typing them here is how they go stale. It cannot create a
- * student, cannot touch ทะเบียนบ้าน, and cannot reach any other column — see
- * the route for the full list of what it may set.
+ * `students:phone:write` is the ONLY write scope on this surface, and it
+ * writes exactly one column: `students.additional_phone` (เบอร์เพิ่มเติม). It
+ * exists because the school collects that number through another system's form,
+ * and re-typing it here is how it goes stale.
+ *
+ * It replaced `students:contact:write`, which could rewrite the whole emergency
+ * block on ที่อยู่ปัจจุบัน — เบอร์ฉุกเฉิน, เบอร์บ้าน, อยู่กับใคร, เพื่อนบ้าน.
+ * The school's rule is now the simpler one to hold in your head: an outside
+ * system may change NOTHING that the office typed. เบอร์เพิ่มเติม is a column
+ * no office form fills in, added for this purpose, so the worst a compromised
+ * or buggy integration can do is put a wrong extra number on a child — never
+ * overwrite the number the school actually calls. Keys still carrying the old
+ * scope keep it in the row as an inert string; nothing answers to it.
  *
  * `auth:handoff` is the odd one out: it tests no password at all. It lets a
  * consumer's SERVER redeem a one-time code the user's browser already collected
@@ -47,7 +54,7 @@ export const API_SCOPES = [
   'students:photo',
   'students:health',
   'students:contact',
-  'students:contact:write',
+  'students:phone:write',
   'teachers:read',
   'teachers:pii',
   'teachers:photo',
@@ -80,7 +87,7 @@ export const SCOPE_LABEL_TH: Record<ApiScope, string> = {
   'students:photo': 'ดึงรูปนักเรียน',
   'students:health': 'อ่านข้อมูลสุขภาพนักเรียน (น้ำหนัก ส่วนสูง กรุ๊ปเลือด การแพ้ โรคประจำตัว)',
   'students:contact': 'อ่านเบอร์/ผู้ติดต่อฉุกเฉินของนักเรียน',
-  'students:contact:write': 'เขียนเบอร์/ผู้ติดต่อฉุกเฉินกลับเข้าระบบ',
+  'students:phone:write': 'เขียน "เบอร์เพิ่มเติม" ของนักเรียนกลับเข้าระบบ (ช่องเดียว)',
   'teachers:read': 'อ่านรายชื่อครู',
   'teachers:pii': 'อ่านเลขบัตร ปชช. ครู',
   'teachers:photo': 'ดึงรูปครู',
@@ -107,7 +114,9 @@ export const PII_SCOPES: ApiScope[] = [
   // An emergency contact names and reaches a third person — usually a parent —
   // who never dealt with the integration asking for it.
   'students:contact',
-  'students:contact:write',
+  // เบอร์เพิ่มเติม is a way to reach a child. Fewer fields than the block
+  // above, but the same kind of data, so it carries the same flag.
+  'students:phone:write',
   'teachers:pii',
   'workers:pii',
   'students:photo',
@@ -128,7 +137,7 @@ export const AUTH_SCOPES: ApiScope[] = ['auth:students', 'auth:teachers', 'auth:
  * database" are the two facts an admin issuing a key must not confuse. Every
  * write is audited with the key's name.
  */
-export const WRITE_SCOPES: ApiScope[] = ['students:contact:write'];
+export const WRITE_SCOPES: ApiScope[] = ['students:phone:write'];
 
 /** Scopes whose key must also name the system it acts for (`handoffAudience`). */
 export const AUDIENCE_BOUND_SCOPES: ApiScope[] = ['auth:handoff'];

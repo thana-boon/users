@@ -104,6 +104,14 @@ export const students = pgTable(
     hasSiblingInSchool: varchar('has_sibling_in_school', { length: 16 }),
 
     phone: varchar('phone', { length: 32 }),
+    // เบอร์เพิ่มเติม — a second number for the child, beside `phone`. It is a
+    // plain identity column like the first one, NOT part of the emergency block
+    // on ที่อยู่ปัจจุบัน: that block records how to reach a household, this
+    // records another way to reach this person. Kept separate because it is the
+    // one and only column an outside system may write back (see
+    // API_SCOPES['students:phone:write']) — a writable field has to be one
+    // whose worst case is a wrong extra number, never a lost original.
+    additionalPhone: varchar('additional_phone', { length: 32 }),
     email: varchar('email', { length: 128 }),
     // encrypted plaintext password (reversible; admin can reveal - see audit_logs)
     passwordEncrypted: text('password_encrypted'),

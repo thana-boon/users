@@ -217,6 +217,7 @@ function norm(v: unknown): string | null {
  */
 const PHONE_FIELDS = new Set([
   'phone',
+  'additionalPhone',
   'emergencyPhone',
   'nearbyFriendPhone',
   'homePhone',
@@ -236,7 +237,8 @@ export interface StudentUpdateInput {
   nickname?: string | null; firstNameEn?: string | null; lastNameEn?: string | null;
   nicknameEn?: string | null; gender?: string | null; birthDate?: string | null;
   religion?: string | null; nationality?: string | null; ethnicity?: string | null;
-  phone?: string | null; email?: string | null; admissionDate?: string | null;
+  phone?: string | null; additionalPhone?: string | null;
+  email?: string | null; admissionDate?: string | null;
   // sensitive — only applied when a non-empty value is supplied (blank = keep)
   citizenId?: string | null; password?: string | null;
   // active-year enrollment (or a specific enrollment by id)
@@ -249,7 +251,8 @@ export interface StudentUpdateInput {
 
 const IDENTITY_FIELDS = [
   'prefix', 'firstName', 'lastName', 'nickname', 'firstNameEn', 'lastNameEn', 'nicknameEn',
-  'gender', 'birthDate', 'religion', 'nationality', 'ethnicity', 'phone', 'email', 'admissionDate',
+  'gender', 'birthDate', 'religion', 'nationality', 'ethnicity', 'phone', 'additionalPhone',
+  'email', 'admissionDate',
 ] as const;
 
 const ADDRESS_FIELDS = [

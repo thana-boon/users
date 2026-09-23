@@ -1,12 +1,11 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { z } from 'zod';
 import { db } from '@/db';
 import { guardians, studentAddresses, studentHealth } from '@/db/schema';
-import { normalizePhoneFields } from '@/lib/phone';
 
 /**
  * The two opt-in blocks the public student feed can attach to a roster row:
- * ข้อมูลสุขภาพ and ผู้ติดต่อฉุกเฉิน — plus the one write the feed accepts back.
+ * ข้อมูลสุขภาพ and ผู้ติดต่อฉุกเฉิน. Read only — the public API's single write
+ * is PATCH /students/[id]/additional-phone, which touches neither of them.
  *
  * WHY THEY ARE NOT IN THE ROSTER ROW. Both are read by `?include=`, each behind
  * its own additive scope, for the same reason เลขบัตร ปชช. is: the common
@@ -95,7 +94,7 @@ export interface StudentContactBlock {
    * ผู้ปกครอง/บิดา/มารดา with their numbers. Read-only here and forever: a
    * guardian is a record about a third person who never dealt with the
    * integration asking, so an outside system may look one up but may not
-   * rewrite one. See `emergencyContactSchema` for what IS writable.
+   * rewrite one. Nothing in this block is writable through the public API.
    */
   guardians: GuardianContact[];
 }
@@ -171,84 +170,4 @@ export async function readContactsFor(ids: number[]): Promise<Map<number, Studen
     block.guardians.sort((a, b) => ORDER[a.type] - ORDER[b.type]);
   }
   return out;
-}
-
-// -- the one write --------------------------------------------------
-
-/**
- * Everything `students:contact:write` may set, and nothing else.
- *
- * `.strict()`, so a payload naming any other column is a 400 rather than a
- * silently dropped key — an integration that thinks it is updating a name must
- * be told it is not. Every field is optional and absence means "leave alone",
- * so the usual call ("here is the เบอร์ฉุกเฉิน this parent just gave us") is a
- * one-key body that cannot blank out the rest of the block by omission.
- *
- * `null` (or '') clears a field on purpose: "this number is no longer valid" is
- * a real thing the other system learns and has to be able to tell us.
- */
-export const emergencyContactSchema = z
-  .object({
-    emergencyPhone: z.string().nullable().optional(),
-    emergencyEmail: z.string().nullable().optional(),
-    homePhone: z.string().nullable().optional(),
-    livingWith: z.string().nullable().optional(),
-    livingWithLastname: z.string().nullable().optional(),
-    nearbyFriendName: z.string().nullable().optional(),
-    nearbyFriendLastname: z.string().nullable().optional(),
-    nearbyFriendPhone: z.string().nullable().optional(),
-  })
-  .strict()
-  .refine((b) => Object.keys(b).length > 0, { message: 'ต้องระบุอย่างน้อยหนึ่งช่อง' });
-
-export type EmergencyContactPatch = z.infer<typeof emergencyContactSchema>;
-
-/** The writable columns, mapped from the payload's names to the table's. */
-const WRITABLE_COLUMN: Record<keyof EmergencyContactPatch, string> = {
-  emergencyPhone: 'emergencyPhone',
-  emergencyEmail: 'emergencyEmail',
-  homePhone: 'phone', // the payload calls it what the read block calls it
-  livingWith: 'livingWith',
-  livingWithLastname: 'livingWithLastname',
-  nearbyFriendName: 'nearbyFriendName',
-  nearbyFriendLastname: 'nearbyFriendLastname',
-  nearbyFriendPhone: 'nearbyFriendPhone',
-};
-
-const WRITE_PHONE_KEYS = ['emergencyPhone', 'phone', 'nearbyFriendPhone'] as const;
-
-/**
- * Write the emergency contact block, creating the ที่อยู่ปัจจุบัน row if the
- * student has none. Returns the field names actually set, for the audit line.
- *
- * `addressType: 'current'` is written here, never taken from the payload — the
- * same rule the student self-service route follows, so no request can aim this
- * at ที่อยู่ตามทะเบียนบ้าน.
- */
-export async function writeEmergencyContact(
-  studentId: number,
-  patch: EmergencyContactPatch,
-): Promise<string[]> {
-  const set: Record<string, string | null> = {};
-  for (const [key, column] of Object.entries(WRITABLE_COLUMN)) {
-    if (!(key in patch)) continue;
-    const v = patch[key as keyof EmergencyContactPatch] ?? null;
-    // '' and null both mean "no value on file"; a stored '' would be a value
-    // that looks like data to everything downstream.
-    set[column] = typeof v === 'string' && v.trim() === '' ? null : v;
-  }
-  // The same trailing-separator rule every other phone write follows, so a
-  // number arriving as "0812345678-" cannot recreate the mess the first import
-  // left behind. See lib/phone.ts.
-  const values = normalizePhoneFields(set, WRITE_PHONE_KEYS);
-
-  await db
-    .insert(studentAddresses)
-    .values({ studentId, addressType: 'current', ...values })
-    .onConflictDoUpdate({
-      target: [studentAddresses.studentId, studentAddresses.addressType],
-      set: values,
-    });
-
-  return Object.keys(patch);
 }

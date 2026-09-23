@@ -89,6 +89,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           birthDate: students.birthDate,
           email: students.email,
           phone: students.phone,
+          additionalPhone: students.additionalPhone,
           status: students.status,
           exitType: students.exitType,
           exitDate: students.exitDate,

@@ -102,6 +102,7 @@ export async function GET(req: NextRequest) {
           birthDate: students.birthDate,
           email: students.email,
           phone: students.phone,
+          additionalPhone: students.additionalPhone,
           status: students.status,
           gradeLevel: enrollments.gradeLevel,
           classroom: enrollments.classroom,

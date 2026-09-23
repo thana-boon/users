@@ -34,7 +34,8 @@ interface Detail {
   firstName: string; lastName: string; nickname: string | null;
   firstNameEn: string | null; lastNameEn: string | null; nicknameEn: string | null;
   gender: string | null; birthDate: string | null; religion: string | null;
-  nationality: string | null; ethnicity: string | null; phone: string | null; email: string | null;
+  nationality: string | null; ethnicity: string | null; phone: string | null;
+  additionalPhone: string | null; email: string | null;
   admissionDate: string | null;
   siblingsTotal: number | null; siblingOrder: number | null; hasSiblingInSchool: string | null;
   status: 'studying' | 'withdrawn' | 'graduated';
@@ -175,7 +176,8 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       prefix: d.prefix, firstName: d.firstName, lastName: d.lastName, nickname: d.nickname,
       firstNameEn: d.firstNameEn, lastNameEn: d.lastNameEn, nicknameEn: d.nicknameEn,
       gender: d.gender, birthDate: d.birthDate, religion: d.religion, nationality: d.nationality,
-      ethnicity: d.ethnicity, phone: d.phone, email: d.email, admissionDate: d.admissionDate,
+      ethnicity: d.ethnicity, phone: d.phone, additionalPhone: d.additionalPhone,
+      email: d.email, admissionDate: d.admissionDate,
     });
     // Copy only known string fields (source rows also carry numeric id/studentId).
     const pick = (src: Dict | null | undefined, fields: { k: string }[]): Dict => {
@@ -376,6 +378,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                 <Field label="สัญชาติ" value={d.nationality} />
                 <Field label="เชื้อชาติ" value={d.ethnicity} />
                 <Field label="เบอร์โทร" value={d.phone} />
+                <Field label="เบอร์เพิ่มเติม" value={d.additionalPhone} />
                 {/* Lifted out of ที่อยู่ปัจจุบัน — see ADDR_EXTRA. The number the
                     office reaches for first belongs beside the child's own. */}
                 <Field label="เบอร์ติดต่อฉุกเฉิน" value={addrByType.current?.emergencyPhone as string} />
@@ -400,6 +403,9 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                 <Combo label="สัญชาติ" value={core.nationality} onChange={setC('nationality')} options={NATIONALITY_OPTIONS} />
                 <Combo label="เชื้อชาติ" value={core.ethnicity} onChange={setC('ethnicity')} options={ETHNICITY_OPTIONS} />
                 <PhoneInput label="เบอร์โทร" value={core.phone} onChange={setC('phone')} />
+                {/* The one column an outside system may write back, so the
+                    office may be looking at a number it did not type. */}
+                <PhoneInput label="เบอร์เพิ่มเติม" value={core.additionalPhone} onChange={setC('additionalPhone')} />
                 {/* Writes to ที่อยู่ปัจจุบัน, which is where the column lives —
                     the same state the address card edits, just surfaced here. */}
                 <PhoneInput
