@@ -1,10 +1,10 @@
 import type { NextRequest } from 'next/server';
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { students } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
-import { ok, notFound, handleError } from '@/lib/http';
+import { ok, notFound, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { maskCitizenId, tryDecrypt } from '@/lib/crypto';
 import { updateStudentAggregate } from '@/lib/services/students';
@@ -75,6 +75,10 @@ const nstr = z.string().nullable().optional();
 const recStr = z.record(z.string(), z.string().nullable().optional());
 
 const patchSchema = z.object({
+  // Editable so a record made with a placeholder (ดัมมี่) code can take the real
+  // one later. It is also the student's login id and the session's `sub`, so
+  // changing it signs the student out until they log in with the new code.
+  studentCode: z.string().trim().min(1).max(32).optional(),
   prefix: nstr,
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
@@ -121,6 +125,17 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     });
     if (!s) return notFound();
 
+    const codeChanged = body.studentCode !== undefined && body.studentCode !== s.studentCode;
+    if (codeChanged) {
+      const dup = await db.query.students.findFirst({
+        where: and(eq(students.studentCode, body.studentCode!), ne(students.id, id)),
+        columns: { id: true },
+      });
+      if (dup) return badRequest('รหัสนักเรียนนี้มีในระบบแล้ว');
+    } else {
+      delete body.studentCode;
+    }
+
     await updateStudentAggregate(id, body);
     await recordAudit({
       session: guard.session,
@@ -128,7 +143,9 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       targetType: 'student',
       targetId: id,
       targetLabel: `${s.studentCode} ${s.firstName} ${s.lastName}`,
-      detail: `แก้ไข: ${Object.keys(body).join(', ')}`,
+      detail:
+        `แก้ไข: ${Object.keys(body).join(', ')}` +
+        (codeChanged ? ` (รหัสนักเรียน ${s.studentCode} → ${body.studentCode})` : ''),
       req,
     });
     return ok({ ok: true });

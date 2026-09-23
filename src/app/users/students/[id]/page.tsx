@@ -173,6 +173,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   function beginEdit() {
     if (!d) return;
     setCore({
+      studentCode: d.studentCode,
       prefix: d.prefix, firstName: d.firstName, lastName: d.lastName, nickname: d.nickname,
       firstNameEn: d.firstNameEn, lastNameEn: d.lastNameEn, nicknameEn: d.nicknameEn,
       gender: d.gender, birthDate: d.birthDate, religion: d.religion, nationality: d.nationality,
@@ -390,6 +391,9 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
               </div>
             ) : (
               <div className="grid-3" style={{ gap: 12 }}>
+                {/* Editable so a ดัมมี่ code can be swapped for the real one.
+                    It is also the student's login id. */}
+                <TInput label="รหัสนักเรียน" value={core.studentCode} onChange={setC('studentCode')} />
                 <Combo label="คำนำหน้า" value={core.prefix} onChange={setC('prefix')} options={STUDENT_PREFIX_OPTIONS} />
                 <TInput label="ชื่อ" value={core.firstName} onChange={setC('firstName')} />
                 <TInput label="นามสกุล" value={core.lastName} onChange={setC('lastName')} />

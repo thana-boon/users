@@ -239,6 +239,8 @@ export interface StudentUpdateInput {
   religion?: string | null; nationality?: string | null; ethnicity?: string | null;
   phone?: string | null; additionalPhone?: string | null;
   email?: string | null; admissionDate?: string | null;
+  // caller checks uniqueness; only sent when it actually changes
+  studentCode?: string;
   // sensitive — only applied when a non-empty value is supplied (blank = keep)
   citizenId?: string | null; password?: string | null;
   // active-year enrollment (or a specific enrollment by id)
@@ -291,6 +293,7 @@ export async function updateStudentAggregate(id: number, data: StudentUpdateInpu
     for (const k of IDENTITY_FIELDS) {
       if (data[k] !== undefined) coreSet[k] = normField(k, data[k]);
     }
+    if (data.studentCode) coreSet.studentCode = data.studentCode;
     if (data.citizenId) coreSet.citizenIdEncrypted = encrypt(data.citizenId);
     if (data.password) coreSet.passwordEncrypted = encrypt(data.password);
     if (Object.keys(coreSet).length) {
