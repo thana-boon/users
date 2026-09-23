@@ -10,6 +10,9 @@ import { compareGrades } from '@/lib/grades';
 
 export const runtime = 'nodejs';
 
+/** Sort ห้อง strings numerically when possible ('2' before '10'). */
+const byRoom = (a: string, b: string) => a.localeCompare(b, 'th', { numeric: true });
+
 /** Distinct values that populate the filter dropdowns. */
 export async function GET(req: NextRequest) {
   const guard = await requireTeacherAdmin(req);
@@ -18,7 +21,7 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const yearId = sp.get('yearId') ? Number(sp.get('yearId')) : await resolveActiveYearId();
 
-    const [grades, rooms, subjects, specialSubjects, managedGroups, years] = await Promise.all([
+    const [grades, rooms, pairs, subjects, specialSubjects, managedGroups, years] = await Promise.all([
       db
         .selectDistinct({ v: enrollments.gradeLevel })
         .from(enrollments)
@@ -27,6 +30,18 @@ export async function GET(req: NextRequest) {
         .selectDistinct({ v: enrollments.classroom })
         .from(enrollments)
         .where(and(eq(enrollments.academicYearId, yearId), isNotNull(enrollments.classroom))),
+      // (ชั้น, ห้อง) pairs, so a room picker can offer only the rooms of the
+      // chosen grade instead of every room number in the school.
+      db
+        .selectDistinct({ gradeLevel: enrollments.gradeLevel, classroom: enrollments.classroom })
+        .from(enrollments)
+        .where(
+          and(
+            eq(enrollments.academicYearId, yearId),
+            isNotNull(enrollments.gradeLevel),
+            isNotNull(enrollments.classroom),
+          ),
+        ),
       db
         .selectDistinct({ v: teachers.subjectGroup })
         .from(teachers)
@@ -50,7 +65,11 @@ export async function GET(req: NextRequest) {
     return ok({
       yearId,
       grades: gradeVals,
-      classrooms: rooms.map((r) => r.v!).filter(Boolean).sort(),
+      classrooms: rooms.map((r) => r.v!).filter(Boolean).sort(byRoom),
+      rooms: pairs
+        .filter((r) => r.gradeLevel && r.classroom)
+        .map((r) => ({ gradeLevel: r.gradeLevel!, classroom: r.classroom! }))
+        .sort((a, b) => compareGrades(a.gradeLevel, b.gradeLevel) || byRoom(a.classroom, b.classroom)),
       subjectGroups: [
         ...new Set([
           ...managedGroups,

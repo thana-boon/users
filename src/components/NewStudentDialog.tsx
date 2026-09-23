@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from './Toast';
 import { Combo } from './Combo';
@@ -12,10 +12,13 @@ import {
 /** Minimal create form. Full profile (addresses/guardians/health) is populated via import. */
 export function NewStudentDialog({
   grades,
+  rooms,
   onClose,
   onCreated,
 }: {
   grades: string[];
+  /** Existing (ชั้น, ห้อง) pairs this year — the ห้อง picker's choices. */
+  rooms: { gradeLevel: string; classroom: string }[];
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -27,6 +30,15 @@ export function NewStudentDialog({
     religion: 'พุทธ', nationality: 'ไทย', ethnicity: 'ไทย',
     email: '', password: '', citizenId: '',
   });
+
+  // Rooms of the chosen grade. A grade's first room of the year is not in the
+  // list yet, so "ห้องใหม่…" falls back to typing it.
+  const roomChoices = useMemo(
+    () => rooms.filter((r) => r.gradeLevel === f.gradeLevel).map((r) => r.classroom),
+    [rooms, f.gradeLevel],
+  );
+  const [newRoom, setNewRoom] = useState(false);
+  const typingRoom = newRoom || roomChoices.length === 0;
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF((s) => ({ ...s, [k]: e.target.value }));
@@ -69,14 +81,48 @@ export function NewStudentDialog({
             <Combo label="เพศ" value={f.gender} onChange={setV('gender')} options={GENDER_OPTIONS} />
             <div>
               <label className="form-label">ชั้น</label>
-              <select className="form-select" value={f.gradeLevel} onChange={set('gradeLevel')}>
+              <select
+                className="form-select"
+                value={f.gradeLevel}
+                // A room number means nothing once the grade changes.
+                onChange={(e) => { setF((s) => ({ ...s, gradeLevel: e.target.value, classroom: '' })); setNewRoom(false); }}
+              >
                 {grades.length === 0 && <option value="">-</option>}
                 {grades.map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
           </div>
           <div className="grid-3">
-            <div><label className="form-label">ห้อง</label><input className="form-input" value={f.classroom} onChange={set('classroom')} /></div>
+            <div>
+              <label className="form-label">ห้อง</label>
+              {typingRoom ? (
+                <div className="row" style={{ gap: 6 }}>
+                  <input className="form-input" value={f.classroom} onChange={set('classroom')} placeholder="เลขห้อง" autoFocus={newRoom} />
+                  {newRoom && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => { setNewRoom(false); setF((s) => ({ ...s, classroom: '' })); }}
+                    >
+                      เลือก
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <select
+                  className="form-select"
+                  value={f.classroom}
+                  onChange={(e) => {
+                    if (e.target.value === '__new') { setNewRoom(true); setF((s) => ({ ...s, classroom: '' })); }
+                    else set('classroom')(e);
+                  }}
+                >
+                  <option value="">- เลือกห้อง -</option>
+                  {roomChoices.map((r) => <option key={r} value={r}>{r}</option>)}
+                  <option value="__new">+ ห้องใหม่…</option>
+                </select>
+              )}
+            </div>
             <div><label className="form-label">เลขที่</label><input className="form-input" value={f.classNumber} onChange={set('classNumber')} /></div>
             <div><label className="form-label">เลขบัตร ปชช.</label><input className="form-input" value={f.citizenId} onChange={set('citizenId')} /></div>
           </div>

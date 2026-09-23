@@ -19,7 +19,7 @@ interface Row {
   /** Leave type when the student is พักการเรียน right now; status stays 'studying'. */
   onLeave: string | null;
 }
-interface Meta { grades: string[]; classrooms: string[]; }
+interface Meta { grades: string[]; classrooms: string[]; rooms: { gradeLevel: string; classroom: string }[]; }
 
 const STATUS_LABEL: Record<string, string> = {
   studying: 'กำลังศึกษา', withdrawn: 'จำหน่าย/ลาออก', graduated: 'จบการศึกษา',
@@ -34,7 +34,7 @@ export default function StudentsPage() {
   const [grade, setGrade] = useState('');
   const [classroom, setClassroom] = useState('');
   const [loading, setLoading] = useState(true);
-  const [meta, setMeta] = useState<Meta>({ grades: [], classrooms: [] });
+  const [meta, setMeta] = useState<Meta>({ grades: [], classrooms: [], rooms: [] });
   const [showImport, setShowImport] = useState(false);
   const [showPhotoImport, setShowPhotoImport] = useState(false);
   const [showNew, setShowNew] = useState(false);
@@ -43,7 +43,7 @@ export default function StudentsPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    api<Meta>('/api/users/meta').then((m) => setMeta({ grades: m.grades, classrooms: m.classrooms })).catch(() => {});
+    api<Meta>('/api/users/meta').then((m) => setMeta({ grades: m.grades, classrooms: m.classrooms, rooms: m.rooms ?? [] })).catch(() => {});
   }, []);
 
   const load = useCallback(async (p: number) => {
@@ -202,6 +202,7 @@ export default function StudentsPage() {
       {showNew && (
         <NewStudentDialog
           grades={meta.grades}
+          rooms={meta.rooms}
           onClose={() => setShowNew(false)}
           onCreated={() => { setShowNew(false); load(1); toast('เพิ่มนักเรียนแล้ว', 'success'); }}
         />
