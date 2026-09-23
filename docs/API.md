@@ -118,6 +118,7 @@ curl -H "X-API-Key: sk_live_..." \
 | `students:photo` | ดึง **รูป** นักเรียน | เสริม — ต้องมี `students:read` ด้วย |
 | `students:health` | อ่าน **ข้อมูลสุขภาพ** (น้ำหนัก ส่วนสูง กรุ๊ปเลือด แพ้อาหาร/ยา โรคประจำตัว/ร้ายแรง) | เสริม · เรียกผ่าน `?include=health` · **ถูก audit ทุกครั้ง** |
 | `students:contact` | อ่าน **เบอร์/ผู้ติดต่อฉุกเฉิน** + เบอร์ผู้ปกครอง | เสริม · เรียกผ่าน `?include=contact` · **ถูก audit ทุกครั้ง** |
+| `students:education` | อ่าน **สถานศึกษาเดิม** (โรงเรียนเดิม ตำบล/อำเภอ/จังหวัด วุฒิ GPA) | เสริม · เรียกผ่าน `?include=education` · **ถูก audit ทุกครั้ง** |
 | `students:phone:write` | **เขียน** ช่อง **"เบอร์เพิ่มเติม"** ของนักเรียนกลับเข้าระบบ | ⚠️ **สิทธิ์เขียนอันเดียวของ API นี้** และแตะได้**ช่องเดียว** — ดูข้อ 4.3c |
 | `teachers:read` | อ่านรายชื่อครู + ครูประจำชั้น | ครอบคลุม `/homerooms` ด้วย |
 | `teachers:pii` | อ่าน **เลขบัตร ปชช.** ครู | เสริม · ถูก audit ทุกครั้ง |
@@ -159,6 +160,8 @@ curl -H "X-API-Key: sk_live_..." \
 | **เลขบัตรประชาชน** | **อ่อนไหว** | `students:pii` | ✅ audit ทุกครั้ง |
 | **ข้อมูลสุขภาพ** — น้ำหนัก ส่วนสูง กรุ๊ปเลือด แพ้อาหาร แพ้ยา แพ้อื่น ๆ โรคประจำตัว โรคร้ายแรง | **อ่อนไหวมาก** | `students:health` | ✅ `?include=health` · audit ทุกครั้ง |
 | **เบอร์/ผู้ติดต่อฉุกเฉิน** + เบอร์ผู้ปกครอง (ผู้ปกครอง/บิดา/มารดา) | **อ่อนไหว** | `students:contact` | ✅ `?include=contact` · audit ทุกครั้ง · **อ่านอย่างเดียว** |
+| **สถานศึกษาเดิม** — โรงเรียนเดิม ตำบล/อำเภอ/จังหวัด วุฒิ GPA | **อ่อนไหว** | `students:education` | ✅ `?include=education` · audit ทุกครั้ง · **อ่านอย่างเดียว** |
+| **เหตุที่ย้าย** (เหตุผลที่ย้ายมาจากโรงเรียนเดิม) | **อ่อนไหวมาก** | — | ❌ ไม่ส่งออก API ทุกกรณี — ดูในระบบเท่านั้น |
 | รหัสผ่าน | — | — | ❌ **ไม่มีทางส่งออก** ไม่ว่ามี scope อะไร |
 | ที่อยู่ตามทะเบียนบ้าน, รหัสประจำบ้าน | — | — | ❌ ยังไม่เปิดผ่าน API |
 | เลขบัตร ปชช. ของผู้ปกครอง, **รายได้ผู้ปกครอง** | — | — | ❌ ไม่เปิดผ่าน API เด็ดขาด |
@@ -184,7 +187,7 @@ curl -H "X-API-Key: sk_live_..." \
 
 **ข้อควรรู้ก่อนขอ scope อ่อนไหว**
 
-1. ทุกครั้งที่ key ดึง `:pii` / `:health` / `:contact` จะมีแถวใน **"บันทึกการใช้งาน"** ว่า key ไหน ดึงของใคร กี่คน เมื่อไหร่ — แอดมินโรงเรียนเห็นหมด
+1. ทุกครั้งที่ key ดึง `:pii` / `:health` / `:contact` / `:education` จะมีแถวใน **"บันทึกการใช้งาน"** ว่า key ไหน ดึงของใคร กี่คน เมื่อไหร่ — แอดมินโรงเรียนเห็นหมด
 2. `students:health` กับ `students:contact` **แยกกันคนละสิทธิ์โดยตั้งใจ** — ระบบห้องพยาบาลควรได้แค่ `health`, ระบบโทรแจ้งผู้ปกครองควรได้แค่ `contact` ไม่มีใครต้องถือของอีกฝ่าย
 3. ขอเท่าที่ใช้จริง — key ที่ขอครบทุกอย่างมักถูกแอดมินปฏิเสธ
 4. `students:phone:write` เป็นสิทธิ์**เขียน** แอดมินจะเห็นมันถูกทำเครื่องหมายไว้ต่างหากในหน้าออก key — ขอเฉพาะเมื่อระบบคุณเป็นคนเก็บเบอร์นั้นจริง ๆ
@@ -198,7 +201,7 @@ curl -H "X-API-Key: sk_live_..." \
 | 4.1 | `GET /me` | — | ตรวจว่า key ใช้ได้/มีสิทธิ์อะไร |
 | 4.2 | `GET /students` | `students:read` | ดึงรายชื่อนักเรียน |
 | 4.3 | `GET /students/{id}` | `students:read` | ดึงนักเรียน **รายคน** + ประวัติทุกปี — ไม่ผูกกับปีการศึกษา |
-| 4.3a | `GET /students?include=health,contact`<br>`GET /students/{id}?include=health,contact` | + `students:health` / `students:contact` | ดึง **ข้อมูลสุขภาพ** และ **ผู้ติดต่อฉุกเฉิน** |
+| 4.3a | `GET /students?include=health,contact,education`<br>`GET /students/{id}?include=health,contact,education` | + `students:health` / `students:contact` / `students:education` | ดึง **ข้อมูลสุขภาพ**, **ผู้ติดต่อฉุกเฉิน**, **สถานศึกษาเดิม** |
 | 4.3b | `GET /students/{id}/emergency-contact` | `students:contact` | อ่านเบอร์/ผู้ติดต่อฉุกเฉินอย่างเดียว |
 | 4.3c | `GET`/`PATCH /students/{id}/additional-phone` | `students:read` / `students:phone:write` | อ่าน/**เขียน** "เบอร์เพิ่มเติม" — **การเขียนอันเดียวของ API นี้** |
 | 4.4 | `GET /teachers` | `teachers:read` | ดึงรายชื่อครู |
@@ -310,7 +313,7 @@ Endpoint เดียวที่ **ไม่ต้องมี scope** แล�
 | `photoUrl` | string \| null | เป็น path สัมพัทธ์ ต้องเติม base URL เอง |
 | `citizenId` | string | โผล่เฉพาะเมื่อ key มี `students:pii` — และการเรียกครั้งนั้นถูกบันทึก audit |
 | `additionalPhone` | string \| null | **เบอร์เพิ่มเติม** — เก็บเป็นตัวเลขล้วน และเป็นช่องเดียวที่ระบบคุณเขียนกลับได้ (ข้อ 4.3c) |
-| `health` / `contact` | object | โผล่เฉพาะเมื่อส่ง `?include=` และ key มีสิทธิ์ — ดูข้อ 4.3a |
+| `health` / `contact` / `education` | object | โผล่เฉพาะเมื่อส่ง `?include=` และ key มีสิทธิ์ — ดูข้อ 4.3a |
 
 > `academicYear` บอกว่าข้อมูลชุดนี้เป็นของปีไหน — **ควร log ไว้ทุกครั้งที่ sync** จะช่วยดีบักมหาศาลตอนโรงเรียนเปลี่ยนปีการศึกษา
 
@@ -388,21 +391,22 @@ Endpoint เดียวที่ **ไม่ต้องมี scope** แล�
 
 ---
 
-### 4.3a `?include=health,contact` — ข้อมูลสุขภาพ และผู้ติดต่อฉุกเฉิน
+### 4.3a `?include=health,contact,education` — ข้อมูลสุขภาพ ผู้ติดต่อฉุกเฉิน และสถานศึกษาเดิม
 
 ใช้ได้ทั้งกับ **ข้อ 4.2** (รายชื่อทั้งห้อง/ทั้งชั้น) และ **ข้อ 4.3** (รายคน) — พารามิเตอร์เดียวกัน คั่นด้วย comma
 
 ```
 GET /api/public/v1/students?grade=ม.1&classroom=1&include=health
-GET /api/public/v1/students/123?include=health,contact
+GET /api/public/v1/students/123?include=health,contact,education
 ```
 
 | block | scope ที่ต้องมีเพิ่ม | ได้อะไร |
 |---|---|---|
 | `health` | `students:health` | น้ำหนัก ส่วนสูง กรุ๊ปเลือด แพ้อาหาร/ยา/อื่น ๆ โรคประจำตัว โรคร้ายแรง |
 | `contact` | `students:contact` | เบอร์ฉุกเฉิน อีเมลฉุกเฉิน เบอร์บ้าน อาศัยอยู่กับใคร เพื่อนใกล้บ้าน + **เบอร์ผู้ปกครอง** |
+| `education` | `students:education` | โรงเรียนเดิม ตำบล/อำเภอ/จังหวัดของโรงเรียนเดิม วุฒิที่จบมา GPA |
 
-**Response (ต่อคนหนึ่ง — ฟิลด์เดิมทั้งหมดยังอยู่ครบ แค่บวก 2 key นี้เพิ่ม)**
+**Response (ต่อคนหนึ่ง — ฟิลด์เดิมทั้งหมดยังอยู่ครบ แค่บวก key ที่ขอเพิ่ม)**
 
 ```json
 {
@@ -442,6 +446,15 @@ GET /api/public/v1/students/123?include=health,contact
       { "type": "father", "relationship": null, "fullName": "นายสมศักดิ์ ใจดี", "mobilePhone": "0811111111", "homePhone": null, "workPhone": null },
       { "type": "mother", "relationship": null, "fullName": "นางสมศรี ใจดี", "mobilePhone": null, "homePhone": null, "workPhone": null }
     ]
+  },
+
+  "education": {
+    "schoolName": "โรงเรียนอนุบาลราชบุรี",
+    "subDistrict": "หน้าเมือง",
+    "district": "เมืองราชบุรี",
+    "province": "ราชบุรี",
+    "qualification": "ประถมศึกษาปีที่ 6",
+    "gpa": "3.45"
   }
 }
 ```
@@ -455,7 +468,8 @@ GET /api/public/v1/students/123?include=health,contact
 | ค่าเป็น **text ทั้งหมด** | `weight` `height` เป็น string เพราะต้นทางกรอกมือ (`"42"`, `"42 กก."`, `""`) — parse เองก่อนคำนวณ |
 | `guardians` เรียงคงที่ | `guardian` → `father` → `mother` เสมอ คนที่ไม่มีข้อมูลจะไม่อยู่ใน array |
 | ผู้ปกครองเป็น **read-only** | ดูได้ แก้ไม่ได้ผ่าน API — เป็นข้อมูลของบุคคลที่สาม ดูข้อ 4.3c |
-| ราคาของ block | ทั้งสอง block ใช้ query เพิ่มแค่ **คงที่ต่อหน้า** ไม่ใช่ต่อคน ดึงทั้งห้องพร้อม `include=health` ได้สบาย |
+| ราคาของ block | ทุก block ใช้ query เพิ่มแค่ **คงที่ต่อหน้า** ไม่ใช่ต่อคน ดึงทั้งห้องพร้อม `include=health` ได้สบาย |
+| `education` ไม่มี **เหตุที่ย้าย** | `transferReason` ไม่ถูกส่งออกไม่ว่าจะมี scope อะไร — เป็น free text ที่อาจมีเรื่องครอบครัวเด็ก เหตุผลเดียวกับ `exitReason` ในข้อ 4.3 (PDPA) |
 
 > ⚠️ ข้อมูลสุขภาพเด็กเป็นข้อมูลอ่อนไหวตาม PDPA — เก็บเท่าที่ต้องใช้ อย่า log ลงที่ที่คนทั่วไปเห็น และอย่า cache นานเกินจำเป็น
 

@@ -26,6 +26,12 @@
  * the ห้องพยาบาล system can hold health without contacts, and a calling system
  * can hold contacts without a child's allergies and chronic illnesses.
  *
+ * `students:education` is the third such block: สถานศึกษาเดิม — โรงเรียนเดิม,
+ * ตำบล/อำเภอ/จังหวัด, วุฒิ and GPA. Split off rather than folded into
+ * `students:read` because a past GPA is an academic record about a child, not
+ * a roster fact, and the "มาดึงรายชื่อไป" key has no use for it. เหตุที่ย้าย is
+ * not in the block at any scope — see readEducationFor().
+ *
  * `students:phone:write` is the ONLY write scope on this surface, and it
  * writes exactly one column: `students.additional_phone` (เบอร์เพิ่มเติม). It
  * exists because the school collects that number through another system's form,
@@ -54,6 +60,7 @@ export const API_SCOPES = [
   'students:photo',
   'students:health',
   'students:contact',
+  'students:education',
   'students:phone:write',
   'teachers:read',
   'teachers:pii',
@@ -87,6 +94,7 @@ export const SCOPE_LABEL_TH: Record<ApiScope, string> = {
   'students:photo': 'ดึงรูปนักเรียน',
   'students:health': 'อ่านข้อมูลสุขภาพนักเรียน (น้ำหนัก ส่วนสูง กรุ๊ปเลือด การแพ้ โรคประจำตัว)',
   'students:contact': 'อ่านเบอร์/ผู้ติดต่อฉุกเฉินของนักเรียน',
+  'students:education': 'อ่านสถานศึกษาเดิมของนักเรียน (โรงเรียนเดิม วุฒิ GPA จังหวัด)',
   'students:phone:write': 'เขียน "เบอร์เพิ่มเติม" ของนักเรียนกลับเข้าระบบ (ช่องเดียว)',
   'teachers:read': 'อ่านรายชื่อครู',
   'teachers:pii': 'อ่านเลขบัตร ปชช. ครู',
@@ -114,6 +122,9 @@ export const PII_SCOPES: ApiScope[] = [
   // An emergency contact names and reaches a third person — usually a parent —
   // who never dealt with the integration asking for it.
   'students:contact',
+  // สถานศึกษาเดิมและ GPA เดิม — an academic record about a child, tied to a
+  // named school they can be traced to.
+  'students:education',
   // เบอร์เพิ่มเติม is a way to reach a child. Fewer fields than the block
   // above, but the same kind of data, so it carries the same flag.
   'students:phone:write',

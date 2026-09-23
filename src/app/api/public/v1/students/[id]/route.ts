@@ -7,7 +7,7 @@ import { ok, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { tryDecrypt } from '@/lib/crypto';
 import { resolveActiveYearId } from '@/lib/services/students';
-import { readContactsFor, readHealthFor } from '@/lib/services/student-extras';
+import { readContactsFor, readEducationFor, readHealthFor } from '@/lib/services/student-extras';
 
 export const runtime = 'nodejs';
 
@@ -41,11 +41,15 @@ export const runtime = 'nodejs';
  * The photo blob is not inlined, matching the list route: `hasPhoto` /
  * `photoUrl` point at ./photo, which is gated by `students:photo`.
  *
- * `?include=health,contact` attaches the same two opt-in blocks the list route
- * offers, behind the same additive scopes (`students:health` /
- * `students:contact`) and audited the same way. This is the endpoint an
- * emergency screen actually calls — one child, everything needed to act — so it
- * takes the blocks by id without needing to know which year they are enrolled in.
+ * `?include=health,contact,education` attaches the same opt-in blocks the list
+ * route offers, behind the same additive scopes (`students:health` /
+ * `students:contact` / `students:education`) and audited the same way. This is
+ * the endpoint an emergency screen actually calls — one child, everything needed
+ * to act — so it takes the blocks by id without needing to know which year they
+ * are enrolled in. `education` (สถานศึกษาเดิม) is the block a ทะเบียน/รับย้าย
+ * flow wants here for the same reason the route exists at all: it holds an id
+ * and needs the child's history, not this year's roster row. Like `exitReason`,
+ * เหตุที่ย้าย stays out of it at every scope.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await requireApiScope(req, 'students:read');
@@ -67,11 +71,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     );
     const wantHealth = include.has('health');
     const wantContact = include.has('contact');
+    const wantEducation = include.has('education');
     if (wantHealth && !actorHasScope(guard.actor, 'students:health')) {
       return insufficientScope('students:health');
     }
     if (wantContact && !actorHasScope(guard.actor, 'students:contact')) {
       return insufficientScope('students:contact');
+    }
+    if (wantEducation && !actorHasScope(guard.actor, 'students:education')) {
+      return insufficientScope('students:education');
     }
 
     const [rows, enrolled, activeYearId, years] = await Promise.all([
@@ -147,16 +155,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Fetched only after the 404 above, so a probe for a nonexistent id never
     // costs two extra queries.
-    const [healthById, contactById] = await Promise.all([
+    const [healthById, contactById, educationById] = await Promise.all([
       wantHealth ? readHealthFor([row.id]) : null,
       wantContact ? readContactsFor([row.id]) : null,
+      wantEducation ? readEducationFor([row.id]) : null,
     ]);
 
-    if (withPii || wantHealth || wantContact) {
+    if (withPii || wantHealth || wantContact || wantEducation) {
       const blocks = [
         withPii ? 'เลขบัตรประชาชน' : null,
         wantHealth ? 'ข้อมูลสุขภาพ' : null,
         wantContact ? 'ผู้ติดต่อฉุกเฉิน' : null,
+        wantEducation ? 'สถานศึกษาเดิม' : null,
       ].filter(Boolean);
       await recordAudit({
         session: guard.actor.kind === 'session' ? guard.actor.session : null,
@@ -188,6 +198,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         ...(withPii ? { citizenId: tryDecrypt(citizenIdEncrypted) } : {}),
         ...(healthById ? { health: healthById.get(row.id) ?? null } : {}),
         ...(contactById ? { contact: contactById.get(row.id) ?? null } : {}),
+        ...(educationById ? { education: educationById.get(row.id) ?? null } : {}),
         exit:
           exitType || exitDate || exitAcademicYearId
             ? {

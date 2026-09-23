@@ -8,7 +8,7 @@ import { recordAudit } from '@/lib/audit';
 import { tryDecrypt } from '@/lib/crypto';
 import { resolveActiveYearId } from '@/lib/services/students';
 import { gradeRank, roomRank, roomText } from '@/lib/grade-sql';
-import { readContactsFor, readHealthFor } from '@/lib/services/student-extras';
+import { readContactsFor, readEducationFor, readHealthFor } from '@/lib/services/student-extras';
 
 export const runtime = 'nodejs';
 
@@ -27,14 +27,15 @@ export const runtime = 'nodejs';
  * both gated by the additive `students:photo` scope. `hasPhoto`/`photoUrl` here
  * let a caller fetch only the students that actually have one.
  *
- * Opt-in blocks, `?include=health,contact`, each behind its own additive scope
- * (`students:health` / `students:contact`) and each audited per response like
+ * Opt-in blocks, `?include=health,contact,education`, each behind its own
+ * additive scope (`students:health` / `students:contact` /
+ * `students:education`) and each audited per response like
  * `:pii` is. Asking for a block the key does not carry is a 403 rather than a
  * silently thinner payload — an integration must never believe a child has no
  * recorded allergy when the truth is that it was not allowed to ask.
  *
  * Query: ?yearId= ?grade= ?classroom= ?status= ?q= ?page= ?pageSize= (max 200)
- *        ?include=health,contact
+ *        ?include=health,contact,education
  */
 export async function GET(req: NextRequest) {
   const guard = await requireApiScope(req, 'students:read');
@@ -59,11 +60,15 @@ export async function GET(req: NextRequest) {
     );
     const wantHealth = include.has('health');
     const wantContact = include.has('contact');
+    const wantEducation = include.has('education');
     if (wantHealth && !actorHasScope(guard.actor, 'students:health')) {
       return insufficientScope('students:health');
     }
     if (wantContact && !actorHasScope(guard.actor, 'students:contact')) {
       return insufficientScope('students:contact');
+    }
+    if (wantEducation && !actorHasScope(guard.actor, 'students:education')) {
+      return insufficientScope('students:education');
     }
 
     const conds = [eq(students.isArchived, false), eq(enrollments.academicYearId, yearId)];
@@ -135,9 +140,10 @@ export async function GET(req: NextRequest) {
 
     // One query per requested block for the whole page, keyed by student id.
     const ids = rows.map((r) => r.id);
-    const [healthById, contactById] = await Promise.all([
+    const [healthById, contactById, educationById] = await Promise.all([
       wantHealth ? readHealthFor(ids) : null,
       wantContact ? readContactsFor(ids) : null,
+      wantEducation ? readEducationFor(ids) : null,
     ]);
 
     const data = rows.map((r) => {
@@ -151,10 +157,11 @@ export async function GET(req: NextRequest) {
         ...(withPii ? { citizenId: tryDecrypt(citizenIdEncrypted) } : {}),
         ...(healthById ? { health: healthById.get(r.id) ?? null } : {}),
         ...(contactById ? { contact: contactById.get(r.id) ?? null } : {}),
+        ...(educationById ? { education: educationById.get(r.id) ?? null } : {}),
       };
     });
 
-    if (data.length > 0 && (withPii || wantHealth || wantContact)) {
+    if (data.length > 0 && (withPii || wantHealth || wantContact || wantEducation)) {
       // One row per response, naming every sensitive block it carried. The
       // action stays `reveal_citizen_id` only when an id actually went out;
       // otherwise this is an `api_read` of the health/contact blocks, and the
@@ -163,6 +170,7 @@ export async function GET(req: NextRequest) {
         withPii ? 'เลขบัตรประชาชน' : null,
         wantHealth ? 'ข้อมูลสุขภาพ' : null,
         wantContact ? 'ผู้ติดต่อฉุกเฉิน' : null,
+        wantEducation ? 'สถานศึกษาเดิม' : null,
       ].filter(Boolean);
       await recordAudit({
         session: guard.actor.kind === 'session' ? guard.actor.session : null,

@@ -1,10 +1,10 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
-import { guardians, studentAddresses, studentHealth } from '@/db/schema';
+import { guardians, previousSchools, studentAddresses, studentHealth } from '@/db/schema';
 
 /**
- * The two opt-in blocks the public student feed can attach to a roster row:
- * ข้อมูลสุขภาพ and ผู้ติดต่อฉุกเฉิน. Read only — the public API's single write
+ * The opt-in blocks the public student feed can attach to a roster row:
+ * ข้อมูลสุขภาพ, ผู้ติดต่อฉุกเฉิน and สถานศึกษาเดิม. Read only — the public API's single write
  * is PATCH /students/[id]/additional-phone, which touches neither of them.
  *
  * WHY THEY ARE NOT IN THE ROSTER ROW. Both are read by `?include=`, each behind
@@ -168,6 +168,59 @@ export async function readContactsFor(ids: number[]): Promise<Map<number, Studen
   const ORDER = { guardian: 0, father: 1, mother: 2 } as const;
   for (const block of out.values()) {
     block.guardians.sort((a, b) => ORDER[a.type] - ORDER[b.type]);
+  }
+  return out;
+}
+
+// -- previous school (สถานศึกษาเดิม) --------------------------------
+
+export interface StudentEducationBlock {
+  schoolName: string | null;
+  subDistrict: string | null;
+  district: string | null;
+  province: string | null;
+  qualification: string | null;
+  gpa: string | null;
+}
+
+/**
+ * สถานศึกษาเดิม for a page of students — where the child came from, the
+ * qualification they arrived with and its GPA. The block a ระบบรับสมัคร/
+ * ทะเบียน needs to build เอกสารรับย้าย without re-typing what the office
+ * already holds.
+ *
+ * `transferReason` (เหตุที่ย้าย) is deliberately NOT here, for the same reason
+ * `exitReason` is absent from the by-id route: the free text a parent gave for
+ * moving a child can record family circumstances — illness, separation, debt —
+ * that no roster integration needs in order to do its job. A consumer that
+ * genuinely needs it reads it in the office UI, where the person reading is a
+ * person and not a key.
+ *
+ * Missing row → a block of nulls, same as health: "we hold no previous school
+ * on file" and "no such student" are different answers.
+ */
+export async function readEducationFor(
+  ids: number[],
+): Promise<Map<number, StudentEducationBlock>> {
+  const out = new Map<number, StudentEducationBlock>();
+  if (ids.length === 0) return out;
+
+  const rows = await db
+    .select()
+    .from(previousSchools)
+    .where(inArray(previousSchools.studentId, ids));
+
+  const byId = new Map(rows.map((r) => [r.studentId, r]));
+  for (const id of ids) {
+    const r = byId.get(id);
+    out.set(id, {
+      schoolName: r?.schoolName ?? null,
+      subDistrict: r?.subDistrict ?? null,
+      district: r?.district ?? null,
+      province: r?.province ?? null,
+      qualification: r?.qualification ?? null,
+      gpa: r?.gpa ?? null,
+    });
   }
   return out;
 }
