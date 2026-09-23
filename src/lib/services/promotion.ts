@@ -132,6 +132,11 @@ export interface TransferInput {
   yearId: number;
   /** Grade of the roster being edited — needed to scope the optional renumber. */
   grade: string | null;
+  /**
+   * Set when the moved students also change ชั้น within the year (e.g.
+   * เตรียมอนุบาล → อ.1 mid-year). Null/absent = same grade, room change only.
+   */
+  targetGrade?: string | null;
   /** Re-sequence 1..N every room in (year, grade) after the moves. */
   renumber: boolean;
   items: TransferItem[];
@@ -141,12 +146,13 @@ export interface TransferInput {
  * Move students between rooms **within the same academic year** — the single-
  * student / small-batch "ย้ายห้อง" case that promotion (which creates a NEW
  * next-year enrollment) doesn't cover. Updates the existing enrollment's room
- * in place; grade + year are untouched. Only the students whose room actually
- * changed are passed in. Optionally renumbers all rooms of the grade so numbers
+ * in place; the year is untouched, and so is the grade unless `targetGrade`
+ * says otherwise. Only the students who actually move are passed in. Optionally renumbers all rooms of the grade so numbers
  * stay 1..N after a move (off by default — a lone move usually keeps numbers).
  */
 export async function transferRooms(input: TransferInput): Promise<{ moved: number }> {
   const { yearId, grade, renumber, items } = input;
+  const targetGrade = input.targetGrade && input.targetGrade !== grade ? input.targetGrade : null;
   if (!items.length) return { moved: 0 };
 
   return db.transaction(async (tx) => {
@@ -154,13 +160,17 @@ export async function transferRooms(input: TransferInput): Promise<{ moved: numb
       // Scope to yearId as a defence so a stale enrollmentId can't touch another year.
       await tx
         .update(enrollments)
-        .set({ classroom: it.targetClassroom })
+        .set(targetGrade
+          ? { gradeLevel: targetGrade, classroom: it.targetClassroom }
+          : { classroom: it.targetClassroom })
         .where(and(eq(enrollments.id, it.enrollmentId), eq(enrollments.academicYearId, yearId)));
     }
 
-    if (renumber && grade) {
-      // Re-sequence every room in this grade (covers both the rooms that lost and
-      // gained a student). Ordered by room then code so per-room counters run 1..N.
+    // Re-sequence every room in the grade (covers both the rooms that lost and
+    // gained a student) — and in the new grade too when students changed ชั้น.
+    const toRenumber = renumber ? [grade, targetGrade].filter((g): g is string => !!g) : [];
+    for (const g of toRenumber) {
+      // Ordered by room then code so per-room counters run 1..N.
       const rows = await tx
         .select({ enrollmentId: enrollments.id, classroom: enrollments.classroom })
         .from(enrollments)
@@ -168,7 +178,7 @@ export async function transferRooms(input: TransferInput): Promise<{ moved: numb
         .where(
           and(
             eq(enrollments.academicYearId, yearId),
-            eq(enrollments.gradeLevel, grade),
+            eq(enrollments.gradeLevel, g),
             eq(students.isArchived, false),
           ),
         )

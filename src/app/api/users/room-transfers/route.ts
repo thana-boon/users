@@ -13,6 +13,8 @@ export const runtime = 'nodejs';
 const schema = z.object({
   yearId: z.number().int(),
   grade: z.string().nullable().optional(),
+  // Also change ชั้น within the year (e.g. เตรียมอนุบาล → อ.1).
+  targetGrade: z.string().trim().min(1).nullable().optional(),
   renumber: z.boolean().default(false),
   items: z
     .array(
@@ -40,9 +42,13 @@ export async function POST(req: NextRequest) {
     });
     if (!year) return badRequest('ไม่พบปีการศึกษา');
 
+    const regrade = body.targetGrade && body.targetGrade !== body.grade ? body.targetGrade : null;
+    if (regrade && !body.grade) return badRequest('ต้องระบุชั้นต้นทาง');
+
     const result = await transferRooms({
       yearId: body.yearId,
       grade: body.grade ?? null,
+      targetGrade: regrade,
       renumber: body.renumber,
       items: body.items.map((i) => ({
         enrollmentId: i.enrollmentId,
@@ -55,7 +61,9 @@ export async function POST(req: NextRequest) {
       action: 'transfer_room',
       targetType: 'enrollment',
       targetLabel: `${year.year}${body.grade ? ` • ${body.grade}` : ''}`,
-      detail: `ย้ายห้อง ${result.moved} คน (ปีเดียวกัน)`,
+      detail: regrade
+        ? `ย้ายชั้น ${body.grade} → ${regrade} ${result.moved} คน (ปีเดียวกัน)`
+        : `ย้ายห้อง ${result.moved} คน (ปีเดียวกัน)`,
       req,
     });
 

@@ -24,6 +24,7 @@ import { nextGrade, isKeyStageBoundary, keyStageOf, KEY_STAGE_LABEL_TH, GRADE_OR
 
 interface YearOpt { id: number; year: number; isActive: boolean }
 interface Meta { years: YearOpt[]; grades: string[]; classrooms: string[] }
+interface RoomPair { gradeLevel: string; classroom: string }
 interface RosterRow {
   enrollmentId: number; studentId: number; studentCode: string;
   prefix: string | null; firstName: string; lastName: string;
@@ -32,14 +33,16 @@ interface RosterRow {
 }
 
 // A column key is one of: `room:<name>`, 'none' (no room), 'hold' (repeat the
-// year), or 'graduate' (จบการศึกษา — finished the stage and leaves, only offered
-// when the promotion crosses a ช่วงชั้น boundary).
-type ColKind = 'room' | 'none' | 'hold' | 'graduate';
+// year), 'graduate' (จบการศึกษา — finished the stage and leaves, only offered
+// when the promotion crosses a ช่วงชั้น boundary), or 'stay' (a same-year grade
+// change: the students who are NOT moving to the new grade).
+type ColKind = 'room' | 'none' | 'hold' | 'graduate' | 'stay';
 interface Column { key: string; label: string; room: string | null; kind: ColKind }
 
 const HOLD = 'hold';
 const NONE = 'none';
 const GRAD = 'graduate';
+const STAY = 'stay';
 const roomKey = (name: string) => `room:${name}`;
 
 const STATUS_LABEL: Record<string, string> = {
@@ -62,6 +65,12 @@ export default function PromotionsPage() {
   const [targetYearId, setTargetYearId] = useState<number | ''>('');
   const [grade, setGrade] = useState('');
   const [targetGrade, setTargetGrade] = useState('');
+  // Room mode: the ชั้น the moved students end up in. Same as `grade` = a plain
+  // room move; a different grade = change ชั้น within the year (เตรียมอนุบาล → อ.1).
+  const [roomGrade, setRoomGrade] = useState('');
+  // (ชั้น, ห้อง) pairs that already exist in the source year, so a destination
+  // grade's rooms show up as columns even though none of its students are loaded.
+  const [yearRooms, setYearRooms] = useState<RoomPair[]>([]);
   const [rows, setRows] = useState<RosterRow[]>([]);
 
   // enrollmentId -> column key. Source of truth for where each student lands.
@@ -100,6 +109,18 @@ export default function PromotionsPage() {
   // Default the target grade to "the next grade" whenever the source grade changes.
   useEffect(() => { setTargetGrade(nextGrade(grade) ?? ''); }, [grade]);
 
+  const loadYearRooms = useCallback(() => {
+    if (!sourceYearId) { setYearRooms([]); return; }
+    api<{ rooms: RoomPair[] }>(`/api/users/meta?yearId=${sourceYearId}`)
+      .then((m) => setYearRooms(m.rooms ?? []))
+      .catch(() => setYearRooms([]));
+  }, [sourceYearId]);
+  useEffect(() => { loadYearRooms(); }, [loadYearRooms]);
+
+  // Same-year grade change: the board shows the destination grade's rooms and
+  // parks everyone in a "stay" column until they are dragged out of it.
+  const regrade = mode === 'room' && !!roomGrade && roomGrade !== grade;
+
   const loadRoster = useCallback(async () => {
     if (!sourceYearId || !grade) { setRows([]); setAssign({}); setExtraRooms([]); setSel(new Set()); return; }
     setLoading(true);
@@ -112,7 +133,8 @@ export default function PromotionsPage() {
       // non-studying students are parked in the "hold" bin instead.
       const a: Record<number, string> = {};
       for (const r of res.data) {
-        if (mode === 'year' && r.status !== 'studying') a[r.enrollmentId] = HOLD;
+        if (regrade) a[r.enrollmentId] = STAY;
+        else if (mode === 'year' && r.status !== 'studying') a[r.enrollmentId] = HOLD;
         else if (r.classroom) a[r.enrollmentId] = roomKey(r.classroom);
         else a[r.enrollmentId] = NONE;
       }
@@ -124,7 +146,7 @@ export default function PromotionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [sourceYearId, grade, mode, toast]);
+  }, [sourceYearId, grade, mode, regrade, toast]);
 
   useEffect(() => { loadRoster(); }, [loadRoster]);
 
@@ -151,6 +173,18 @@ export default function PromotionsPage() {
 
   // Build the ordered column list: real rooms, then "no room", then the hold bin.
   const columns = useMemo<Column[]>(() => {
+    if (regrade) {
+      // Destination = the rooms roomGrade already has this year, plus any added here.
+      const roomSet = new Set<string>(extraRooms);
+      for (const p of yearRooms) if (p.gradeLevel === roomGrade) roomSet.add(p.classroom);
+      return [
+        { key: STAY, label: `คงอยู่ ${grade}`, room: null, kind: 'stay' as const },
+        ...[...roomSet].sort(byRoom).map((name) => ({
+          key: roomKey(name), label: `${roomGrade} ห้อง ${name}`, room: name, kind: 'room' as const,
+        })),
+        { key: NONE, label: `${roomGrade} (ไม่ระบุห้อง)`, room: null, kind: 'none' as const },
+      ];
+    }
     const roomSet = new Set<string>();
     for (const r of rows) if (r.classroom) roomSet.add(r.classroom);
     for (const r of extraRooms) roomSet.add(r);
@@ -164,7 +198,7 @@ export default function PromotionsPage() {
     // The "hold / repeat the year" bin only makes sense when promoting a year.
     if (mode === 'year') cols.push({ key: HOLD, label: 'ไม่เลื่อนชั้น / ซ้ำชั้น', room: null, kind: 'hold' });
     return cols;
-  }, [rows, extraRooms, assign, mode, boundary]);
+  }, [rows, extraRooms, assign, mode, boundary, regrade, yearRooms, roomGrade, grade]);
 
   const rowsByCol = useMemo(() => {
     const m = new Map<string, RosterRow[]>();
@@ -194,18 +228,19 @@ export default function PromotionsPage() {
   // Room mode: the students whose target room differs from their current room.
   const movedRows = useMemo(() => {
     if (mode !== 'room') return [];
+    if (regrade) return rows.filter((r) => (assign[r.enrollmentId] ?? STAY) !== STAY);
     return rows.filter((r) => {
       const cur = r.classroom ? roomKey(r.classroom) : NONE;
       return (assign[r.enrollmentId] ?? NONE) !== cur;
     });
-  }, [mode, rows, assign]);
+  }, [mode, regrade, rows, assign]);
 
   // Switching mode reloads the board; renumber defaults on for promotion, off for
   // a same-year room move (a lone move usually should not renumber whole rooms).
   const switchMode = (m: 'year' | 'room') => {
     if (m === mode) return;
     setMode(m);
-    setRenumber(m === 'year');
+    setRenumber(m === 'year' || roomGrade !== grade);
     setSel(new Set());
   };
 
@@ -239,7 +274,10 @@ export default function PromotionsPage() {
   const addRoom = () => {
     const name = newRoom.trim();
     if (!name) return;
-    if (!extraRooms.includes(name) && !rows.some((r) => r.classroom === name)) {
+    const exists = regrade
+      ? yearRooms.some((p) => p.gradeLevel === roomGrade && p.classroom === name)
+      : rows.some((r) => r.classroom === name);
+    if (!extraRooms.includes(name) && !exists) {
       setExtraRooms((r) => [...r, name]);
     }
     setNewRoom('');
@@ -251,16 +289,22 @@ export default function PromotionsPage() {
 
     const colOf = (k: string) => columns.find((c) => c.key === k);
     const summary = movedRows
-      .map((r) => `${fullName(r)}: ห้อง ${r.classroom ?? '-'} → ${colOf(assign[r.enrollmentId])?.room ?? '-'}`)
+      .map((r) => regrade
+        ? `${fullName(r)}: ${grade} ห้อง ${r.classroom ?? '-'} → ${roomGrade} ห้อง ${colOf(assign[r.enrollmentId])?.room ?? '-'}`
+        : `${fullName(r)}: ห้อง ${r.classroom ?? '-'} → ${colOf(assign[r.enrollmentId])?.room ?? '-'}`)
       .slice(0, 8)
       .join('\n');
 
     if (!(await confirm({
-      title: 'ยืนยันการย้ายห้อง',
+      title: regrade ? 'ยืนยันการย้ายชั้น' : 'ยืนยันการย้ายห้อง',
       message:
-        `ย้าย ${movedRows.length} คน ภายในปี ${sourceYear} (ชั้น ${grade})\n${summary}` +
+        (regrade
+          ? `ย้าย ${movedRows.length} คน จาก ${grade} → ${roomGrade} ภายในปี ${sourceYear}\n${summary}`
+          : `ย้าย ${movedRows.length} คน ภายในปี ${sourceYear} (ชั้น ${grade})\n${summary}`) +
         (movedRows.length > 8 ? `\n…และอีก ${movedRows.length - 8} คน` : '') +
-        (renumber ? '\nและรันเลขที่ใหม่ทุกห้องในชั้นนี้' : ''),
+        (renumber
+          ? (regrade ? `\nและรันเลขที่ใหม่ทุกห้องใน ${grade} และ ${roomGrade}` : '\nและรันเลขที่ใหม่ทุกห้องในชั้นนี้')
+          : ''),
       confirmText: `ย้าย ${movedRows.length} คน`,
     }))) return;
 
@@ -272,9 +316,11 @@ export default function PromotionsPage() {
       }));
       const res = await api<{ moved: number }>(
         '/api/users/room-transfers',
-        jsonBody({ yearId: sourceYearId, grade, renumber, items }),
+        jsonBody({ yearId: sourceYearId, grade, targetGrade: regrade ? roomGrade : null, renumber, items }),
       );
-      toast(`ย้ายห้อง ${res.moved} คนสำเร็จ`, 'success');
+      toast(`${regrade ? `ย้ายไป ${roomGrade}` : 'ย้ายห้อง'} ${res.moved} คนสำเร็จ`, 'success');
+      // A room typed in here now exists for the destination grade.
+      if (regrade) loadYearRooms();
       loadRoster();
     } catch (e) {
       toast((e as Error).message, 'error');
@@ -362,7 +408,7 @@ export default function PromotionsPage() {
         <p className="muted" style={{ marginTop: 4 }}>
           {mode === 'year'
             ? 'ทุกคนเริ่มต้นอยู่ “ห้องเดิม” — ไม่ต้องแก้อะไรก็กดเลื่อนทั้งชั้นได้เลย. ถ้าจะจัดห้องใหม่ให้ลากการ์ดนักเรียนข้ามคอลัมน์ (คลิกเลือกหลายคนแล้วลากพร้อมกันได้) หรือลากไปคอลัมน์ “ไม่เลื่อนชั้น” เพื่อคงไว้/ซ้ำชั้น.'
-            : 'ย้ายนักเรียนไปห้องอื่นภายในปีเดิม (ชั้นเดิม). ลากการ์ดคนที่ต้องการไปคอลัมน์ห้องปลายทาง — จะย้ายเฉพาะคนที่ลากเท่านั้น. เหมาะกับการย้ายทีละคน.'}
+            : 'ย้ายนักเรียนไปห้องอื่นภายในปีเดิม — หรือเลือก “ชั้นปลายทาง” เป็นชั้นอื่นเพื่อย้ายข้ามชั้นในปีเดียวกัน (เช่น เตรียมอนุบาล → อ.1). ลากการ์ดคนที่ต้องการไปคอลัมน์ห้องปลายทาง — จะย้ายเฉพาะคนที่ลากเท่านั้น.'}
         </p>
       </div>
 
@@ -407,11 +453,25 @@ export default function PromotionsPage() {
           )}
           <div>
             <label className="form-label">ชั้น{mode === 'year' ? ' (ต้นทาง)' : ''}</label>
-            <select className="form-select" style={{ width: 150 }} value={grade} onChange={(e) => setGrade(e.target.value)}>
+            <select className="form-select" style={{ width: 150 }} value={grade} onChange={(e) => { setGrade(e.target.value); setRoomGrade(e.target.value); setExtraRooms([]); }}>
               <option value="">— เลือกชั้น —</option>
               {meta.grades.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
+          {mode === 'room' && grade && (
+            <div>
+              <label className="form-label">→ ชั้นปลายทาง</label>
+              <select className="form-select" style={{ width: 170 }} value={roomGrade}
+                onChange={(e) => {
+                  setRoomGrade(e.target.value);
+                  setExtraRooms([]);
+                  // Numbers from the old grade mean nothing in the new one.
+                  setRenumber(e.target.value !== grade);
+                }}>
+                {GRADE_ORDER.map((g) => <option key={g} value={g}>{g === grade ? `${g} (ชั้นเดิม)` : g}</option>)}
+              </select>
+            </div>
+          )}
           {mode === 'year' && (
             <div>
               <label className="form-label">→ ชั้นปลายทาง</label>
@@ -425,6 +485,18 @@ export default function PromotionsPage() {
           <p className="muted" style={{ marginTop: 10, fontSize: 13, color: 'var(--skdw-purple)' }}>
             {grade} → {targetGrade} ข้ามช่วงชั้น — ระบบจะบันทึก “จบ{KEY_STAGE_LABEL_TH[keyStageOf(grade)!]}” ให้ผู้ที่เลื่อน (ไม่ถือเป็นการจำหน่าย).
             เด็กที่ “จบแล้วไม่เรียนต่อ” ให้ลากไปคอลัมน์ <strong>จบการศึกษา (ไม่เรียนต่อ)</strong> — จะบันทึกเป็นจบการศึกษา ไม่ใช่ลาออก.
+          </p>
+        )}
+        {mode === 'year' && !!targetYearId && sourceYearId === targetYearId && (
+          <p className="muted" style={{ marginTop: 10, fontSize: 13, color: 'var(--color-warning)' }}>
+            ปีต้นทางและปลายทางเป็นปีเดียวกัน — ถ้าจะย้ายชั้นภายในปีนี้ (เช่น เตรียมอนุบาล → อ.1) ให้ใช้{' '}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => switchMode('room')}>ย้ายห้อง (ปีเดียวกัน)</button>{' '}
+            แล้วเลือกชั้นปลายทาง
+          </p>
+        )}
+        {regrade && !yearRooms.some((p) => p.gradeLevel === roomGrade) && (
+          <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+            ปี {sourceYear} ยังไม่มีห้องของ {roomGrade} — พิมพ์ชื่อห้องที่ช่อง “ชื่อห้องใหม่” แล้วกด “+ เพิ่มห้อง” หรือลากไปคอลัมน์ “ไม่ระบุห้อง”
           </p>
         )}
         {mode === 'year' && !targetYearId && (
@@ -482,7 +554,7 @@ export default function PromotionsPage() {
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, alignItems: 'flex-start' }}>
             {columns.map((c) => {
               const list = rowsByCol.get(c.key) ?? [];
-              const isHold = c.kind === HOLD;
+              const isHold = c.kind === HOLD || c.kind === STAY;
               const isGrad = c.kind === 'graduate';
               const active = dragOverCol === c.key;
               return (
@@ -594,12 +666,15 @@ export default function PromotionsPage() {
             <div className="row" style={{ gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
               <label className="row" style={{ gap: 8, cursor: 'pointer' }}>
                 <input type="checkbox" checked={renumber} onChange={(e) => setRenumber(e.target.checked)} />
-                <span>รันเลขที่ใหม่ 1..N ทุกห้องในชั้นนี้ <span className="muted">(ไม่เลือก = คงเลขที่เดิม)</span></span>
+                <span>
+                  {regrade ? `รันเลขที่ใหม่ 1..N ทุกห้องใน ${grade} และ ${roomGrade}` : 'รันเลขที่ใหม่ 1..N ทุกห้องในชั้นนี้'}{' '}
+                  <span className="muted">(ไม่เลือก = คงเลขที่เดิม)</span>
+                </span>
               </label>
               <div className="spacer" style={{ flex: 1 }} />
               <span className="muted">ย้าย {movedRows.length} คน</span>
               <button className="btn btn-primary" onClick={submitRoomMove} disabled={busy || !movedRows.length}>
-                {busy ? 'กำลังย้ายห้อง…' : `ย้ายห้อง ${movedRows.length} คน`}
+                {busy ? 'กำลังย้าย…' : regrade ? `ย้ายไป ${roomGrade} ${movedRows.length} คน` : `ย้ายห้อง ${movedRows.length} คน`}
               </button>
             </div>
           )}
