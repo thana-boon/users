@@ -271,8 +271,25 @@ export function parseStudentRow(r: unknown[]): ParsedStudent | null {
   };
 }
 
-// -- Teachers: 11 base columns + 7 contact/demographic columns -----
-/** The contact + demographic fields that sit after the 11 original columns. */
+// -- Teachers: read by header name, not position ----------------------
+/**
+ * The teachers sheet is read by HEADER TEXT, so column order does not matter:
+ * the current template puts รหัสครูผู้สอน first, older files have it sixth, and
+ * both import the same. A header that is not in the file reads as absent.
+ */
+export type TeacherColumnIndex = Map<string, number>;
+
+/** Header row → column position, keyed on the trimmed header text. */
+export function teacherColumnIndex(header: readonly unknown[]): TeacherColumnIndex {
+  const out: TeacherColumnIndex = new Map();
+  header.forEach((h, i) => {
+    const name = cleanStr(h);
+    if (name && !out.has(name)) out.set(name, i);
+  });
+  return out;
+}
+
+/** The contact + demographic fields, added after the original 11 columns. */
 export interface ParsedTeacherContact {
   phone: string | null;
   lineId: string | null;
@@ -282,6 +299,17 @@ export interface ParsedTeacherContact {
   nationality: string | null;
   ethnicity: string | null;
 }
+
+/** Contact field ← its header in the teachers sheet. */
+const TEACHER_CONTACT_HEADERS: Record<keyof ParsedTeacherContact, string> = {
+  phone: 'เบอร์โทร',
+  lineId: 'ไอดีไลน์',
+  birthDate: 'วัน/เดือน/ปีเกิด',
+  gender: 'เพศ',
+  religion: 'ศาสนา',
+  nationality: 'สัญชาติ',
+  ethnicity: 'เชื้อชาติ',
+};
 
 export interface ParsedTeacher {
   teacherCode: string;
@@ -293,12 +321,16 @@ export interface ParsedTeacher {
   plainPassword: string | null;
   gradeTaught: string | null;
   subjectGroup: string | null;
-  contact: ParsedTeacherContact;
+  /**
+   * Only the fields whose column is IN the file. An old file without them
+   * yields {}, so writing this object never blanks a phone number nobody sent.
+   */
+  contact: Partial<ParsedTeacherContact>;
 }
 
 /**
  * A phone cell Excel stored as a number has lost its leading zero
- * (0812345678 → 812345678). A 9-digit number starting 2–9 is a Thai mobile or
+ * (0812345678 → 812345678). A 9-digit number starting 1–9 is a Thai mobile or
  * landline with the 0 eaten, so it gets the 0 back.
  */
 function phoneCell(v: unknown): string | null {
@@ -310,9 +342,9 @@ function phoneCell(v: unknown): string | null {
 }
 
 /**
- * A date cell Excel recognised arrives as a Date (or its serial number); stored form is the raw
- * Buddhist "dd/mm/BBBB" like everywhere else. Typed text is tidied the same
- * way the date field tidies what is typed into it.
+ * A date cell Excel recognised arrives as a Date (or its serial number); stored
+ * form is the raw Buddhist "dd/mm/BBBB" like everywhere else. Typed text is
+ * tidied the same way the date field tidies what is typed into it.
  */
 function thaiDateCell(v: unknown): string | null {
   // A bare Excel date serial (days since 1899-12-30), e.g. 33009 = 16/05/1990.
@@ -327,33 +359,41 @@ function thaiDateCell(v: unknown): string | null {
   return s ? normalizeThaiInput(s) || s : null;
 }
 
-export function parseTeacherRow(r: unknown[]): ParsedTeacher | null {
-  // 0:ลำดับ 1:รหัสบัตร 2:คำนำหน้า 3:ชื่อ 4:นามสกุล 5:รหัสครูผู้สอน
-  // 6:Username 7:Password 8:Email 9:ชั้นที่สอน 10:กลุ่มสาระที่สอน
-  // 11:เบอร์โทร 12:ไอดีไลน์ 13:วัน/เดือน/ปีเกิด 14:เพศ 15:ศาสนา 16:สัญชาติ 17:เชื้อชาติ
-  const teacherCode = (cleanStr(r[5]) || cleanStr(r[6])).trim();
-  const firstName = cleanStr(r[3]).trim();
-  const lastName = cleanStr(r[4]).trim();
+export function parseTeacherRow(r: unknown[], cols: TeacherColumnIndex): ParsedTeacher | null {
+  const cell = (name: string): unknown => {
+    const i = cols.get(name);
+    return i === undefined ? undefined : r[i];
+  };
+  const text = (name: string) => clean(cell(name));
+
+  // Username is the fallback: in the school's files it always equals the code.
+  const teacherCode = (cleanStr(cell('รหัสครูผู้สอน')) || cleanStr(cell('Username'))).trim();
+  const firstName = cleanStr(cell('ชื่อ')).trim();
+  const lastName = cleanStr(cell('นามสกุล')).trim();
   if (!teacherCode || (!firstName && !lastName)) return null;
+
+  const contact: Partial<ParsedTeacherContact> = {};
+  const has = (k: keyof ParsedTeacherContact) => cols.has(TEACHER_CONTACT_HEADERS[k]);
+  const raw = (k: keyof ParsedTeacherContact) => cell(TEACHER_CONTACT_HEADERS[k]);
+  if (has('phone')) contact.phone = phoneCell(raw('phone'));
+  if (has('lineId')) contact.lineId = clean(raw('lineId'));
+  if (has('birthDate')) contact.birthDate = thaiDateCell(raw('birthDate'));
+  if (has('gender')) contact.gender = normalizeChoice(clean(raw('gender')), GENDER_OPTIONS);
+  if (has('religion')) contact.religion = normalizeChoice(clean(raw('religion')), RELIGION_OPTIONS);
+  if (has('nationality')) contact.nationality = normalizeChoice(clean(raw('nationality')), NATIONALITY_OPTIONS);
+  if (has('ethnicity')) contact.ethnicity = normalizeChoice(clean(raw('ethnicity')), ETHNICITY_OPTIONS);
+
   return {
     teacherCode,
-    citizenId: g(r, 1),
-    prefix: g(r, 2),
+    citizenId: text('รหัสบัตรประชาชน'),
+    prefix: text('คำนำหน้า'),
     firstName,
     lastName,
-    email: g(r, 8)?.toLowerCase() ?? null,
-    plainPassword: g(r, 7),
-    gradeTaught: g(r, 9),
-    subjectGroup: g(r, 10),
-    contact: {
-      phone: phoneCell(r[11]),
-      lineId: g(r, 12),
-      birthDate: thaiDateCell(r[13]),
-      gender: normalizeChoice(g(r, 14), GENDER_OPTIONS),
-      religion: normalizeChoice(g(r, 15), RELIGION_OPTIONS),
-      nationality: normalizeChoice(g(r, 16), NATIONALITY_OPTIONS),
-      ethnicity: normalizeChoice(g(r, 17), ETHNICITY_OPTIONS),
-    },
+    email: text('Email')?.toLowerCase() ?? null,
+    plainPassword: text('Password'),
+    gradeTaught: text('ชั้นที่สอน'),
+    subjectGroup: text('กลุ่มสาระที่สอน'),
+    contact,
   };
 }
 

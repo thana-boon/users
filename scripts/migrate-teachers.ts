@@ -16,8 +16,8 @@ import { eq } from 'drizzle-orm';
 import { db, sql } from '../src/db';
 import { teachers } from '../src/db/schema';
 import { encrypt } from '../src/lib/crypto';
-import { parseTeacherRow } from '../src/lib/excel-map';
-import { readSheetRows } from '../src/lib/excel-io';
+import { parseTeacherRow, teacherColumnIndex } from '../src/lib/excel-map';
+import { readTeacherWorkbook } from '../src/lib/excel-io';
 
 /** Teacher codes seeded as `teacher-admin` (everyone else is `teacher`). */
 const ADMIN_CODES = new Set(['T00116', 'T00241']);
@@ -26,14 +26,15 @@ async function main() {
   const file = process.argv[2] ?? path.resolve(process.cwd(), '.example/teachers.xlsx');
   console.log(`[teachers] reading ${file}`);
   const buf = await readFile(file);
-  const rows = await readSheetRows(buf);
+  const { main: rows, mainHeader } = await readTeacherWorkbook(buf, []);
+  const cols = teacherColumnIndex(mainHeader);
 
   let created = 0;
   let updated = 0;
   let skipped = 0;
 
   for (const raw of rows) {
-    const t = parseTeacherRow(raw);
+    const t = parseTeacherRow(raw, cols);
     if (!t) { skipped++; continue; }
     const existing = await db.query.teachers.findFirst({
       where: eq(teachers.teacherCode, t.teacherCode),

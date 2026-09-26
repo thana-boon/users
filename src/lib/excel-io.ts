@@ -40,15 +40,12 @@ export const STUDENT_COLUMNS: string[] = [
 ];
 
 /**
- * The first 11 columns are the original teachers.xlsx layout. The contact and
- * demographic columns after them were added later and are APPENDED, never
- * inserted, so an old 11-column file still lines up — and the import only
- * writes those fields when the file's header actually has them, so re-importing
- * an old file does not blank everyone's phone number.
+ * รหัสครูผู้สอน comes first: it is the key the import matches on (found →
+ * update, not found → create). The import reads this sheet by header name, so
+ * older files with the code in column 6 still import unchanged.
  */
-export const TEACHER_BASE_COLUMN_COUNT = 11;
 export const TEACHER_COLUMNS: string[] = [
-  'ลำดับ', 'รหัสบัตรประชาชน', 'คำนำหน้า', 'ชื่อ', 'นามสกุล', 'รหัสครูผู้สอน',
+  'รหัสครูผู้สอน', 'ลำดับ', 'รหัสบัตรประชาชน', 'คำนำหน้า', 'ชื่อ', 'นามสกุล',
   'Username', 'Password', 'Email', 'ชั้นที่สอน', 'กลุ่มสาระที่สอน',
   'เบอร์โทร', 'ไอดีไลน์', 'วัน/เดือน/ปีเกิด', 'เพศ', 'ศาสนา', 'สัญชาติ', 'เชื้อชาติ',
 ];
@@ -297,12 +294,12 @@ export async function buildTeacherExport(rows: TeacherExportRow[]): Promise<Buff
   ws.addRow(TEACHER_COLUMNS);
   rows.forEach((t, i) => {
     ws.addRow([
+      t.teacherCode,
       i + 1,
       decrypt(t.citizenIdEncrypted) ?? '',
       val(t.prefix),
       t.firstName,
       t.lastName,
-      t.teacherCode,
       t.teacherCode, // Username = teacher_code
       decrypt(t.passwordEncrypted) ?? '',
       val(t.email),
