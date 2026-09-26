@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import { decrypt } from '@/lib/crypto';
 
 /**
@@ -424,10 +425,48 @@ function sheetRows(ws: ExcelJS.Worksheet): unknown[][] {
   return out;
 }
 
-export async function readSheetRows(buf: Buffer): Promise<unknown[][]> {
+const COMMENT_REL = /<Relationship\b[^>]*\bType="[^"]*\/(?:comments|vmlDrawing)"[^>]*\/>/g;
+
+/**
+ * Drop cell comments (notes) before exceljs sees the file. exceljs 4.4 crashes
+ * on comments whose part path is written absolute ("/xl/comments/comment1.xml")
+ * — which is how openpyxl and some other tools write them — with "Cannot read
+ * properties of undefined (reading 'comments')". The import never reads
+ * comments, so removing them loses nothing and lets those files open.
+ */
+async function withoutComments(buf: Buffer): Promise<Buffer> {
+  let zip: JSZip;
+  try {
+    zip = await JSZip.loadAsync(buf);
+  } catch {
+    return buf; // not a zip — let exceljs report it the usual way
+  }
+  let changed = false;
+  for (const relPath of Object.keys(zip.files)) {
+    const m = relPath.match(/^xl\/worksheets\/_rels\/(.+)\.rels$/);
+    if (!m) continue;
+    const rels = await zip.file(relPath)!.async('string');
+    const cleaned = rels.replace(COMMENT_REL, '');
+    if (cleaned === rels) continue;
+    zip.file(relPath, cleaned);
+    // The sheet points at the (now removed) VML drawing; drop that pointer too.
+    const sheetPath = `xl/worksheets/${m[1]}`;
+    const sheet = await zip.file(sheetPath)?.async('string');
+    if (sheet !== undefined) zip.file(sheetPath, sheet.replace(/<legacyDrawing\b[^>]*\/>/g, ''));
+    changed = true;
+  }
+  return changed ? zip.generateAsync({ type: 'nodebuffer' }) : buf;
+}
+
+async function loadWorkbook(buf: Buffer): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
   // exceljs typings predate the Buffer<ArrayBufferLike> generic; cast is safe.
-  await wb.xlsx.load(buf as unknown as ExcelJS.Buffer);
+  await wb.xlsx.load((await withoutComments(buf)) as unknown as ExcelJS.Buffer);
+  return wb;
+}
+
+export async function readSheetRows(buf: Buffer): Promise<unknown[][]> {
+  const wb = await loadWorkbook(buf);
   return sheetRows(wb.worksheets[0]);
 }
 
@@ -444,8 +483,7 @@ export async function readTeacherWorkbook(
   buf: Buffer,
   extraSheets: readonly string[],
 ): Promise<{ main: unknown[][]; mainHeader: string[]; extra: Record<string, unknown[][]> }> {
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buf as unknown as ExcelJS.Buffer);
+  const wb = await loadWorkbook(buf);
   const extra: Record<string, unknown[][]> = {};
   for (const name of extraSheets) {
     const ws = wb.getWorksheet(name);

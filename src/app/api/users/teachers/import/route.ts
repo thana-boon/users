@@ -50,6 +50,10 @@ export const runtime = 'nodejs';
  * A row pointing at a teacher code that is not in the database is reported like
  * any other row error, so a typo does not silently drop somebody's degrees.
  *
+ * UPDATING an existing teacher only writes cells that have a value: a blank
+ * cell keeps what the database already holds. Clearing a field is done from
+ * the teacher's page, not by emptying a cell.
+ *
  * The roster sheet is read by HEADER NAME, so column order is free. The
  * contact columns (เบอร์โทร, ไอดีไลน์, วันเกิด, เพศ, ศาสนา, สัญชาติ, เชื้อชาติ) follow
  * the same "absent means untouched" rule: each is written only when its header
@@ -178,8 +182,10 @@ export async function POST(req: NextRequest) {
         ...t.contact,
       };
       if (existing) {
-        // Do NOT touch role on re-import (preserve promotions).
-        await db.update(teachers).set(base).where(eq(teachers.id, existing.id));
+        // Do NOT touch role on re-import (preserve promotions). A blank cell
+        // keeps what is stored: a file sent to update phone numbers usually
+        // has เลขบัตร / Password / ชั้นที่สอน empty, and must not wipe them.
+        await db.update(teachers).set(withoutBlanks(base)).where(eq(teachers.id, existing.id));
         updatedCount++;
       } else {
         await db.insert(teachers).values({ teacherCode: t.teacherCode, role: 'teacher', ...base });
@@ -229,6 +235,13 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return handleError(err);
   }
+}
+
+/** The fields that carry a value — blank (null) cells are left out of an update. */
+function withoutBlanks<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== null && v !== undefined),
+  ) as Partial<T>;
 }
 
 /** Rows of one extra sheet, grouped by teacher code, in sheet order. */
