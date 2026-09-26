@@ -94,13 +94,27 @@ export async function POST(req: NextRequest) {
     const valid: NonNullable<ReturnType<typeof parseTeacherRow>>[] = [];
     const seen = new Map<string, number>();
 
-    rawRows.forEach((raw, i) => {
+    const parsed = rawRows.map((raw) => parseTeacherRow(raw, cols));
+    // Codes already in the database: those rows may leave the name blank, since
+    // an update only writes the cells that carry a value.
+    const fileCodes = [...new Set(parsed.map((t) => t?.teacherCode).filter((c): c is string => !!c))];
+    const existingCodes = new Set(
+      fileCodes.length
+        ? (await db
+            .select({ code: teachers.teacherCode })
+            .from(teachers)
+            .where(inArray(teachers.teacherCode, fileCodes))).map((r) => r.code)
+        : [],
+    );
+
+    parsed.forEach((t, i) => {
       const rowNo = i + 2;
-      const t = parseTeacherRow(raw, cols);
       if (!t) return;
       const errs: string[] = [];
       if (!t.teacherCode) errs.push('ขาดรหัสครู');
-      if (!t.firstName && !t.lastName) errs.push('ขาดชื่อ-นามสกุล');
+      else if (!t.firstName && !t.lastName && !existingCodes.has(t.teacherCode)) {
+        errs.push('ขาดชื่อ-นามสกุล (ครูใหม่ที่ยังไม่มีในระบบต้องระบุชื่อ)');
+      }
       if (!isValidCitizenId(t.citizenId)) errs.push('เลขบัตรประชาชนไม่ถูกต้อง');
 
       const snapped = snapSubjectGroup(t.subjectGroup, known);
@@ -237,10 +251,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** The fields that carry a value — blank (null) cells are left out of an update. */
+/** The fields that carry a value — blank cells are left out of an update. */
 function withoutBlanks<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return Object.fromEntries(
-    Object.entries(obj).filter(([, v]) => v !== null && v !== undefined),
+    Object.entries(obj).filter(([, v]) => v !== null && v !== undefined && v !== ''),
   ) as Partial<T>;
 }
 

@@ -370,7 +370,10 @@ export function parseTeacherRow(r: unknown[], cols: TeacherColumnIndex): ParsedT
   const teacherCode = (cleanStr(cell('รหัสครูผู้สอน')) || cleanStr(cell('Username'))).trim();
   const firstName = cleanStr(cell('ชื่อ')).trim();
   const lastName = cleanStr(cell('นามสกุล')).trim();
-  if (!teacherCode || (!firstName && !lastName)) return null;
+  // A row with neither code nor name is blank. A code without a name is NOT
+  // blank: it is how a file that only updates phone numbers looks, and the
+  // route decides whether that is fine (existing teacher) or an error (new).
+  if (!teacherCode && !firstName && !lastName) return null;
 
   const contact: Partial<ParsedTeacherContact> = {};
   const has = (k: keyof ParsedTeacherContact) => cols.has(TEACHER_CONTACT_HEADERS[k]);
