@@ -9,6 +9,8 @@ import {
   TEACHER_EDUCATION_SHEET,
   TEACHER_SCOUT_SHEET,
   TEACHER_TRAINING_SHEET,
+  TEACHER_COLUMNS,
+  TEACHER_BASE_COLUMN_COUNT,
   readTeacherWorkbook,
 } from '@/lib/excel-io';
 import {
@@ -17,6 +19,7 @@ import {
   parseTeacherScoutRow,
   parseTeacherTrainingRow,
   type ParsedQualificationRow,
+  type ParsedTeacherContact,
 } from '@/lib/excel-map';
 import { replaceTeacherLists } from '@/lib/services/teachers';
 import { encrypt } from '@/lib/crypto';
@@ -48,6 +51,10 @@ export const runtime = 'nodejs';
  *
  * A row pointing at a teacher code that is not in the database is reported like
  * any other row error, so a typo does not silently drop somebody's degrees.
+ *
+ * CONTACT COLUMNS (เบอร์โทร, ไอดีไลน์, วันเกิด, เพศ, ศาสนา, สัญชาติ, เชื้อชาติ) follow
+ * the same "absent means untouched" rule: each is written only when its header
+ * is in the file, so an old 11-column file re-imported does not blank them.
  */
 interface RowIssue {
   row: number;
@@ -67,12 +74,13 @@ export async function POST(req: NextRequest) {
     if (!(file instanceof File)) return badRequest('กรุณาแนบไฟล์ .xlsx');
 
     const buf = Buffer.from(await file.arrayBuffer());
-    const { main: rawRows, extra } = await readTeacherWorkbook(buf, [
+    const { main: rawRows, mainHeader, extra } = await readTeacherWorkbook(buf, [
       TEACHER_EDUCATION_SHEET,
       TEACHER_SCOUT_SHEET,
       TEACHER_TRAINING_SHEET,
     ]);
     if (rawRows.length === 0) return badRequest('ไฟล์ไม่มีข้อมูล');
+    const contactKeys = presentContactKeys(mainHeader);
 
     const known = await listActiveNames();
 
@@ -165,6 +173,7 @@ export async function POST(req: NextRequest) {
         gradeTaught: t.gradeTaught,
         citizenIdEncrypted: encrypt(t.citizenId),
         passwordEncrypted: encrypt(t.plainPassword),
+        ...pick(t.contact, contactKeys),
       };
       if (existing) {
         // Do NOT touch role on re-import (preserve promotions).
@@ -218,6 +227,29 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return handleError(err);
   }
+}
+
+/** Header of each contact column → the field it fills, in TEACHER_COLUMNS order. */
+const CONTACT_KEYS: (keyof ParsedTeacherContact)[] = [
+  'phone', 'lineId', 'birthDate', 'gender', 'religion', 'nationality', 'ethnicity',
+];
+
+/**
+ * The contact fields whose column is in this file, at the position the parser
+ * reads it from. Matched on header text AND position: a header typed into the
+ * wrong column would otherwise land its data in someone else's field.
+ */
+function presentContactKeys(header: string[]): (keyof ParsedTeacherContact)[] {
+  return CONTACT_KEYS.filter((_, i) => {
+    const col = TEACHER_BASE_COLUMN_COUNT + i;
+    return header[col] === TEACHER_COLUMNS[col];
+  });
+}
+
+function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
+  const out = {} as Pick<T, K>;
+  for (const k of keys) out[k] = obj[k];
+  return out;
 }
 
 /** Rows of one extra sheet, grouped by teacher code, in sheet order. */

@@ -1,4 +1,4 @@
-import { clean, cleanStr, toInt } from './thai';
+import { clean, cleanStr, toInt, normalizeThaiInput, toThaiDate } from './thai';
 import {
   normalizeChoice, GENDER_OPTIONS, RELIGION_OPTIONS,
   NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
@@ -271,7 +271,18 @@ export function parseStudentRow(r: unknown[]): ParsedStudent | null {
   };
 }
 
-// -- Teachers: 11 columns ------------------------------------------
+// -- Teachers: 11 base columns + 7 contact/demographic columns -----
+/** The contact + demographic fields that sit after the 11 original columns. */
+export interface ParsedTeacherContact {
+  phone: string | null;
+  lineId: string | null;
+  birthDate: string | null;
+  gender: string | null;
+  religion: string | null;
+  nationality: string | null;
+  ethnicity: string | null;
+}
+
 export interface ParsedTeacher {
   teacherCode: string;
   citizenId: string | null;
@@ -282,11 +293,44 @@ export interface ParsedTeacher {
   plainPassword: string | null;
   gradeTaught: string | null;
   subjectGroup: string | null;
+  contact: ParsedTeacherContact;
+}
+
+/**
+ * A phone cell Excel stored as a number has lost its leading zero
+ * (0812345678 → 812345678). A 9-digit number starting 2–9 is a Thai mobile or
+ * landline with the 0 eaten, so it gets the 0 back.
+ */
+function phoneCell(v: unknown): string | null {
+  if (typeof v === 'number') {
+    const s = String(Math.trunc(v));
+    return /^[1-9]\d{8}$/.test(s) ? `0${s}` : s;
+  }
+  return clean(v);
+}
+
+/**
+ * A date cell Excel recognised arrives as a Date (or its serial number); stored form is the raw
+ * Buddhist "dd/mm/BBBB" like everywhere else. Typed text is tidied the same
+ * way the date field tidies what is typed into it.
+ */
+function thaiDateCell(v: unknown): string | null {
+  // A bare Excel date serial (days since 1899-12-30), e.g. 33009 = 16/05/1990.
+  if (typeof v === 'number' && v > 0 && v < 80000) {
+    v = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000);
+  }
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    const y = v.getUTCFullYear();
+    return toThaiDate(v.getUTCDate(), v.getUTCMonth() + 1, y > 2400 ? y : y + 543);
+  }
+  const s = clean(v);
+  return s ? normalizeThaiInput(s) || s : null;
 }
 
 export function parseTeacherRow(r: unknown[]): ParsedTeacher | null {
   // 0:ลำดับ 1:รหัสบัตร 2:คำนำหน้า 3:ชื่อ 4:นามสกุล 5:รหัสครูผู้สอน
   // 6:Username 7:Password 8:Email 9:ชั้นที่สอน 10:กลุ่มสาระที่สอน
+  // 11:เบอร์โทร 12:ไอดีไลน์ 13:วัน/เดือน/ปีเกิด 14:เพศ 15:ศาสนา 16:สัญชาติ 17:เชื้อชาติ
   const teacherCode = (cleanStr(r[5]) || cleanStr(r[6])).trim();
   const firstName = cleanStr(r[3]).trim();
   const lastName = cleanStr(r[4]).trim();
@@ -301,6 +345,15 @@ export function parseTeacherRow(r: unknown[]): ParsedTeacher | null {
     plainPassword: g(r, 7),
     gradeTaught: g(r, 9),
     subjectGroup: g(r, 10),
+    contact: {
+      phone: phoneCell(r[11]),
+      lineId: g(r, 12),
+      birthDate: thaiDateCell(r[13]),
+      gender: normalizeChoice(g(r, 14), GENDER_OPTIONS),
+      religion: normalizeChoice(g(r, 15), RELIGION_OPTIONS),
+      nationality: normalizeChoice(g(r, 16), NATIONALITY_OPTIONS),
+      ethnicity: normalizeChoice(g(r, 17), ETHNICITY_OPTIONS),
+    },
   };
 }
 

@@ -39,10 +39,32 @@ export const STUDENT_COLUMNS: string[] = [
   'ส่วนสูง', 'กรุ๊ปเลือด', 'แพ้อาหาร', 'แพ้ยา', 'แพ้อื่นๆ', 'โรคประจำตัว', 'โรคร้ายแรง',
 ];
 
+/**
+ * The first 11 columns are the original teachers.xlsx layout. The contact and
+ * demographic columns after them were added later and are APPENDED, never
+ * inserted, so an old 11-column file still lines up — and the import only
+ * writes those fields when the file's header actually has them, so re-importing
+ * an old file does not blank everyone's phone number.
+ */
+export const TEACHER_BASE_COLUMN_COUNT = 11;
 export const TEACHER_COLUMNS: string[] = [
   'ลำดับ', 'รหัสบัตรประชาชน', 'คำนำหน้า', 'ชื่อ', 'นามสกุล', 'รหัสครูผู้สอน',
   'Username', 'Password', 'Email', 'ชั้นที่สอน', 'กลุ่มสาระที่สอน',
+  'เบอร์โทร', 'ไอดีไลน์', 'วัน/เดือน/ปีเกิด', 'เพศ', 'ศาสนา', 'สัญชาติ', 'เชื้อชาติ',
 ];
+
+/**
+ * Columns typed as Text in the template, so Excel keeps 0812345678's leading
+ * zero, and does not turn 01/02/2530 into a date serial.
+ */
+const TEACHER_TEXT_COLUMNS = ['รหัสบัตรประชาชน', 'เบอร์โทร', 'ไอดีไลน์', 'วัน/เดือน/ปีเกิด'];
+
+function setTextColumns(ws: ExcelJS.Worksheet, headers: string[], textCols: string[]) {
+  for (const h of textCols) {
+    const i = headers.indexOf(h);
+    if (i >= 0) ws.getColumn(i + 1).numFmt = '@';
+  }
+}
 
 /**
  * วุฒิการศึกษา / วุฒิลูกเสือ / การอบรม — three EXTRA sheets in the same
@@ -121,6 +143,7 @@ export async function buildTeacherTemplate(): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('teachers');
   ws.columns = TEACHER_COLUMNS.map((h) => ({ header: h, key: h, width: 20 }));
+  setTextColumns(ws, TEACHER_COLUMNS, TEACHER_TEXT_COLUMNS);
   styleHeader(ws, true);
   ws.views = [{ state: 'frozen', ySplit: 1 }];
   addQualificationSheets(wb);
@@ -255,6 +278,13 @@ export interface TeacherExportRow {
   passwordEncrypted: string | null;
   gradeTaught: string | null;
   subjectGroup: string | null;
+  phone: string | null;
+  lineId: string | null;
+  birthDate: string | null;
+  gender: string | null;
+  religion: string | null;
+  nationality: string | null;
+  ethnicity: string | null;
   /** The three repeatable lists, each exported to its own sheet. */
   educations?: Record<string, unknown>[];
   scoutQualifications?: Record<string, unknown>[];
@@ -278,8 +308,17 @@ export async function buildTeacherExport(rows: TeacherExportRow[]): Promise<Buff
       val(t.email),
       val(t.gradeTaught),
       val(t.subjectGroup),
+      // Strings, never numbers — see TEACHER_TEXT_COLUMNS.
+      String(t.phone ?? ''),
+      String(t.lineId ?? ''),
+      String(t.birthDate ?? ''),
+      val(t.gender),
+      val(t.religion),
+      val(t.nationality),
+      val(t.ethnicity),
     ]);
   });
+  setTextColumns(ws, TEACHER_COLUMNS, TEACHER_TEXT_COLUMNS);
   styleHeader(ws, true);
   ws.views = [{ state: 'frozen', ySplit: 1 }];
 
@@ -357,6 +396,18 @@ export async function buildSpecialTeacherExport(rows: SpecialTeacherExportRow[])
 
 // -- Import (read rows back to arrays) -----------------------------
 
+/** A worksheet's header row as trimmed strings. */
+function headerRow(ws: ExcelJS.Worksheet): string[] {
+  const values = ws.getRow(1).values as unknown[];
+  const out: string[] = [];
+  for (let i = 1; i < values.length; i++) {
+    const v = values[i];
+    const text = v && typeof v === 'object' && 'text' in (v as object) ? (v as { text: string }).text : v;
+    out[i - 1] = String(text ?? '').trim();
+  }
+  return out;
+}
+
 /** One worksheet's data rows as dense 0-indexed arrays (header row dropped). */
 function sheetRows(ws: ExcelJS.Worksheet): unknown[][] {
   const out: unknown[][] = [];
@@ -395,7 +446,7 @@ export async function readSheetRows(buf: Buffer): Promise<unknown[][]> {
 export async function readTeacherWorkbook(
   buf: Buffer,
   extraSheets: readonly string[],
-): Promise<{ main: unknown[][]; extra: Record<string, unknown[][]> }> {
+): Promise<{ main: unknown[][]; mainHeader: string[]; extra: Record<string, unknown[][]> }> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf as unknown as ExcelJS.Buffer);
   const extra: Record<string, unknown[][]> = {};
@@ -403,5 +454,6 @@ export async function readTeacherWorkbook(
     const ws = wb.getWorksheet(name);
     if (ws) extra[name] = sheetRows(ws);
   }
-  return { main: sheetRows(wb.worksheets[0]), extra };
+  const ws = wb.worksheets[0];
+  return { main: sheetRows(ws), mainHeader: headerRow(ws), extra };
 }
