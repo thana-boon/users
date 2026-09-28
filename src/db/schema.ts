@@ -410,6 +410,32 @@ export const teachers = pgTable(
     nationality: varchar('nationality', { length: 48 }),
     ethnicity: varchar('ethnicity', { length: 48 }),
 
+    // ผู้ติดต่อฉุกเฉิน — who to call when something happens to this teacher.
+    // A third person's number, so the public API serves it only under the
+    // additive `teachers:contact` scope, never on the plain roster.
+    emergencyContactName: varchar('emergency_contact_name', { length: 191 }),
+    emergencyPhone: varchar('emergency_phone', { length: 32 }),
+    emergencyRelationship: varchar('emergency_relationship', { length: 64 }), // ความเกี่ยวข้อง เช่น มารดา
+
+    // ที่อยู่ตามทะเบียนบ้าน — the same fields a student address has. Columns on
+    // the row rather than a child table: a teacher has exactly one of these, and
+    // the student table's per-type key would be a key with one value here.
+    // Published as a nested `householdAddress` object (see services/teachers).
+    addrHouseNo: varchar('addr_house_no', { length: 64 }),
+    addrMoo: varchar('addr_moo', { length: 32 }),
+    addrSoi: varchar('addr_soi', { length: 128 }),
+    addrRoad: varchar('addr_road', { length: 128 }),
+    addrSubDistrict: varchar('addr_sub_district', { length: 128 }),
+    addrDistrict: varchar('addr_district', { length: 128 }),
+    addrProvince: varchar('addr_province', { length: 128 }),
+    addrPostalCode: varchar('addr_postal_code', { length: 16 }),
+    addrHouseRegCode: varchar('addr_house_reg_code', { length: 32 }), // รหัสประจำบ้าน
+
+    // เดือน/ปีที่เข้าทำงาน — "mm/BBBB" (Buddhist year), e.g. "05/2560". Month
+    // precision on purpose: that is what the teachers actually know, and a
+    // made-up day would read as a fact on every document that prints it.
+    workStart: varchar('work_start', { length: 7 }),
+
     // Employment lifecycle (ยังทำงานอยู่ / ลาออก). Exit fields recorded on resign.
     employmentStatus: employmentStatusEnum('employment_status').notNull().default('active'),
     exitDate: varchar('exit_date', { length: 20 }), // raw Thai dd/mm/BBBB
@@ -468,7 +494,7 @@ export const teacherEducations = pgTable(
     major: varchar('major', { length: 191 }), // วิชาเอก/สาขาวิชา
     faculty: varchar('faculty', { length: 191 }), // คณะ
     institution: varchar('institution', { length: 191 }), // มหาวิทยาลัย/สถาบัน
-    graduationYear: varchar('graduation_year', { length: 16 }), // ปีที่สำเร็จ (พ.ศ.)
+    graduationYear: varchar('graduation_year', { length: 16 }), // ปีที่สำเร็จ (พ.ศ.) — optional
   },
   (t) => ({
     teacherIdx: index('teacher_educations_teacher_idx').on(t.teacherId),

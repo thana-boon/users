@@ -6,6 +6,13 @@ import { useNotice } from '@/components/Notice';
 import { PhoneInput } from '@/components/PhoneInput';
 import { PhotoCard } from '@/components/PhotoCard';
 import { Combo } from '@/components/Combo';
+import { DateField } from '@/components/DateField';
+import {
+  EmergencyContactFields,
+  HouseholdAddressFields,
+  MonthYearField,
+  type HouseholdAddressForm,
+} from '@/components/StaffProfileFields';
 import {
   QualificationSections,
   type QualificationLists,
@@ -14,7 +21,6 @@ import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
 } from '@/lib/options';
 import { CitizenIdField, ClosedNotice, Field, Locked, SaveBar, Section } from './parts';
-import { PasswordCard } from './PasswordCard';
 
 /**
  * A teacher's own record.
@@ -51,6 +57,11 @@ export interface TeacherMe {
   hasPassword: boolean;
   hasPhoto: boolean;
   employmentStatus: 'active' | 'resigned';
+  emergencyContactName: string | null;
+  emergencyPhone: string | null;
+  emergencyRelationship: string | null;
+  householdAddress: HouseholdAddressForm | null;
+  workStart: string | null;
   educations?: QualificationLists['educations'];
   scoutQualifications?: QualificationLists['scoutQualifications'];
   trainings?: QualificationLists['trainings'];
@@ -65,7 +76,13 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
     religion: me.religion,
     nationality: me.nationality,
     ethnicity: me.ethnicity,
+    birthDate: me.birthDate,
+    emergencyContactName: me.emergencyContactName,
+    emergencyPhone: me.emergencyPhone,
+    emergencyRelationship: me.emergencyRelationship,
+    workStart: me.workStart,
   });
+  const [address, setAddress] = useState<HouseholdAddressForm>(me.householdAddress ?? {});
   const [lists, setLists] = useState<QualificationLists>({
     educations: me.educations ?? [],
     scoutQualifications: me.scoutQualifications ?? [],
@@ -91,12 +108,13 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
         // switch off, the server answers 403 to its mere presence.
         body: JSON.stringify({
           ...form,
+          householdAddress: address,
           ...lists,
           ...(citizenId === undefined ? {} : { citizenId }),
         }),
       });
       reload();
-      notice({ message: 'ข้อมูลติดต่อและวุฒิ/การอบรมของคุณถูกบันทึกแล้ว' });
+      notice({ message: 'ข้อมูลของคุณถูกบันทึกแล้ว' });
     } catch (e) {
       notice({ kind: 'error', message: (e as Error).message });
     } finally {
@@ -137,13 +155,14 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
         </div>
       </div>
 
-      {ro && me.closedReason && <ClosedNotice reason={me.closedReason} />}
+      {ro && me.closedReason && <ClosedNotice reason={me.closedReason} canChangePassword={false} />}
 
-      <Section title="ข้อมูลติดต่อ" hint={ro ? undefined : 'ส่วนนี้แก้ไขเองได้'}>
+      <Section title="ข้อมูลส่วนตัวและการติดต่อ" hint={ro ? undefined : 'ส่วนนี้แก้ไขเองได้'}>
         <PhoneInput label="เบอร์โทร" value={form.phone} onChange={setV('phone')} disabled={ro} />
         <Field label="ไอดีไลน์" value={form.lineId} onChange={setV('lineId')} placeholder="เช่น teacher.somchai" disabled={ro} />
         {ro ? (
           <>
+            <Locked label="วันเดือนปีเกิด" value={form.birthDate} />
             <Locked label="เพศ" value={form.gender} />
             <Locked label="ศาสนา" value={form.religion} />
             <Locked label="สัญชาติ" value={form.nationality} />
@@ -151,12 +170,34 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
           </>
         ) : (
           <>
+            <DateField label="วันเดือนปีเกิด" value={form.birthDate} onChange={setV('birthDate')} />
             <Combo label="เพศ" value={form.gender} onChange={setV('gender')} options={GENDER_OPTIONS} />
             <Combo label="ศาสนา" value={form.religion} onChange={setV('religion')} options={RELIGION_OPTIONS} />
             <Combo label="สัญชาติ" value={form.nationality} onChange={setV('nationality')} options={NATIONALITY_OPTIONS} />
             <Combo label="เชื้อชาติ" value={form.ethnicity} onChange={setV('ethnicity')} options={ETHNICITY_OPTIONS} />
           </>
         )}
+        <MonthYearField
+          label="เดือน / ปีที่เข้าทำงาน (พ.ศ.)"
+          value={form.workStart}
+          onChange={setV('workStart')}
+          disabled={ro}
+          hint="เดือนและปีที่เริ่มทำงานที่โรงเรียนนี้ เช่น พฤษภาคม 2560"
+        />
+      </Section>
+
+      <Section title="ผู้ติดต่อฉุกเฉิน" hint={ro ? undefined : 'คนที่โรงเรียนควรติดต่อเมื่อเกิดเหตุฉุกเฉิน'}>
+        <EmergencyContactFields
+          name={form.emergencyContactName}
+          phone={form.emergencyPhone}
+          relationship={form.emergencyRelationship}
+          onChange={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
+          disabled={ro}
+        />
+      </Section>
+
+      <Section title="ที่อยู่ตามทะเบียนบ้าน" hint={ro ? undefined : 'กรอกตามสำเนาทะเบียนบ้าน'}>
+        <HouseholdAddressFields value={address} onChange={setAddress} disabled={ro} />
       </Section>
 
       <Section
@@ -172,7 +213,6 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
         <Locked label="อีเมล (ใช้เข้าสู่ระบบ)" value={me.email} />
         <Locked label="ชื่อ" value={me.firstName} />
         <Locked label="นามสกุล" value={me.lastName} />
-        <Locked label="วันเดือนปีเกิด" value={me.birthDate} />
         <CitizenIdField
           masked={me.citizenIdMasked}
           canEdit={me.canEditSensitive}
@@ -187,10 +227,14 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
       <QualificationSections lists={lists} onChange={setLists} readOnly={ro} />
 
       {!ro && (
-        <SaveBar busy={busy} onSave={save} hint="บันทึกข้อมูลติดต่อและวุฒิ/การอบรมทั้งหมดพร้อมกัน" />
+        <SaveBar busy={busy} onSave={save} hint="บันทึกทุกส่วนในหน้านี้พร้อมกัน" />
       )}
 
-      <PasswordCard hasPassword={me.hasPassword} />
+      {/* No เปลี่ยนรหัสผ่าน card: staff passwords are set by an admin only
+          (api/users/me/password refuses teachers). */}
+      <div className="alert alert-info" style={{ fontSize: 13 }}>
+        ต้องการเปลี่ยนรหัสผ่าน กรุณาติดต่อผู้ดูแลระบบ
+      </div>
     </div>
   );
 }

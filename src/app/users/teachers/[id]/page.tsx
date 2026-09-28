@@ -17,6 +17,12 @@ import { Combo } from '@/components/Combo';
 import { SubjectGroupSelect } from '@/components/SubjectGroupSelect';
 import { DateField } from '@/components/DateField';
 import {
+  EmergencyContactFields,
+  HouseholdAddressFields,
+  MonthYearField,
+  type HouseholdAddressForm,
+} from '@/components/StaffProfileFields';
+import {
   EMPTY_LISTS,
   QualificationSections,
   type QualificationLists,
@@ -37,6 +43,10 @@ interface Detail {
   hasPhoto: boolean;
   employmentStatus: 'active' | 'resigned';
   exitDate: string | null; exitReason: string | null; exitAcademicYearId: number | null;
+  emergencyContactName: string | null; emergencyPhone: string | null;
+  emergencyRelationship: string | null;
+  householdAddress: HouseholdAddressForm | null;
+  workStart: string | null;
 }
 
 type DetailWithLists = Detail & Partial<QualificationLists>;
@@ -55,6 +65,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
   // The three repeatable lists, held apart from `form` because they are arrays
   // the RepeatList editor replaces wholesale rather than fields it sets.
   const [lists, setLists] = useState<QualificationLists>(EMPTY_LISTS);
+  const [address, setAddress] = useState<HouseholdAddressForm>({});
   // เลขบัตร / รหัสผ่าน start locked on every visit — see SensitiveLock.
   const [unlocked, setUnlocked] = useState(false);
 
@@ -63,6 +74,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
       .then((x) => {
         setD(x);
         setForm(x);
+        setAddress(x.householdAddress ?? {});
         setLists({
           educations: x.educations ?? [],
           scoutQualifications: x.scoutQualifications ?? [],
@@ -93,6 +105,11 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
         gender: form.gender, religion: form.religion,
         nationality: form.nationality, ethnicity: form.ethnicity,
         role: form.role,
+        emergencyContactName: form.emergencyContactName,
+        emergencyPhone: form.emergencyPhone,
+        emergencyRelationship: form.emergencyRelationship,
+        workStart: form.workStart,
+        householdAddress: address,
         ...lists,
       };
       // Locked means the encrypted fields never reach the payload, not merely
@@ -201,6 +218,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
             hint="เลือกจากรายการกลุ่มสาระของโรงเรียน — แก้ไขรายการได้ที่หน้า “กลุ่มสาระ”"
             style={{ gridColumn: '1 / -1' }}
           />
+          <MonthYearField label="เดือน / ปีที่เข้าทำงาน (พ.ศ.)" value={form.workStart} onChange={setV('workStart')} />
           <div>
             <label className="form-label">สิทธิ์ (role)</label>
             <select className="form-select" value={form.role ?? 'teacher'} onChange={set('role')}>
@@ -214,6 +232,26 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
         <div className="row" style={{ gap: 8, marginTop: 16 }}>
           <button className="btn btn-primary btn-sm" onClick={save} disabled={busy}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>
         </div>
+      </div>
+
+      <div className="card">
+        <h2 className="section-title">ผู้ติดต่อฉุกเฉิน</h2>
+        <div className="grid-2" style={{ gap: 12 }}>
+          <EmergencyContactFields
+            name={form.emergencyContactName}
+            phone={form.emergencyPhone}
+            relationship={form.emergencyRelationship}
+            onChange={(k, v) => setForm((s) => ({ ...s, [k]: v }))}
+          />
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 className="section-title">ที่อยู่ตามทะเบียนบ้าน</h2>
+        <div className="grid-2" style={{ gap: 12 }}>
+          <HouseholdAddressFields value={address} onChange={setAddress} />
+        </div>
+        <p className="form-hint" style={{ marginTop: 8 }}>บันทึกด้วยปุ่ม “บันทึก” ด้านล่างสุดของหน้า</p>
       </div>
 
       {/* Sensitive data. ตั้งรหัสผ่านใหม่ lives here rather than with the ordinary

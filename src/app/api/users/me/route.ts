@@ -6,11 +6,11 @@ import { requireSelf } from '@/lib/rbac';
 import { ok, notFound, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { encrypt } from '@/lib/crypto';
-import { normalizePhone } from '@/lib/phone';
 import {
   SELF_EDITABLE,
   SENSITIVE_EDITABLE,
   describeLists,
+  profileColumns,
   readTeacherProfile,
   replaceTeacherLists,
   selfPatchSchema,
@@ -161,9 +161,9 @@ async function patchTeacher(id: number, raw: unknown): Promise<string[]> {
   const body = selfPatchSchema.parse(raw);
   const { educations, scoutQualifications, trainings, citizenId, ...rest } = body;
 
-  // Same trailing-separator cleanup the student side does — see lib/phone.ts.
-  const scalars: Record<string, unknown> =
-    'phone' in rest ? { ...rest, phone: normalizePhone(rest.phone) } : { ...rest };
+  // Phones were normalized during parse (phoneField); the nested ที่อยู่ fans
+  // out into its addr_* columns here — see profileColumns.
+  const scalars = profileColumns(rest);
   if (citizenId !== undefined) {
     scalars.citizenIdEncrypted = citizenId && citizenId.trim() ? encrypt(citizenId.trim()) : null;
   }
@@ -173,8 +173,10 @@ async function patchTeacher(id: number, raw: unknown): Promise<string[]> {
   }
   const lists = { educations, scoutQualifications, trainings };
   await replaceTeacherLists(id, lists);
-  const named = Object.keys(scalars).map((k) =>
-    k === 'citizenIdEncrypted' ? 'เลขบัตรประชาชน' : k,
+  const named = new Set(
+    Object.keys(scalars).map((k) =>
+      k === 'citizenIdEncrypted' ? 'เลขบัตรประชาชน' : k.startsWith('addr') ? 'ที่อยู่ตามทะเบียนบ้าน' : k,
+    ),
   );
   return [...named, ...describeLists(lists)];
 }

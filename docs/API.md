@@ -119,10 +119,14 @@ curl -H "X-API-Key: sk_live_..." \
 | `students:health` | อ่าน **ข้อมูลสุขภาพ** (น้ำหนัก ส่วนสูง กรุ๊ปเลือด แพ้อาหาร/ยา โรคประจำตัว/ร้ายแรง) | เสริม · เรียกผ่าน `?include=health` · **ถูก audit ทุกครั้ง** |
 | `students:contact` | อ่าน **เบอร์/ผู้ติดต่อฉุกเฉิน** + เบอร์ผู้ปกครอง | เสริม · เรียกผ่าน `?include=contact` · **ถูก audit ทุกครั้ง** |
 | `students:education` | อ่าน **สถานศึกษาเดิม** (โรงเรียนเดิม ตำบล/อำเภอ/จังหวัด วุฒิ GPA) | เสริม · เรียกผ่าน `?include=education` · **ถูก audit ทุกครั้ง** |
-| `students:phone:write` | **เขียน** ช่อง **"เบอร์เพิ่มเติม"** ของนักเรียนกลับเข้าระบบ | ⚠️ **สิทธิ์เขียนอันเดียวของ API นี้** และแตะได้**ช่องเดียว** — ดูข้อ 4.3c |
+| `students:phone:write` | **เขียน** ช่อง **"เบอร์เพิ่มเติม"** ของนักเรียนกลับเข้าระบบ | ✏️ เขียน · แตะได้**ช่องเดียว** — ดูข้อ 4.3c |
+| `students:write` | **แก้ไข**ข้อมูลนักเรียน — ประวัติ ที่อยู่ ผู้ปกครอง สถานศึกษาเดิม | ✏️ เขียน · ยกเว้นบัญชีและสถานะ — ดูข้อ 4.3d · audit ทุกครั้ง |
+| `students:health:write` | **แก้ไข**ข้อมูลสุขภาพนักเรียน | ✏️ เขียน · ใช้คู่กับ `students:write` — ดูข้อ 4.3d |
 | `teachers:read` | อ่านรายชื่อครู + ครูประจำชั้น | ครอบคลุม `/homerooms` ด้วย |
 | `teachers:pii` | อ่าน **เลขบัตร ปชช.** ครู | เสริม · ถูก audit ทุกครั้ง |
 | `teachers:photo` | ดึง **รูป** ครู | เสริม |
+| `teachers:contact` | อ่าน **ผู้ติดต่อฉุกเฉิน** + **ที่อยู่ตามทะเบียนบ้าน** ของครู | เสริม · เรียกผ่าน `?include=contact` · **ถูก audit ทุกครั้ง** |
+| `teachers:write` | **แก้ไข**ข้อมูลครู — ประวัติ ติดต่อ ผู้ติดต่อฉุกเฉิน ที่อยู่ วันเข้าทำงาน วุฒิ/อบรม | ✏️ เขียน · ยกเว้นบัญชีและสถานะ — ดูข้อ 4.4d · audit ทุกครั้ง |
 | `workers:read` | อ่านรายชื่อ **คนงาน** (นักการภารโรง ฯลฯ) | แยกจาก `teachers:read` — คนงานเป็นคนละตาราง ไม่มีบัญชีล็อกอิน |
 | `workers:pii` | อ่าน **เลขบัตร ปชช.** คนงาน | เสริม · ถูก audit ทุกครั้ง |
 | `workers:photo` | ดึง **รูป** คนงาน | เสริม |
@@ -135,7 +139,10 @@ curl -H "X-API-Key: sk_live_..." \
 
 **กฎที่บังคับในโค้ด ไม่ว่ามี scope อะไรก็ตาม:**
 
-- **API นี้แก้ข้อมูลของโรงเรียนไม่ได้เลย** — ทุก endpoint เป็น read-only มีข้อยกเว้นเดียวคือช่อง "เบอร์เพิ่มเติม" (ข้อ 4.3c) ซึ่งเป็นช่องที่ทำขึ้นมาเพื่อการนี้โดยเฉพาะ ธุรการไม่ได้กรอก
+- **การเขียนต้องมี scope `:write` เท่านั้น** (ข้อ 4.3c, 4.3d, 4.4d) และแม้มีสิทธิ์เขียน ก็**แก้ส่วนที่เป็น "บัญชี" และ "สถานะ" ไม่ได้เลย**:
+  รหัสครู/รหัสนักเรียน, role, รหัสผ่าน, อีเมล (ใช้ล็อกอิน), เลขบัตร ปชช. และค่าเข้ารหัสอื่น (เลขบัตร/รายได้ผู้ปกครอง),
+  สถานะ (ลาออก/จบ/จำหน่าย/พักการเรียน), ชั้น/ห้อง/เลขที่, ถังขยะ, รูป — ส่งมา = **400** ไม่ใช่เงียบ ๆ
+- สร้าง/ลบคนผ่าน API **ไม่ได้** — แก้ได้เฉพาะคนที่มีอยู่แล้ว
 - **รหัสผ่านไม่เคยถูกส่งกลับ** ทุกกรณี
 - **รูปไม่เคยติดมากับรายชื่อ** (payload จะบวมเป็น 100 เท่า) — ต้องเรียก endpoint รูปแยก
 - `:pii` / `:photo` / `:health` / `:contact` เป็นสิทธิ์ **เสริม** ใช้เดี่ยว ๆ ไม่ได้ ต้องมี `:read` คู่เสมอ
@@ -159,11 +166,11 @@ curl -H "X-API-Key: sk_live_..." \
 | **รูปติดบัตร** | **อ่อนไหว** | `students:photo` | ✅ ผ่าน endpoint รูปแยก (ข้อ 4.7–4.8) |
 | **เลขบัตรประชาชน** | **อ่อนไหว** | `students:pii` | ✅ audit ทุกครั้ง |
 | **ข้อมูลสุขภาพ** — น้ำหนัก ส่วนสูง กรุ๊ปเลือด แพ้อาหาร แพ้ยา แพ้อื่น ๆ โรคประจำตัว โรคร้ายแรง | **อ่อนไหวมาก** | `students:health` | ✅ `?include=health` · audit ทุกครั้ง |
-| **เบอร์/ผู้ติดต่อฉุกเฉิน** + เบอร์ผู้ปกครอง (ผู้ปกครอง/บิดา/มารดา) | **อ่อนไหว** | `students:contact` | ✅ `?include=contact` · audit ทุกครั้ง · **อ่านอย่างเดียว** |
-| **สถานศึกษาเดิม** — โรงเรียนเดิม ตำบล/อำเภอ/จังหวัด วุฒิ GPA | **อ่อนไหว** | `students:education` | ✅ `?include=education` · audit ทุกครั้ง · **อ่านอย่างเดียว** |
+| **เบอร์/ผู้ติดต่อฉุกเฉิน** + เบอร์ผู้ปกครอง (ผู้ปกครอง/บิดา/มารดา) | **อ่อนไหว** | `students:contact` | ✅ `?include=contact` · audit ทุกครั้ง · แก้ได้ด้วย `students:write` (ข้อ 4.3d) |
+| **สถานศึกษาเดิม** — โรงเรียนเดิม ตำบล/อำเภอ/จังหวัด วุฒิ GPA | **อ่อนไหว** | `students:education` | ✅ `?include=education` · audit ทุกครั้ง · แก้ได้ด้วย `students:write` (ข้อ 4.3d) |
 | **เหตุที่ย้าย** (เหตุผลที่ย้ายมาจากโรงเรียนเดิม) | **อ่อนไหวมาก** | — | ❌ ไม่ส่งออก API ทุกกรณี — ดูในระบบเท่านั้น |
 | รหัสผ่าน | — | — | ❌ **ไม่มีทางส่งออก** ไม่ว่ามี scope อะไร |
-| ที่อยู่ตามทะเบียนบ้าน, รหัสประจำบ้าน | — | — | ❌ ยังไม่เปิดผ่าน API |
+| ที่อยู่ตามทะเบียนบ้าน, รหัสประจำบ้าน | — | — | ❌ ยังไม่เปิดให้**อ่าน**ผ่าน API · **เขียน**ได้ด้วย `students:write` (ข้อ 4.3d) |
 | เลขบัตร ปชช. ของผู้ปกครอง, **รายได้ผู้ปกครอง** | — | — | ❌ ไม่เปิดผ่าน API เด็ดขาด |
 | สาเหตุการลาออก (`exitReason`) | — | — | ❌ ตั้งใจไม่ส่ง (ดูข้อ 4.3) |
 | ประวัติการพักการเรียน, โรงเรียนเดิม, วุฒิ/GPA เดิม | — | — | ❌ ยังไม่เปิดผ่าน API |
@@ -177,6 +184,8 @@ curl -H "X-API-Key: sk_live_..." \
 | กลุ่มสาระ, ชั้นที่สอน, บทบาท, สถานะการทำงาน | ทั่วไป | `teachers:read` | ✅ |
 | ครูประจำชั้นรายห้อง | ทั่วไป | `teachers:read` | ✅ ข้อ 4.6 |
 | วุฒิการศึกษา / วุฒิลูกเสือ / ประวัติการอบรม | ทั่วไป | `teachers:read` | ✅ `?include=qualifications` |
+| เพศ ศาสนา สัญชาติ เชื้อชาติ, เดือน/ปีที่เข้าทำงาน (`workStart`) | ทั่วไป | `teachers:read` | ✅ อยู่ใน list เลย |
+| **ผู้ติดต่อฉุกเฉิน** (ชื่อ เบอร์ ความเกี่ยวข้อง), **ที่อยู่ตามทะเบียนบ้าน** | **อ่อนไหว** | `teachers:contact` | ✅ `?include=contact` · audit ทุกครั้ง |
 | **รูป** | **อ่อนไหว** | `teachers:photo` | ✅ endpoint แยก |
 | **เลขบัตรประชาชน** | **อ่อนไหว** | `teachers:pii` | ✅ audit ทุกครั้ง |
 | รหัสผ่าน | — | — | ❌ **ไม่มีทางส่งออก** |
@@ -190,7 +199,7 @@ curl -H "X-API-Key: sk_live_..." \
 1. ทุกครั้งที่ key ดึง `:pii` / `:health` / `:contact` / `:education` จะมีแถวใน **"บันทึกการใช้งาน"** ว่า key ไหน ดึงของใคร กี่คน เมื่อไหร่ — แอดมินโรงเรียนเห็นหมด
 2. `students:health` กับ `students:contact` **แยกกันคนละสิทธิ์โดยตั้งใจ** — ระบบห้องพยาบาลควรได้แค่ `health`, ระบบโทรแจ้งผู้ปกครองควรได้แค่ `contact` ไม่มีใครต้องถือของอีกฝ่าย
 3. ขอเท่าที่ใช้จริง — key ที่ขอครบทุกอย่างมักถูกแอดมินปฏิเสธ
-4. `students:phone:write` เป็นสิทธิ์**เขียน** แอดมินจะเห็นมันถูกทำเครื่องหมายไว้ต่างหากในหน้าออก key — ขอเฉพาะเมื่อระบบคุณเป็นคนเก็บเบอร์นั้นจริง ๆ
+4. scope ที่ลงท้าย `:write` เป็นสิทธิ์**เขียน** แอดมินจะเห็นมันถูกทำเครื่องหมายไว้ต่างหากในหน้าออก key — ขอเฉพาะเมื่อระบบคุณเป็นคนเก็บ/แก้ข้อมูลนั้นจริง ๆ และทุกการเขียนมีแถวใน "บันทึกการใช้งาน" ว่า key ไหนแก้ช่องไหนของใคร
 
 ---
 
@@ -203,8 +212,11 @@ curl -H "X-API-Key: sk_live_..." \
 | 4.3 | `GET /students/{id}` | `students:read` | ดึงนักเรียน **รายคน** + ประวัติทุกปี — ไม่ผูกกับปีการศึกษา |
 | 4.3a | `GET /students?include=health,contact,education`<br>`GET /students/{id}?include=health,contact,education` | + `students:health` / `students:contact` / `students:education` | ดึง **ข้อมูลสุขภาพ**, **ผู้ติดต่อฉุกเฉิน**, **สถานศึกษาเดิม** |
 | 4.3b | `GET /students/{id}/emergency-contact` | `students:contact` | อ่านเบอร์/ผู้ติดต่อฉุกเฉินอย่างเดียว |
-| 4.3c | `GET`/`PATCH /students/{id}/additional-phone` | `students:read` / `students:phone:write` | อ่าน/**เขียน** "เบอร์เพิ่มเติม" — **การเขียนอันเดียวของ API นี้** |
+| 4.3c | `GET`/`PATCH /students/{id}/additional-phone` | `students:read` / `students:phone:write` | อ่าน/**เขียน** "เบอร์เพิ่มเติม" ช่องเดียว |
+| 4.3d | `PATCH /students/{id}` | `students:write` (+ `students:health:write`) | **แก้ไข**ข้อมูลนักเรียน |
 | 4.4 | `GET /teachers` | `teachers:read` | ดึงรายชื่อครู |
+| 4.4a | `GET /teachers/{id}` | `teachers:read` | ดึงครูรายคน + วุฒิ/อบรม |
+| 4.4d | `PATCH /teachers/{id}` | `teachers:write` | **แก้ไข**ข้อมูลครู |
 | 4.4b | `GET /workers` | `workers:read` | ดึงรายชื่อคนงาน |
 | 4.4c | `GET /special-teachers` | `special-teachers:read` | ดึงรายชื่ออาจารย์พิเศษ |
 | 4.5 | `GET /academic-years` | `years:read` | ดูปีการศึกษา + ช่วงภาคเรียน |
@@ -467,7 +479,7 @@ GET /api/public/v1/students/123?include=health,contact,education
 | ไม่มีสิทธิ์ = 403 | ขอ `include=health` โดย key ไม่มี `students:health` → `403 insufficient_scope` **ไม่ใช่**ตอบแบบไม่มี block (กันเข้าใจผิดว่าเด็กไม่มีประวัติแพ้ยา) |
 | ค่าเป็น **text ทั้งหมด** | `weight` `height` เป็น string เพราะต้นทางกรอกมือ (`"42"`, `"42 กก."`, `""`) — parse เองก่อนคำนวณ |
 | `guardians` เรียงคงที่ | `guardian` → `father` → `mother` เสมอ คนที่ไม่มีข้อมูลจะไม่อยู่ใน array |
-| ผู้ปกครองเป็น **read-only** | ดูได้ แก้ไม่ได้ผ่าน API — เป็นข้อมูลของบุคคลที่สาม ดูข้อ 4.3c |
+| แก้ผู้ปกครอง | ใช้ `PATCH /students/{id}` ด้วย `students:write` (ข้อ 4.3d) — endpoint นี้อ่านอย่างเดียว |
 | ราคาของ block | ทุก block ใช้ query เพิ่มแค่ **คงที่ต่อหน้า** ไม่ใช่ต่อคน ดึงทั้งห้องพร้อม `include=health` ได้สบาย |
 | `education` ไม่มี **เหตุที่ย้าย** | `transferReason` ไม่ถูกส่งออกไม่ว่าจะมี scope อะไร — เป็น free text ที่อาจมีเรื่องครอบครัวเด็ก เหตุผลเดียวกับ `exitReason` ในข้อ 4.3 (PDPA) |
 
@@ -497,7 +509,7 @@ scope: `students:contact` · ตอบ `{ "data": { ... } }` โดย `data` �
 
 ### 4.3c `GET`/`PATCH /api/public/v1/students/{id}/additional-phone` — เบอร์เพิ่มเติม (เขียนได้)
 
-**นี่คือ endpoint เดียวของ API นี้ที่ "เขียน" ข้อมูลกลับเข้าฐานข้อมูลได้ และแตะได้ช่องเดียวคือ `additionalPhone`**
+**endpoint นี้แตะได้ช่องเดียวคือ `additionalPhone`** — ถ้าต้องแก้ข้อมูลนักเรียนมากกว่านี้ ใช้ `PATCH /students/{id}` (ข้อ 4.3d)
 
 มีไว้สำหรับกรณีที่โรงเรียนเก็บเบอร์ติดต่อสำรองผ่านฟอร์มของ**ระบบอื่น** แล้วส่งกลับมาให้ SchoolOS
 แทนที่จะให้ธุรการพิมพ์ซ้ำ (ซึ่งคือสาเหตุที่เบอร์ที่อัปเดตเดือนมีนาคม ยังเป็นเบอร์เก่าอยู่ในเดือนกันยายน)
@@ -553,14 +565,70 @@ curl -X PATCH https://schoolos.example.ac.th/users/api/public/v1/students/123/ad
 | เด็กในถังขยะ = **404** | เหมือนทุก endpoint |
 | ทุกการเขียน **ถูก audit** | บันทึกว่า key ไหน แก้ของใคร **จากค่าอะไรเป็นค่าอะไร** เมื่อไหร่ — แอดมินโรงเรียนเห็นหมด |
 
-> **ทำไมไม่เปิดให้เขียนช่องอื่น** — ทุกช่องที่เหลือเป็นข้อมูลที่ธุรการโรงเรียนกรอกเอง หรือเป็นข้อมูลของ*บุคคลที่สาม* (ผู้ปกครอง) ที่ไม่เคยมาตกลงอะไรกับระบบคุณ
-> ถ้าเบอร์ในช่องหลักผิด ให้แจ้งธุรการแก้ในหน้าเว็บของ SchoolOS — ไม่ใช่ให้ระบบนอกเขียนทับ
+> **ใช้อันไหนดี** — ถ้าระบบคุณแค่เก็บเบอร์สำรองมาให้ ใช้ endpoint นี้กับ `students:phone:write` พอ: key ที่แตะได้ช่องเดียว
+> ทำพลาดได้แค่ใส่เบอร์สำรองผิด แต่ key ที่มี `students:write` เขียนทับชื่อ ที่อยู่ และผู้ปกครองได้ — ขอเท่าที่ต้องใช้
+
+---
+
+### 4.3d `PATCH /api/public/v1/students/{id}` — แก้ไขข้อมูลนักเรียน
+
+Scope **`students:write`** · ถ้าส่ง `health` มาด้วยต้องมี **`students:health:write`** เพิ่ม (ไม่มี = 403 ทั้ง request ไม่มีอะไรถูกเขียน)
+
+```bash
+curl -X PATCH https://schoolos.example.ac.th/users/api/public/v1/students/123 \
+  -H "X-API-Key: sk_live_..." -H "Content-Type: application/json" \
+  --data-binary @patch.json
+```
+
+```json
+{
+  "nickname": "ต้น",
+  "phone": "081-234-5678",
+  "addresses": [
+    { "addressType": "current", "houseNo": "99/1", "emergencyPhone": "0899999999" }
+  ],
+  "guardians": [
+    { "guardianType": "mother", "mobilePhone": "0861111111", "occupation": "ค้าขาย" }
+  ],
+  "previousSchool": { "schoolName": "โรงเรียนบ้านหนองบัว" },
+  "health": { "weight": "42", "drugAllergy": "เพนิซิลลิน" }
+}
+```
+
+**ช่องที่แก้ได้**
+
+| ส่วน | ฟิลด์ |
+|---|---|
+| ประวัติ | `prefix` `firstName` `lastName` `nickname` `firstNameEn` `lastNameEn` `nicknameEn` `gender` `birthDate` `religion` `nationality` `ethnicity` `phone` `additionalPhone` `admissionDate` |
+| `addresses[]` | `addressType` (`household` \| `birth_place` \| `current` \| `hometown`) + `houseNo` `moo` `soi` `road` `subDistrict` `district` `province` `postalCode` `phone` `houseRegCode` `hospitalName` `livingWith` `livingWithLastname` `houseType` `emergencyEmail` `emergencyPhone` `nearbyFriendName` `nearbyFriendLastname` `nearbyFriendPhone` |
+| `guardians[]` | `guardianType` (`guardian` \| `father` \| `mother`) + `relationship` `prefix` `firstName` `lastName` `firstNameEn` `lastNameEn` `birthDate` `religion` `nationality` `ethnicity` `houseNo` `moo` `soi` `road` `subDistrict` `district` `province` `postalCode` `homePhone` `mobilePhone` `workPhone` `familyStatus` `education` `occupation` `workplace` |
+| `previousSchool` | `schoolName` `subDistrict` `district` `province` `qualification` `gpa` `transferReason` |
+| `health` | `weight` `height` `bloodType` `foodAllergy` `drugAllergy` `otherAllergy` `chronicDisease` `seriousDisease` |
+
+**Response**
+
+```json
+{ "data": { "id": 123, "studentCode": "10234" },
+  "updated": ["nickname", "phone", "addresses.current", "guardians.mother", "previousSchool", "health"] }
+```
+
+**กติกา**
+
+| กฎ | รายละเอียด |
+|---|---|
+| **แก้เป็นส่วน ๆ ได้ทุกชั้น** | ไม่ส่ง key = ไม่แตะ · ส่ง `null` หรือ `""` = ล้างค่า · ใน `addresses`/`guardians`/`health`/`previousSchool` ก็เหมือนกัน — ส่งแค่ `mobilePhone` ของแม่ ชื่อแม่ไม่หาย |
+| ที่อยู่/ผู้ปกครอง ระบุด้วยชนิด | หนึ่ง request ส่งได้ชนิดละ 1 ก้อน (`addressType`/`guardianType` ซ้ำ = 400) · ถ้ายังไม่มีก้อนนั้นจะสร้างให้ |
+| `firstName` / `lastName` | แก้ได้ แต่**ล้างเป็นค่าว่างไม่ได้** |
+| เบอร์โทร | normalize เป็นตัวเลขล้วนเหมือนทุกที่ |
+| **แก้ไม่ได้ทุกกรณี** | `studentCode` `password` `email` `citizenId` · เลขบัตร/รายได้ผู้ปกครอง · `status`/การจำหน่าย/พักการเรียน · ชั้น/ห้อง/เลขที่ (ใช้หน้าเลื่อนชั้นในระบบ) · ถังขยะ · รูป → ส่งมา = **400 `invalid_body`** |
+| เด็กในถังขยะ | **404** |
+| audit | ทุกครั้ง — บันทึกชื่อ key และรายการช่องที่แก้ |
 
 ---
 
 ### 4.4 `GET /api/public/v1/teachers` — รายชื่อครู
 
-**Query:** `yearId` (ใช้กับฟิลด์ `homerooms`), `subjectGroup`, `role` (`teacher` \| `teacher-admin`), `status` (`active` \| `resigned` \| `all`, default `active`), `q`, `include`, `page`, `pageSize` (สูงสุด 200)
+**Query:** `yearId` (ใช้กับฟิลด์ `homerooms`), `subjectGroup`, `role` (`teacher` \| `teacher-admin`), `status` (`active` \| `resigned` \| `all`, default `active`), `q`, `include` (`qualifications`, `contact` — คั่นด้วย `,`), `updatedSince`, `page`, `pageSize` (สูงสุด 200)
 
 ```json
 {
@@ -576,10 +644,17 @@ curl -X PATCH https://schoolos.example.ac.th/users/api/public/v1/students/123/ad
       "phone": "0812345678",
       "lineId": "artit.s",
       "birthDate": "14/02/2530",
+      "gender": "ชาย",
+      "religion": "พุทธ",
+      "nationality": "ไทย",
+      "ethnicity": "ไทย",
       "subjectGroup": "คณิตศาสตร์",
       "gradeTaught": "ม.ปลาย",
       "role": "teacher-admin",
+      "workStart": "05/2560",
       "employmentStatus": "active",
+      "exitDate": null,
+      "updatedAt": "2026-09-28T03:12:44.000Z",
       "homerooms": [{ "gradeLevel": "ม.1", "classroom": "1" }],
       "hasPhoto": true,
       "photoUrl": "/api/public/v1/teachers/7/photo"
@@ -595,6 +670,25 @@ curl -X PATCH https://schoolos.example.ac.th/users/api/public/v1/students/123/ad
 - `q` ค้นได้ทั้งชื่อ/สกุล/`teacherCode`/อีเมล
 - `phone` / `lineId` / `birthDate` เป็นข้อมูลติดต่อในทำเนียบบุคลากร มากับ `teachers:read` เหมือน `email` (null ได้ถ้ายังไม่กรอก) · `birthDate` เป็นข้อความ **พ.ศ. `ว/ด/ปปปป`** เหมือนของนักเรียน — ไม่ใช่ ISO date
 - เลขบัตร ปชช. ยังคงเป็นฟิลด์เดียวที่ต้องใช้ `teachers:pii`
+- `workStart` = **เดือน/ปีที่เข้าทำงาน** รูปแบบ `ดด/ปปปป` (พ.ศ.) เช่น `"05/2560"` — ละเอียดแค่เดือน ไม่มีวัน
+- **`?updatedSince=<ISO datetime>`** — เอาเฉพาะครูที่แถวถูกแก้ตั้งแต่เวลานั้น (`>=`) ใช้ทำ sync แบบดึงเฉพาะส่วนที่เปลี่ยน
+  เก็บ `updatedAt` ที่มากที่สุดที่ได้ไว้ใช้รอบหน้า · ⚠️ การแก้**เฉพาะ**วุฒิ/อบรมไม่ขยับ `updatedAt` ของแถวครู
+
+**`?include=contact`** (ต้องมี `teachers:contact`, ไม่มี = 403) — เพิ่มก้อน `contact` ต่อครูหนึ่งคน:
+
+```json
+{
+  "contact": {
+    "emergencyContact": { "name": "นางสมศรี แสงทอง", "phone": "0891234567", "relationship": "มารดา" },
+    "householdAddress": {
+      "houseNo": "12", "moo": "3", "soi": null, "road": null, "subDistrict": "สุเทพ",
+      "district": "เมืองเชียงใหม่", "province": "เชียงใหม่", "postalCode": "50200", "houseRegCode": null
+    }
+  }
+}
+```
+
+ชื่อ key ของ `householdAddress` ตรงกับที่อยู่ของนักเรียน — ใช้ mapper ตัวเดียวกันได้
 
 **`?include=qualifications`** — เพิ่ม 3 ลิสต์ต่อครูหนึ่งคน (ไม่ใส่ = ไม่ส่งมาเลย ไม่ใช่ array ว่าง):
 
@@ -626,13 +720,52 @@ curl -X PATCH https://schoolos.example.ac.th/users/api/public/v1/students/123/ad
 
 Scope `teachers:read` · `{id}` คือ `id` ตัวเลขที่ได้จากรายการ (ถ้ามีแต่ `teacherCode` ให้ใช้ `?q=` ที่รายการ)
 
-คืนฟิลด์เหมือนในรายการ **บวก** `gender` / `religion` / `nationality` / `ethnicity` / `exitDate`
-และ **แนบ `educations` / `scoutQualifications` / `trainings` มาเสมอ** (รายคนไม่มีอะไรต้องชั่งน้ำหนัก
-ต่างจากรายการที่ต้องคูณด้วยจำนวนแถวทั้งหน้า)
+คืนฟิลด์เหมือนในรายการ และ **แนบ `educations` / `scoutQualifications` / `trainings` มาเสมอ**
+(รายคนไม่มีอะไรต้องชั่งน้ำหนัก ต่างจากรายการที่ต้องคูณด้วยจำนวนแถวทั้งหน้า)
+· `?include=contact` ใช้ได้เหมือนรายการ (ต้องมี `teachers:contact`)
 
 - `?yearId=` ใช้กับ `homerooms` เหมือนรายการ
 - ครูที่อยู่ในถังขยะ (`is_archived`) → **404** ไม่ใช่ข้อมูลว่าง
 - เลขบัตร ปชช. ต้องมี `teachers:pii` เพิ่ม และถูก audit ทุกครั้งเหมือนเดิม
+
+---
+
+### 4.4d `PATCH /api/public/v1/teachers/{id}` — แก้ไขข้อมูลครู
+
+Scope **`teachers:write`**
+
+```json
+{
+  "phone": "0812345678",
+  "birthDate": "14/02/2530",
+  "workStart": "05/2560",
+  "emergencyContactName": "นางสมศรี แสงทอง",
+  "emergencyPhone": "0891234567",
+  "emergencyRelationship": "มารดา",
+  "householdAddress": { "houseNo": "12", "province": "เชียงใหม่" },
+  "educations": [
+    { "degreeLevel": "ปริญญาตรี", "degreeName": "ค.บ. (ครุศาสตรบัณฑิต)", "major": "คณิตศาสตร์",
+      "institution": "มหาวิทยาลัยราชภัฏเชียงใหม่" }
+  ]
+}
+```
+
+**ช่องที่แก้ได้:** `prefix` `firstName` `lastName` `phone` `lineId` `birthDate` `gender` `religion` `nationality` `ethnicity`
+`subjectGroup` `gradeTaught` `workStart` `emergencyContactName` `emergencyPhone` `emergencyRelationship`
+`householdAddress` (`houseNo` `moo` `soi` `road` `subDistrict` `district` `province` `postalCode` `houseRegCode`)
+และลิสต์ `educations` `scoutQualifications` `trainings` (รูปแถวเดียวกับที่ GET คืน)
+
+**Response:** `{ "data": { "id": 7, "teacherCode": "T00116" }, "updated": ["phone", "birthDate", …, "educations"] }`
+
+| กฎ | รายละเอียด |
+|---|---|
+| ช่องธรรมดาแก้เป็นส่วน ๆ | ไม่ส่ง = ไม่แตะ · `null`/`""` = ล้าง · `householdAddress` ก็แก้ทีละ key ได้ |
+| **ลิสต์วุฒิ/อบรมแทนที่ทั้งลิสต์** | ส่ง `educations` มา = ลิสต์นั้นของครูจะเป็นตามที่ส่ง**ทั้งหมด** (ส่ง `[]` = ล้าง) · ลิสต์ที่ไม่ส่งไม่แตะ · ต้องการเพิ่มหนึ่งแถว → GET มาก่อน ต่อท้าย แล้วส่งกลับทั้งลิสต์ |
+| `workStart` | `ดด/ปปปป` พ.ศ. (ปี 2400–2700) — ส่ง ค.ศ. มา = 400 |
+| `graduationYear` ในวุฒิ | ไม่บังคับ |
+| **แก้ไม่ได้ทุกกรณี** | `teacherCode` `role` `password` `email` `citizenId` · สถานะ/ลาออก · ถังขยะ · รูป → ส่งมา = **400 `invalid_body`** |
+| ครูในถังขยะ | **404** |
+| audit | ทุกครั้ง — บันทึกชื่อ key และรายการช่องที่แก้ |
 
 ---
 
@@ -1400,7 +1533,7 @@ Error ของ public API อยู่ในรูป **`{ "error": { "code": "
 | ค้น**รายคน**ด้วยรหัสนักเรียนข้ามปี | `?q=` ผูกกับปีเสมอ ถ้ามีแต่รหัสเก่าไม่มี `id` ต้องไล่ทีละปี | ข้อ 6.2 ท่อนหลัง แล้วเก็บ `id` ไว้ |
 | Endpoint ศิษย์เก่า (list) ใน public API | ดึง "ทุกคนที่ออกไปแล้ว" เป็นชุดไม่ได้ — รายคนใช้ข้อ 4.3 ได้แล้ว | ระบุ `?yearId=` ปีที่ออก |
 | Webhook / event แจ้งเตือน | ต้อง poll เอง | ตั้ง cron sync (แนะนำวันละครั้ง + หลังเลื่อนชั้น) |
-| **เขียน**ข้อมูลอื่นนอกจาก "เบอร์เพิ่มเติม" | API เป็น read-only ทุกอย่าง ยกเว้นข้อ 4.3c — รวมถึง**เบอร์ฉุกเฉิน** ที่เคยเขียนได้จนถึงเวอร์ชันนี้ | แก้ในหน้าเว็บของ SchoolOS |
+| สร้าง/ลบคน, แก้บัญชี/สถานะ/ชั้นห้องผ่าน API | `PATCH` (ข้อ 4.3d, 4.4d) แก้ได้เฉพาะข้อมูลประวัติ — บัญชี รหัสผ่าน เลขบัตร สถานะ ชั้น/ห้อง เป็นของหน้าเว็บ | แก้ในหน้าเว็บของ SchoolOS |
 | ที่อยู่ตามทะเบียนบ้าน / ข้อมูลผู้ปกครองแบบเต็ม (เลขบัตร, รายได้) | ไม่เปิดผ่าน public API โดยตั้งใจ (PDPA) — **สุขภาพและเบอร์ฉุกเฉินเปิดแล้ว** ดูข้อ 4.3a | — |
 | ข้อมูลสุขภาพของ**ครู** | ระบบไม่ได้เก็บ | — |
 

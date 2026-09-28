@@ -29,6 +29,7 @@ export function RepeatList<T>({
   addLabel = 'เพิ่มรายการ',
   emptyLabel = 'ยังไม่มีข้อมูล',
   readOnly = false,
+  toolbar,
 }: {
   title: string;
   hint?: string;
@@ -43,6 +44,8 @@ export function RepeatList<T>({
   addLabel?: string;
   emptyLabel?: string;
   readOnly?: boolean;
+  /** Extra controls under the title (editable mode only) — e.g. a quick multi-pick. */
+  toolbar?: React.ReactNode;
 }) {
   const update = (i: number) => (k: keyof T) => (v: string) =>
     onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
@@ -58,6 +61,8 @@ export function RepeatList<T>({
         </div>
         <span className="badge badge-muted">{rows.length} รายการ</span>
       </div>
+
+      {!readOnly && toolbar}
 
       {rows.length === 0 && (
         <p className="muted" style={{ fontSize: 13, margin: '12px 0 0' }}>{emptyLabel}</p>

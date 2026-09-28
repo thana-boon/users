@@ -5,8 +5,12 @@ import { DateField } from './DateField';
 import { RepeatList } from './RepeatList';
 import {
   DEGREE_LEVEL_OPTIONS,
+  DEGREE_NAME_OPTIONS,
+  FACULTY_OPTIONS,
+  MAJOR_OPTIONS,
   SCOUT_QUALIFICATION_OPTIONS,
   SCOUT_TYPE_OPTIONS,
+  UNIVERSITY_OPTIONS,
 } from '@/lib/options';
 
 /**
@@ -131,35 +135,45 @@ export function EducationList({
             onChange={set('degreeLevel')}
             options={DEGREE_LEVEL_OPTIONS}
           />
-          <Field
-            label="ชื่อวุฒิ / หลักสูตร"
+          {/* Suggestions, not a closed list — see DEGREE_NAME_OPTIONS. Raw text
+              is kept (normalize off): the certificate's own spelling wins. */}
+          <Combo
+            label="ชื่อปริญญา / วุฒิ"
             value={r.degreeName}
             onChange={set('degreeName')}
-            placeholder="เช่น ค.บ., ศษ.ม."
+            options={DEGREE_NAME_OPTIONS}
+            normalize={false}
+            placeholder="เลือกหรือพิมพ์ เช่น ค.บ."
           />
-          <Field
+          <Combo
             label="วิชาเอก / สาขาวิชา"
             value={r.major}
             onChange={set('major')}
-            placeholder="เช่น ภาษาไทย"
+            options={MAJOR_OPTIONS}
+            normalize={false}
+            placeholder="เลือกหรือพิมพ์ เช่น ภาษาไทย"
           />
-          <Field
+          <Combo
             label="คณะ"
             value={r.faculty}
             onChange={set('faculty')}
-            placeholder="เช่น ครุศาสตร์"
+            options={FACULTY_OPTIONS}
+            normalize={false}
+            placeholder="เลือกหรือพิมพ์ เช่น ครุศาสตร์"
           />
-          <Field
+          <Combo
             label="มหาวิทยาลัย / สถาบัน"
             value={r.institution}
             onChange={set('institution')}
-            placeholder="เช่น มหาวิทยาลัยราชภัฏเชียงใหม่"
+            options={UNIVERSITY_OPTIONS}
+            normalize={false}
+            placeholder="พิมพ์ชื่อเพื่อค้นหา เช่น ราชภัฏ"
           />
           <Field
-            label="ปีที่สำเร็จการศึกษา (พ.ศ.)"
+            label="ปีที่สำเร็จการศึกษา (พ.ศ.) — ไม่บังคับ"
             value={r.graduationYear}
             onChange={set('graduationYear')}
-            placeholder="เช่น 2560"
+            placeholder="เว้นว่างได้ เช่น 2560"
           />
         </>
       )}
@@ -179,11 +193,12 @@ export function ScoutList({
   return (
     <RepeatList<ScoutRow>
       title="วุฒิทางลูกเสือ"
-      hint="ขั้นการฝึกอบรมผู้บังคับบัญชาลูกเสือที่ผ่านมา — มีหลายวุฒิก็เพิ่มได้"
+      hint="ผ่านมาหลายขั้นก็ติ๊กได้หลายวุฒิพร้อมกัน แต่ละวุฒิจะเป็นหนึ่งรายการ แล้วกรอกเลขที่/วันที่ของแต่ละใบ"
       rows={rows}
       onChange={onChange}
       blank={() => ({})}
       addLabel="เพิ่มวุฒิลูกเสือ"
+      toolbar={<ScoutQuickPick rows={rows} onChange={onChange} />}
       emptyLabel="ยังไม่ได้บันทึกวุฒิทางลูกเสือ"
       readOnly={readOnly}
       renderSummary={(r) => (
@@ -229,6 +244,54 @@ export function ScoutList({
         </>
       )}
     />
+  );
+}
+
+/**
+ * The warrants as tick boxes: a teacher who holds B.T.C., A.T.C. and W.B. ticks
+ * three and gets three rows, instead of pressing "เพิ่ม" and picking from the
+ * combo three times. Each warrant stays its own row because each is its own
+ * certificate, with its own number and date.
+ *
+ * Ticking only ADDS. An already-listed warrant shows ticked and greyed; taking
+ * it off is the row's own ลบ, so a tick box can never throw away a certificate
+ * number someone typed.
+ */
+function ScoutQuickPick({
+  rows,
+  onChange,
+}: {
+  rows: ScoutRow[];
+  onChange: (rows: ScoutRow[]) => void;
+}) {
+  const have = new Set(rows.map((r) => r.qualification?.trim()).filter(Boolean));
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>เลือกวุฒิที่ได้รับ (เลือกได้หลายวุฒิ)</div>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        {SCOUT_QUALIFICATION_OPTIONS.map((q) => {
+          const on = have.has(q);
+          return (
+            <label
+              key={q}
+              className="chip"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                cursor: on ? 'default' : 'pointer', opacity: on ? 0.7 : 1,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={on}
+                disabled={on}
+                onChange={() => onChange([...rows, { qualification: q }])}
+              />
+              {q}
+            </label>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

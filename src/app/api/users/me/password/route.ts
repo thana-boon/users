@@ -11,7 +11,8 @@ import { recordAudit } from '@/lib/audit';
 export const runtime = 'nodejs';
 
 /**
- * POST /api/users/me/password — a teacher or student changes their OWN password.
+ * POST /api/users/me/password — a student changes their OWN password.
+ * Teachers are refused (403): staff passwords are set only by an admin.
  *
  * Separate from PATCH /api/users/me, and in neither allow-list, because this is
  * not a field edit: it takes a proof. `currentPassword` must match before the
@@ -45,6 +46,16 @@ export async function POST(req: NextRequest) {
   if (!guard.ok) return guard.response;
   try {
     const { audience, person } = guard;
+    // Teachers do not set their own password: the school issues and resets
+    // staff passwords from the admin teacher page (school's decision, 2026-09 —
+    // teachers were changing them and then locking themselves out). Refused
+    // here, not just hidden on the page, so no client can route around it.
+    if (audience === 'teacher') {
+      return Response.json(
+        { error: 'ครูเปลี่ยนรหัสผ่านเองไม่ได้ หากต้องการเปลี่ยนกรุณาติดต่อผู้ดูแลระบบ' },
+        { status: 403 },
+      );
+    }
     const body = bodySchema.parse(await req.json());
     const label = `${person.code} ${person.firstName} ${person.lastName}`;
 
@@ -77,11 +88,7 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordEncrypted = encrypt(body.newPassword);
-    if (audience === 'teacher') {
-      await db.update(teachers).set({ passwordEncrypted }).where(eq(teachers.id, person.id));
-    } else {
-      await db.update(students).set({ passwordEncrypted }).where(eq(students.id, person.id));
-    }
+    await db.update(students).set({ passwordEncrypted }).where(eq(students.id, person.id));
 
     await recordAudit({
       session: guard.session,

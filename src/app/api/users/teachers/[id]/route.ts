@@ -1,7 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { phoneField } from '@/lib/phone';
 import { db } from '@/db';
 import { teachers } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
@@ -10,9 +9,11 @@ import { encrypt } from '@/lib/crypto';
 import { recordAudit } from '@/lib/audit';
 import {
   describeLists,
+  profileColumns,
   readTeacherProfile,
   replaceTeacherLists,
   teacherListsSchema,
+  teacherProfileFieldsSchema,
 } from '@/lib/services/teachers';
 
 export const runtime = 'nodejs';
@@ -32,20 +33,13 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   }
 }
 
-const patchSchema = teacherListsSchema.extend({
+const patchSchema = teacherListsSchema.merge(teacherProfileFieldsSchema).extend({
   prefix: z.string().nullable().optional(),
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   email: z.string().nullable().optional(),
-  phone: phoneField,
-  lineId: z.string().nullable().optional(),
-  birthDate: z.string().nullable().optional(), // raw Thai dd/mm/BBBB
   subjectGroup: z.string().nullable().optional(),
   gradeTaught: z.string().nullable().optional(),
-  gender: z.string().nullable().optional(),
-  religion: z.string().nullable().optional(),
-  nationality: z.string().nullable().optional(),
-  ethnicity: z.string().nullable().optional(),
   role: z.enum(['teacher', 'teacher-admin']).optional(),
   password: z.string().trim().min(1).optional(), // set new password (re-encrypted, trimmed)
   citizenId: z.string().optional(), // set new เลขบัตร ปชช. (blank = keep, per student convention)
@@ -64,7 +58,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     if (!t) return notFound();
 
     const { password, citizenId, educations, scoutQualifications, trainings, ...rest } = body;
-    const set: Record<string, unknown> = { ...rest };
+    // profileColumns fans the nested ที่อยู่ out into its addr_* columns.
+    const set: Record<string, unknown> = profileColumns(rest);
     if (password) set.passwordEncrypted = encrypt(password);
     // Only rewrite the encrypted citizen id when a non-empty value is supplied.
     if (citizenId && citizenId.trim()) set.citizenIdEncrypted = encrypt(citizenId.trim());

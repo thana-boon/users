@@ -13,6 +13,7 @@ import type {
   TeacherTraining,
 } from '@/db/schema';
 import { maskCitizenId, tryDecrypt } from '@/lib/crypto';
+import { phoneField } from '@/lib/phone';
 import { isValidCitizenId } from '@/lib/thai';
 
 /**
@@ -141,6 +142,138 @@ export async function replaceTeacherLists(
   });
 }
 
+// -- ที่อยู่ตามทะเบียนบ้าน / ผู้ติดต่อฉุกเฉิน / เดือนปีที่เข้าทำงาน ----------
+
+/**
+ * The address travels as ONE nested object everywhere outside the database —
+ * the admin form, the teacher's own form, the public API in both directions —
+ * and becomes nine `addr_*` columns only here. The key names match a student
+ * address (lib/services/students.ts ADDRESS_FIELDS), so a consumer that already
+ * reads one reads the other.
+ */
+export const HOUSEHOLD_ADDRESS_KEYS = [
+  'houseNo', 'moo', 'soi', 'road', 'subDistrict', 'district', 'province', 'postalCode',
+  'houseRegCode',
+] as const;
+
+type HouseholdKey = (typeof HOUSEHOLD_ADDRESS_KEYS)[number];
+export type HouseholdAddress = Partial<Record<HouseholdKey, string | null>>;
+
+const ADDRESS_COLUMN: Record<HouseholdKey, keyof typeof teachers.$inferInsert> = {
+  houseNo: 'addrHouseNo',
+  moo: 'addrMoo',
+  soi: 'addrSoi',
+  road: 'addrRoad',
+  subDistrict: 'addrSubDistrict',
+  district: 'addrDistrict',
+  province: 'addrProvince',
+  postalCode: 'addrPostalCode',
+  houseRegCode: 'addrHouseRegCode',
+};
+
+export const householdAddressSchema = z
+  .object(Object.fromEntries(HOUSEHOLD_ADDRESS_KEYS.map((k) => [k, nstr])) as Record<
+    HouseholdKey,
+    typeof nstr
+  >)
+  .strict();
+
+/** Nested address → the columns to set. Only keys present in the payload. */
+export function householdAddressColumns(a: HouseholdAddress): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const k of HOUSEHOLD_ADDRESS_KEYS) {
+    if (a[k] === undefined) continue;
+    const v = a[k];
+    out[ADDRESS_COLUMN[k]] = typeof v === 'string' && v.trim() ? v.trim() : null;
+  }
+  return out;
+}
+
+/** A teacher row → its nested address (every key present, null when blank). */
+export function householdAddressOf(row: object): Record<HouseholdKey, string | null> {
+  const cols = row as Record<string, unknown>;
+  const out = {} as Record<HouseholdKey, string | null>;
+  for (const k of HOUSEHOLD_ADDRESS_KEYS) out[k] = (cols[ADDRESS_COLUMN[k]] as string | null) ?? null;
+  return out;
+}
+
+/** Drop the flat `addr_*` columns from a row that is about to be published. */
+export function withoutAddressColumns<T extends Record<string, unknown>>(row: T): T {
+  const out: Record<string, unknown> = { ...row };
+  for (const k of HOUSEHOLD_ADDRESS_KEYS) delete out[ADDRESS_COLUMN[k]];
+  return out as T;
+}
+
+/** The same columns, for a drizzle `select({...})` that wants them by name. */
+export const HOUSEHOLD_ADDRESS_COLUMNS = {
+  addrHouseNo: teachers.addrHouseNo,
+  addrMoo: teachers.addrMoo,
+  addrSoi: teachers.addrSoi,
+  addrRoad: teachers.addrRoad,
+  addrSubDistrict: teachers.addrSubDistrict,
+  addrDistrict: teachers.addrDistrict,
+  addrProvince: teachers.addrProvince,
+  addrPostalCode: teachers.addrPostalCode,
+  addrHouseRegCode: teachers.addrHouseRegCode,
+};
+
+/**
+ * เดือน/ปีที่เข้าทำงาน as "mm/BBBB". A พ.ศ. year is enforced by range, since the
+ * commonest slip is typing the ค.ศ. year and it would sit there 543 years out.
+ * '' clears it.
+ */
+export const workStartField = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((v) => (v == null ? v : v.trim() === '' ? null : v.trim()))
+  .refine(
+    (v) => {
+      if (v == null) return true;
+      const m = /^(0[1-9]|1[0-2])\/(\d{4})$/.exec(v);
+      return !!m && Number(m[2]) >= 2400 && Number(m[2]) <= 2700;
+    },
+    { message: 'เดือน/ปีที่เข้าทำงานต้องเป็น ดด/ปปปป (พ.ศ.) เช่น 05/2560' },
+  );
+
+/**
+ * The profile fields a teacher, an admin AND an outside system all write the
+ * same way — contact, demographics, วันเกิด, ผู้ติดต่อฉุกเฉิน, ที่อยู่, วันเข้าทำงาน.
+ * One schema so the three doors cannot drift apart on what a value may be.
+ */
+export const teacherProfileFieldsSchema = z.object({
+  phone: phoneField,
+  lineId: nstr,
+  birthDate: nstr, // raw Thai dd/mm/BBBB
+  gender: nstr,
+  religion: nstr,
+  nationality: nstr,
+  ethnicity: nstr,
+  emergencyContactName: nstr,
+  emergencyPhone: phoneField,
+  emergencyRelationship: nstr,
+  householdAddress: householdAddressSchema.optional(),
+  workStart: workStartField,
+});
+
+/**
+ * Turn a parsed profile patch into the columns to write. Blank strings become
+ * null; the nested address fans out into its columns; phones were already
+ * normalized by `phoneField` during parse.
+ */
+export function profileColumns(
+  body: Partial<z.infer<typeof teacherProfileFieldsSchema>> & Record<string, unknown>,
+): Record<string, unknown> {
+  const { householdAddress, ...rest } = body;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(rest)) {
+    if (v === undefined) continue;
+    out[k] = typeof v === 'string' && v.trim() === '' ? null : v;
+  }
+  if (householdAddress) Object.assign(out, householdAddressColumns(householdAddress));
+  return out;
+}
+
 /** How many rows each list gained/lost — the readable half of an audit line. */
 export function describeLists(lists: TeacherLists): string[] {
   const parts: string[] = [];
@@ -173,7 +306,8 @@ export async function readTeacherProfile(id: number) {
 
   const { passwordEncrypted, citizenIdEncrypted, photoBase64, ...core } = t;
   return {
-    ...core,
+    ...withoutAddressColumns(core),
+    householdAddress: householdAddressOf(core),
     citizenIdMasked: maskCitizenId(tryDecrypt(citizenIdEncrypted)),
     hasCitizenId: !!citizenIdEncrypted,
     hasPassword: !!passwordEncrypted,
@@ -239,6 +373,91 @@ export async function readQualificationsFor(
   return out;
 }
 
+// -- the public API's teacher row ------------------------------------
+
+/**
+ * What /api/public/v1/teachers and ./[id] select, in one place so the list and
+ * the by-id view publish the same fields. The contact block's columns ride
+ * along in the select and are dropped by {@link shapePublicTeacher} unless the
+ * caller asked for — and holds the scope for — `?include=contact`.
+ */
+export const PUBLIC_TEACHER_COLUMNS = {
+  id: teachers.id,
+  teacherCode: teachers.teacherCode,
+  prefix: teachers.prefix,
+  firstName: teachers.firstName,
+  lastName: teachers.lastName,
+  email: teachers.email,
+  // Directory contact fields — plain `teachers:read`, like email.
+  phone: teachers.phone,
+  lineId: teachers.lineId,
+  birthDate: teachers.birthDate,
+  gender: teachers.gender,
+  religion: teachers.religion,
+  nationality: teachers.nationality,
+  ethnicity: teachers.ethnicity,
+  subjectGroup: teachers.subjectGroup,
+  gradeTaught: teachers.gradeTaught,
+  role: teachers.role,
+  workStart: teachers.workStart,
+  employmentStatus: teachers.employmentStatus,
+  exitDate: teachers.exitDate,
+  updatedAt: teachers.updatedAt,
+  citizenIdEncrypted: teachers.citizenIdEncrypted,
+  emergencyContactName: teachers.emergencyContactName,
+  emergencyPhone: teachers.emergencyPhone,
+  emergencyRelationship: teachers.emergencyRelationship,
+  ...HOUSEHOLD_ADDRESS_COLUMNS,
+};
+
+interface PublicTeacherInput {
+  id: number;
+  prefix: string | null;
+  firstName: string;
+  lastName: string;
+  hasPhoto: boolean;
+  citizenIdEncrypted: string | null;
+  emergencyContactName: string | null;
+  emergencyPhone: string | null;
+  emergencyRelationship: string | null;
+}
+
+/**
+ * One selected row → the published object. เลขบัตร only with `:pii`; the
+ * `contact` block (ผู้ติดต่อฉุกเฉิน + ที่อยู่ตามทะเบียนบ้าน) only when asked for.
+ */
+export function shapePublicTeacher<T extends PublicTeacherInput>(
+  row: T,
+  opts: { withPii: boolean; withContact: boolean },
+) {
+  const {
+    citizenIdEncrypted,
+    emergencyContactName,
+    emergencyPhone,
+    emergencyRelationship,
+    ...rest
+  } = row;
+  const base = withoutAddressColumns(rest);
+  return {
+    ...base,
+    fullName: `${row.prefix ?? ''}${row.firstName} ${row.lastName}`.trim(),
+    photoUrl: row.hasPhoto ? `/api/public/v1/teachers/${row.id}/photo` : null,
+    ...(opts.withPii ? { citizenId: tryDecrypt(citizenIdEncrypted) } : {}),
+    ...(opts.withContact
+      ? {
+          contact: {
+            emergencyContact: {
+              name: emergencyContactName,
+              phone: emergencyPhone,
+              relationship: emergencyRelationship,
+            },
+            householdAddress: householdAddressOf(row),
+          },
+        }
+      : {}),
+  };
+}
+
 /** The empty answer, for a teacher with nothing on file. */
 export function noQualifications(): PublicQualifications {
   return { educations: [], scoutQualifications: [], trainings: [] };
@@ -262,9 +481,14 @@ export function noQualifications(): PublicQualifications {
  *    set their own role would be an admin.
  *  - email — it is a LOGIN identifier (api/auth/teacher-login accepts it in
  *    place of the code), so editing it is editing a credential.
- *  - ชื่อ-นามสกุล-คำนำหน้า, วันเกิด — the registry identity these records exist
- *    to be. They do change (marriage, ยศ), but through the office that also has
- *    to change them on every official document, not here.
+ *  - ชื่อ-นามสกุล-คำนำหน้า — the registry identity these records exist to be.
+ *    They do change (marriage, ยศ), but through the office that also has to
+ *    change them on every official document, not here.
+ *
+ * วันเกิด, ผู้ติดต่อฉุกเฉิน, ที่อยู่ตามทะเบียนบ้าน and เดือน/ปีที่เข้าทำงาน were
+ * opened to the teacher at the school's request (2026-09): the office did not
+ * have them on file, and the teacher is the one holding the ทะเบียนบ้าน and the
+ * คำสั่งบรรจุ. วันเกิด moved out of the locked list for the same reason.
  *  - เลขบัตร ปชช. — locked by DEFAULT, and the one lock the school can lift.
  *    With the sensitive switch on at /users/settings a teacher may reveal and
  *    correct their own; see SENSITIVE_EDITABLE. It is not in the everyday list
@@ -275,16 +499,22 @@ export function noQualifications(): PublicQualifications {
  *  - employmentStatus / exit* / isArchived — the lifecycle. Nobody resigns
  *    themselves out of a database.
  *
- * Password is not in this list because it is not a column edit: changing it
- * requires proving the current one (see api/users/me/password).
+ * Password is not in this list, and a teacher cannot change it at all: the
+ * school hands out and resets staff passwords itself (see api/users/me/password).
  */
 export const SELF_EDITABLE = [
   'phone',
   'lineId',
+  'birthDate',
   'gender',
   'religion',
   'nationality',
   'ethnicity',
+  'emergencyContactName',
+  'emergencyPhone',
+  'emergencyRelationship',
+  'householdAddress',
+  'workStart',
 ] as const;
 
 export type SelfEditableField = (typeof SELF_EDITABLE)[number];
@@ -298,14 +528,8 @@ export type SelfEditableField = (typeof SELF_EDITABLE)[number];
 export const SENSITIVE_EDITABLE = ['citizenId'] as const;
 
 /** The scalar half of a self-service PATCH — nothing outside SELF_EDITABLE. */
-export const selfPatchSchema = z
-  .object({
-    phone: nstr,
-    lineId: nstr,
-    gender: nstr,
-    religion: nstr,
-    nationality: nstr,
-    ethnicity: nstr,
+export const selfPatchSchema = teacherProfileFieldsSchema
+  .extend({
     // Accepted only when the sensitive switch is on; api/users/me refuses the
     // whole request before it reaches here if it is not. '' clears the field.
     citizenId: z

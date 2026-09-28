@@ -1,12 +1,31 @@
 import type { NextRequest } from 'next/server';
 import { asc, eq, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '@/db';
-import { students, enrollments, academicYears } from '@/db/schema';
+import {
+  ADDRESS_TYPES,
+  GUARDIAN_TYPES,
+  academicYears,
+  enrollments,
+  guardians,
+  previousSchools,
+  studentAddresses,
+  studentHealth,
+  students,
+} from '@/db/schema';
 import { requireApiScope, actorHasScope, apiError, insufficientScope } from '@/lib/apiauth';
 import { ok, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { tryDecrypt } from '@/lib/crypto';
-import { resolveActiveYearId } from '@/lib/services/students';
+import {
+  ADDRESS_FIELDS,
+  GUARDIAN_FIELDS,
+  HEALTH_FIELDS,
+  IDENTITY_FIELDS,
+  PREV_SCHOOL_FIELDS,
+  resolveActiveYearId,
+  updateStudentAggregate,
+} from '@/lib/services/students';
 import { readContactsFor, readEducationFor, readHealthFor } from '@/lib/services/student-extras';
 
 export const runtime = 'nodejs';
@@ -214,6 +233,189 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         academicYear: yearById.get(activeYearId) ?? null,
       },
     });
+  } catch (err) {
+    return handleError(err);
+  }
+}
+
+// -- PATCH: write a student's record back ------------------------------
+
+/**
+ * PATCH /api/public/v1/students/{id} — the write-back the school asked for
+ * (2026-09), so a sibling system can correct a record instead of someone
+ * re-typing it here.
+ *
+ * Scope `students:write` covers ประวัติ (identity), `addresses`, `guardians`
+ * and `previousSchool`. `health` additionally needs `students:health:write` —
+ * it is a child's medical information and has its own scope on the read side
+ * too.
+ *
+ * NOT writable at any scope, because each is the account or the lifecycle and
+ * belongs to the admin UI: studentCode, password, email (a login identifier),
+ * citizenId and every other encrypted value (guardian citizenId, income),
+ * status / exit / leaves, grade / room / เลขที่ (promotions page), archive, and
+ * the photo. `.strict()` everywhere makes naming one a 400, never a quiet no-op.
+ *
+ * PARTIAL, all the way down: a top-level key that is absent is left alone,
+ * `null`/"" clears it, and inside an address/guardian/health/previousSchool
+ * object only the keys sent are changed — the rest is merged from what is
+ * stored. (The shared service writes a block whole, so the merge happens
+ * here; without it, sending one guardian's mobile number would blank that
+ * guardian's name.) Addresses and guardians are addressed by their type key
+ * (`addressType` household/birth_place/current/hometown, `guardianType`
+ * guardian/father/mother), one object per type per request.
+ */
+const nstr = z.string().nullable().optional();
+function fieldsOf<K extends string>(keys: readonly K[]) {
+  return Object.fromEntries(keys.map((k) => [k, nstr])) as Record<K, typeof nstr>;
+}
+
+// Identity minus email: email is a student login identifier (student-login
+// accepts it in place of the code), so it is account, not profile.
+const WRITABLE_IDENTITY = IDENTITY_FIELDS.filter((k) => k !== 'email');
+
+const addressSchema = z
+  .object({ addressType: z.enum(ADDRESS_TYPES), ...fieldsOf(ADDRESS_FIELDS) })
+  .strict();
+const guardianSchema = z
+  .object({ guardianType: z.enum(GUARDIAN_TYPES), ...fieldsOf(GUARDIAN_FIELDS) })
+  .strict();
+
+function distinct(keys: string[]): boolean {
+  return new Set(keys).size === keys.length;
+}
+
+const studentPatchSchema = z
+  .object({
+    ...fieldsOf(WRITABLE_IDENTITY),
+    // notNull columns: may be changed, never blanked.
+    firstName: z.string().trim().min(1).optional(),
+    lastName: z.string().trim().min(1).optional(),
+    addresses: z
+      .array(addressSchema)
+      .max(ADDRESS_TYPES.length)
+      .refine((l) => distinct(l.map((a) => a.addressType)), 'addressType ซ้ำกันใน request เดียว')
+      .optional(),
+    guardians: z
+      .array(guardianSchema)
+      .max(GUARDIAN_TYPES.length)
+      .refine((l) => distinct(l.map((g) => g.guardianType)), 'guardianType ซ้ำกันใน request เดียว')
+      .optional(),
+    previousSchool: z.object(fieldsOf(PREV_SCHOOL_FIELDS)).strict().optional(),
+    health: z.object(fieldsOf(HEALTH_FIELDS)).strict().optional(),
+  })
+  .strict();
+
+type Block = Record<string, string | null | undefined>;
+
+/** Stored block + the keys the caller sent (undefined = keep). */
+function merge(fields: readonly string[], stored: object | undefined, sent: object): Block {
+  const base = (stored ?? {}) as Record<string, unknown>;
+  const given = sent as Record<string, string | null | undefined>;
+  const out: Block = {};
+  for (const k of fields) {
+    out[k] = given[k] !== undefined ? given[k] : ((base[k] as string | null | undefined) ?? null);
+  }
+  return out;
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const guard = await requireApiScope(req, 'students:write');
+  if (!guard.ok) return guard.response;
+
+  try {
+    const id = Number((await params).id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return apiError(400, 'invalid_id', 'id ต้องเป็นตัวเลข');
+    }
+
+    let raw: unknown;
+    try {
+      raw = await req.json();
+    } catch {
+      return apiError(400, 'invalid_body', 'body ต้องเป็น JSON');
+    }
+    const parsed = studentPatchSchema.safeParse(raw);
+    if (!parsed.success) {
+      return apiError(
+        400,
+        'invalid_body',
+        parsed.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join(', '),
+      );
+    }
+    const body = parsed.data;
+
+    // Health is its own scope, checked before anything is written so a key
+    // without it cannot land half a request.
+    if (body.health && !actorHasScope(guard.actor, 'students:health:write')) {
+      return insufficientScope('students:health:write');
+    }
+
+    const s = await db.query.students.findFirst({
+      where: eq(students.id, id),
+      columns: { id: true, studentCode: true, firstName: true, lastName: true, isArchived: true },
+    });
+    if (!s || s.isArchived) return apiError(404, 'not_found', 'ไม่พบนักเรียนรายนี้');
+
+    const [storedAddr, storedGuard, storedHealth, storedPrev] = await Promise.all([
+      body.addresses
+        ? db.select().from(studentAddresses).where(eq(studentAddresses.studentId, id))
+        : Promise.resolve([]),
+      body.guardians
+        ? db.select().from(guardians).where(eq(guardians.studentId, id))
+        : Promise.resolve([]),
+      body.health
+        ? db.query.studentHealth.findFirst({ where: eq(studentHealth.studentId, id) })
+        : Promise.resolve(undefined),
+      body.previousSchool
+        ? db.query.previousSchools.findFirst({ where: eq(previousSchools.studentId, id) })
+        : Promise.resolve(undefined),
+    ]);
+
+    const identity: Block = {};
+    for (const k of WRITABLE_IDENTITY) {
+      const v = (body as Record<string, unknown>)[k] as string | null | undefined;
+      if (v !== undefined) identity[k] = v;
+    }
+
+    const updated = [
+      ...Object.keys(identity),
+      ...(body.addresses ?? []).map((a) => `addresses.${a.addressType}`),
+      ...(body.guardians ?? []).map((g) => `guardians.${g.guardianType}`),
+      ...(body.previousSchool ? ['previousSchool'] : []),
+      ...(body.health ? ['health'] : []),
+    ];
+    if (updated.length === 0) return apiError(400, 'invalid_body', 'ไม่มีฟิลด์ให้แก้ไข');
+
+    await updateStudentAggregate(id, {
+      ...identity,
+      addresses: body.addresses?.map((a) => ({
+        ...merge(ADDRESS_FIELDS, storedAddr.find((x) => x.addressType === a.addressType), a),
+        addressType: a.addressType,
+      })),
+      guardians: body.guardians?.map((g) => ({
+        ...merge(GUARDIAN_FIELDS, storedGuard.find((x) => x.guardianType === g.guardianType), g),
+        guardianType: g.guardianType,
+      })),
+      previousSchool: body.previousSchool
+        ? merge(PREV_SCHOOL_FIELDS, storedPrev, body.previousSchool)
+        : undefined,
+      health: body.health ? merge(HEALTH_FIELDS, storedHealth, body.health) : undefined,
+    });
+
+    await recordAudit({
+      session: guard.actor.kind === 'session' ? guard.actor.session : null,
+      actorLabel: guard.actor.label,
+      actorRole: guard.actor.kind === 'key' ? 'api_key' : undefined,
+      action: 'update',
+      targetType: 'student',
+      targetId: id,
+      targetLabel: `${s.studentCode} ${s.firstName} ${s.lastName}`,
+      detail: `public API แก้ไข: ${updated.join(', ')}`,
+      req,
+    });
+
+    return ok({ data: { id, studentCode: s.studentCode }, updated });
   } catch (err) {
     return handleError(err);
   }

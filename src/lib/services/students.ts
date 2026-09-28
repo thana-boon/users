@@ -251,31 +251,31 @@ export interface StudentUpdateInput {
   guardians?: Array<Record<string, string | null | undefined> & { guardianType: string }>;
 }
 
-const IDENTITY_FIELDS = [
+export const IDENTITY_FIELDS = [
   'prefix', 'firstName', 'lastName', 'nickname', 'firstNameEn', 'lastNameEn', 'nicknameEn',
   'gender', 'birthDate', 'religion', 'nationality', 'ethnicity', 'phone', 'additionalPhone',
   'email', 'admissionDate',
 ] as const;
 
-const ADDRESS_FIELDS = [
+export const ADDRESS_FIELDS = [
   'houseNo', 'moo', 'soi', 'road', 'subDistrict', 'district', 'province', 'postalCode', 'phone',
   'houseRegCode', 'hospitalName', 'livingWith', 'livingWithLastname', 'houseType',
   'emergencyEmail', 'emergencyPhone', 'nearbyFriendName', 'nearbyFriendLastname', 'nearbyFriendPhone',
 ] as const;
 
-const GUARDIAN_FIELDS = [
+export const GUARDIAN_FIELDS = [
   'relationship', 'prefix', 'firstName', 'lastName', 'firstNameEn', 'lastNameEn', 'birthDate',
   'religion', 'nationality', 'ethnicity', 'houseNo', 'moo', 'soi', 'road', 'subDistrict',
   'district', 'province', 'postalCode', 'homePhone', 'mobilePhone', 'workPhone',
   'familyStatus', 'education', 'occupation', 'workplace',
 ] as const;
 
-const HEALTH_FIELDS = [
+export const HEALTH_FIELDS = [
   'weight', 'height', 'bloodType', 'foodAllergy', 'drugAllergy', 'otherAllergy',
   'chronicDisease', 'seriousDisease',
 ] as const;
 
-const PREV_SCHOOL_FIELDS = [
+export const PREV_SCHOOL_FIELDS = [
   'schoolName', 'subDistrict', 'district', 'province', 'qualification', 'gpa', 'transferReason',
 ] as const;
 

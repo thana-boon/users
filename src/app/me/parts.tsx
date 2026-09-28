@@ -93,12 +93,21 @@ export function Section({
  * of the two reasons applies, because "the school closed the window" and "you
  * have left" want different next steps from the reader.
  */
-export function ClosedNotice({ reason }: { reason: string }) {
+export function ClosedNotice({
+  reason,
+  canChangePassword = true,
+}: {
+  reason: string;
+  /** False for teachers — only an admin sets a staff password. */
+  canChangePassword?: boolean;
+}) {
   return (
     <div className="alert alert-info" style={{ lineHeight: 1.8 }}>
       {reason}
       <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
-        ข้อมูลด้านบนยังเปิดดูได้ตามปกติ และเปลี่ยนรหัสผ่านของตนเองได้เสมอ
+        {canChangePassword
+          ? 'ข้อมูลด้านบนยังเปิดดูได้ตามปกติ และเปลี่ยนรหัสผ่านของตนเองได้เสมอ'
+          : 'ข้อมูลด้านบนยังเปิดดูได้ตามปกติ'}
       </div>
     </div>
   );

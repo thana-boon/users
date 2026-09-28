@@ -32,19 +32,31 @@
  * a roster fact, and the "มาดึงรายชื่อไป" key has no use for it. เหตุที่ย้าย is
  * not in the block at any scope — see readEducationFor().
  *
- * `students:phone:write` is the ONLY write scope on this surface, and it
- * writes exactly one column: `students.additional_phone` (เบอร์เพิ่มเติม). It
- * exists because the school collects that number through another system's form,
- * and re-typing it here is how it goes stale.
+ * `students:phone:write` writes exactly one column: `students.additional_phone`
+ * (เบอร์เพิ่มเติม). It exists because the school collects that number through
+ * another system's form, and re-typing it here is how it goes stale.
  *
  * It replaced `students:contact:write`, which could rewrite the whole emergency
- * block on ที่อยู่ปัจจุบัน — เบอร์ฉุกเฉิน, เบอร์บ้าน, อยู่กับใคร, เพื่อนบ้าน.
- * The school's rule is now the simpler one to hold in your head: an outside
- * system may change NOTHING that the office typed. เบอร์เพิ่มเติม is a column
- * no office form fills in, added for this purpose, so the worst a compromised
- * or buggy integration can do is put a wrong extra number on a child — never
- * overwrite the number the school actually calls. Keys still carrying the old
- * scope keep it in the row as an inert string; nothing answers to it.
+ * block on ที่อยู่ปัจจุบัน. Keys still carrying that old scope keep it in the
+ * row as an inert string; nothing answers to it — which is why the broader
+ * write scopes below have NEW names rather than reviving that one: reusing it
+ * would silently hand write power to every key that was issued before.
+ *
+ * `teachers:write` / `students:write` / `students:health:write` (2026-09) are
+ * the full write-back the school asked for, so a sibling system can correct a
+ * record instead of someone re-typing it here. "Full" means every profile field
+ * the admin editor has, EXCEPT the account and the lifecycle: รหัสครู/รหัส
+ * นักเรียน, role, รหัสผ่าน, อีเมล (a login identifier), เลขบัตร ปชช. and any
+ * other encrypted value (guardian citizen id, income), สถานะ/ลาออก/จบ, ชั้น/ห้อง,
+ * and ถังขยะ. Those stay with the admin UI, because a key that could set any of
+ * them could sign someone in, promote someone to admin, or make a child vanish
+ * from the roster. Health is split into its own write scope for the same reason
+ * it has its own read scope. Every write is audited with the key's name and the
+ * fields it touched.
+ *
+ * `teachers:contact` is the teacher twin of `students:contact`: ผู้ติดต่อฉุกเฉิน
+ * and ที่อยู่ตามทะเบียนบ้าน — a home address and a third person's number, which
+ * the plain staff roster has no business shipping to everyone.
  *
  * `auth:handoff` is the odd one out: it tests no password at all. It lets a
  * consumer's SERVER redeem a one-time code the user's browser already collected
@@ -62,9 +74,13 @@ export const API_SCOPES = [
   'students:contact',
   'students:education',
   'students:phone:write',
+  'students:write',
+  'students:health:write',
   'teachers:read',
   'teachers:pii',
   'teachers:photo',
+  'teachers:contact',
+  'teachers:write',
   // คนงาน — a separate table from teachers (no login, no role), so it needs its
   // own scopes rather than riding on `teachers:read`. A key that pulls the
   // teaching staff has no business reading the support staff unless asked.
@@ -96,9 +112,13 @@ export const SCOPE_LABEL_TH: Record<ApiScope, string> = {
   'students:contact': 'อ่านเบอร์/ผู้ติดต่อฉุกเฉินของนักเรียน',
   'students:education': 'อ่านสถานศึกษาเดิมของนักเรียน (โรงเรียนเดิม วุฒิ GPA จังหวัด)',
   'students:phone:write': 'เขียน "เบอร์เพิ่มเติม" ของนักเรียนกลับเข้าระบบ (ช่องเดียว)',
+  'students:write': 'แก้ไขข้อมูลนักเรียน (ประวัติ ที่อยู่ ผู้ปกครอง สถานศึกษาเดิม) — ยกเว้นรหัส/รหัสผ่าน/เลขบัตร/สถานะ/ชั้นห้อง',
+  'students:health:write': 'แก้ไขข้อมูลสุขภาพนักเรียน',
   'teachers:read': 'อ่านรายชื่อครู',
   'teachers:pii': 'อ่านเลขบัตร ปชช. ครู',
   'teachers:photo': 'ดึงรูปครู',
+  'teachers:contact': 'อ่านผู้ติดต่อฉุกเฉินและที่อยู่ตามทะเบียนบ้านของครู',
+  'teachers:write': 'แก้ไขข้อมูลครู (ประวัติ ติดต่อ ที่อยู่ วุฒิ/อบรม) — ยกเว้นรหัส/role/รหัสผ่าน/อีเมล/เลขบัตร/สถานะ',
   'workers:read': 'อ่านรายชื่อคนงาน',
   'workers:pii': 'อ่านเลขบัตร ปชช. คนงาน',
   'workers:photo': 'ดึงรูปคนงาน',
@@ -128,7 +148,13 @@ export const PII_SCOPES: ApiScope[] = [
   // เบอร์เพิ่มเติม is a way to reach a child. Fewer fields than the block
   // above, but the same kind of data, so it carries the same flag.
   'students:phone:write',
+  // The full write scopes reach names, addresses, guardians and health — the
+  // same data as the read scopes above, now changeable.
+  'students:write',
+  'students:health:write',
   'teachers:pii',
+  'teachers:contact',
+  'teachers:write',
   'workers:pii',
   'students:photo',
   'teachers:photo',
@@ -148,7 +174,12 @@ export const AUTH_SCOPES: ApiScope[] = ['auth:students', 'auth:teachers', 'auth:
  * database" are the two facts an admin issuing a key must not confuse. Every
  * write is audited with the key's name.
  */
-export const WRITE_SCOPES: ApiScope[] = ['students:phone:write'];
+export const WRITE_SCOPES: ApiScope[] = [
+  'students:phone:write',
+  'students:write',
+  'students:health:write',
+  'teachers:write',
+];
 
 /** Scopes whose key must also name the system it acts for (`handoffAudience`). */
 export const AUDIENCE_BOUND_SCOPES: ApiScope[] = ['auth:handoff'];
