@@ -26,6 +26,8 @@ export interface TeachingClasses {
 interface Cell {
   gradeLevel?: string | null;
   section?: string | null;
+  /** 'manual' | 'generated' | … for an ordinary lesson; 'combined' for เรียนร่วม */
+  source?: string | null;
 }
 
 interface Term {
@@ -44,8 +46,8 @@ export function timetableConfigured(): boolean {
   return config() !== null;
 }
 
-// อ.1 < ป.1 < ม.1 — the order the school reads its own grades in.
-const STAGE_ORDER = ['อ.', 'ป.', 'ม.'];
+// เตรียมอนุบาล < อ.1 < ป.1 < ม.1 — the order the school reads its own grades in.
+const STAGE_ORDER = ['เตรียม', 'อ.', 'ป.', 'ม.'];
 function gradeRank(g: string): [number, number] {
   const stage = STAGE_ORDER.findIndex((p) => g.startsWith(p));
   const n = Number(g.replace(/\D+/g, ''));
@@ -94,7 +96,13 @@ export async function fetchTeachingClasses(teacherId: number): Promise<TeachingC
     }
     const body = (await res.json()) as { data?: Cell[]; term?: Term };
     if (!Array.isArray(body.data)) return null;
-    return { groups: groupClasses(body.data), term: termLabel(body.term) };
+    // เรียนร่วม sessions (ลูกเสือ, ชุมนุม, …) are not ชั้นที่สอน: one ชุมนุม row
+    // names dozens of teachers against every class in a key stage, so counting
+    // it would put every ป. grade on every ป. teacher. The timetable flags them
+    // as source 'combined' and leaves them out of its own class counts for the
+    // same reason (timetable/src/lib/class-summary.ts).
+    const lessons = body.data.filter((c) => c.source !== 'combined');
+    return { groups: groupClasses(lessons), term: termLabel(body.term) };
   } catch (err) {
     console.warn(`[timetable] teacher ${teacherId}:`, (err as Error).message);
     return null;
