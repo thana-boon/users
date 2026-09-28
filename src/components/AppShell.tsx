@@ -134,19 +134,6 @@ function UserMenu({ session, onLogout }: { session: SessionInfo; onLogout: () =>
             <div style={{ fontWeight: 600 }}>{name}</div>
             <div className="muted mono" style={{ fontSize: 11 }}>{session.role}</div>
           </div>
-          {/* The other half of the mode switch (/users/me has the way back).
-              Everyone who can see this shell is staff (admin or moderator), so it is always
-              offered: they are teachers too, with a record of their own. */}
-          {/* A plain <a>, not <Link>: /users/me is served by a rewrite onto a
-              different root layout (src/app/me), so switching mode is a real
-              page load rather than a client-side navigation inside this shell. */}
-          <a
-            href="/users/me"
-            role="menuitem"
-            className="user-menu-item user-menu-item-plain"
-          >
-            <IconTeachers width={16} height={16} /> ข้อมูลของฉัน (โหมดครู)
-          </a>
           <button type="button" role="menuitem" className="user-menu-item" onClick={onLogout}>
             <IconLogout width={16} height={16} /> ออกจากระบบ
           </button>
@@ -290,6 +277,19 @@ export function AppShell({
         </div>
         <div className="spacer" />
         <div className="row" style={{ gap: 12 }}>
+          {/* The other half of the mode switch (/users/me has the way back).
+              Everyone who can see this shell is staff (admin or moderator), so it
+              is always offered: they are teachers too, with a record of their
+              own. Out in the header rather than inside the user menu, where
+              nobody found it. A plain <a>, not <Link>: /users/me is served by a
+              rewrite onto a different root layout (src/app/me), so switching
+              mode is a real page load rather than a client-side navigation
+              inside this shell. */}
+          <a href="/users/me" className="mode-btn" title="ไปหน้าข้อมูลของฉัน เพื่อแก้ไขข้อมูลตนเองแบบครูทั่วไป">
+            <IconTeachers width={14} height={14} />
+            <span className="hide-mobile">สลับเป็นโหมดครู</span>
+            <span className="only-mobile">โหมดครู</span>
+          </a>
           <span
             className="badge badge-gold"
             title={isAdmin ? 'สิทธิ์ผู้ดูแลระบบ (users:write)' : 'สิทธิ์เฉพาะส่วนที่ได้รับมอบหมาย'}
@@ -407,14 +407,23 @@ export function AppShell({
           transition: background var(--transition-fast);
         }
         .user-menu-item:hover { background: var(--color-error-bg); }
-        /* The menu's non-destructive entry: same row, ordinary text colour, so
-           ออกจากระบบ stays the only red thing in the menu. */
-        .user-menu-item-plain { color: var(--skdw-dark); }
-        .user-menu-item-plain:hover { background: var(--skdw-bg); }
+        /* Same pill as MeShell's สลับเป็นโหมดผู้ดูแล, so the two halves of the
+           switch look like one control. */
+        .mode-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 6px 12px; border-radius: 999px; cursor: pointer;
+          background: rgba(255,255,255,0.12); color: #fff;
+          border: 1px solid rgba(255,255,255,0.35);
+          font-family: inherit; font-size: 13px; line-height: 1.2;
+          transition: background var(--transition-fast);
+        }
+        .mode-btn:hover { background: rgba(255,255,255,0.24); }
+        .only-mobile { display: none; }
         .bottom-nav { display: none; }
         @media (max-width: 900px) {
           .sidebar-desktop { display: none; }
           .hide-mobile { display: none; }
+          .only-mobile { display: inline; }
           .bottom-nav {
             display: flex; position: fixed; bottom: 0; left: 0; right: 0; height: 64px;
             background: #fff; border-top: 0.5px solid var(--skdw-border); z-index: 200;
