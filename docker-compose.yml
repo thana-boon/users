@@ -75,6 +75,10 @@ services:
       # host + port). Each service runs on its own port, so the call is
       # cross-origin and credentialed. Empty = nobody may ask. See .env.example.
       SSO_ALLOWED_ORIGINS: ${SSO_ALLOWED_ORIGINS:-}
+      # Timetable service, read server-side for ชั้นที่สอน (see .env.example).
+      # Unset = the profile shows the stored value instead.
+      TIMETABLE_API_URL: ${TIMETABLE_API_URL:-}
+      TIMETABLE_API_KEY: ${TIMETABLE_API_KEY:-}
       # Trusted reverse-proxy hops in front of the app (see .env.example). Drives
       # real-client-IP extraction for audit logs and per-IP rate limiting.
       TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-1}

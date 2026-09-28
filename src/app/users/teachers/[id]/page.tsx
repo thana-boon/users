@@ -15,6 +15,7 @@ import { PhotoCard } from '@/components/PhotoCard';
 import { IconBack, IconTrash } from '@/components/Icons';
 import { Combo } from '@/components/Combo';
 import { SubjectGroupSelect } from '@/components/SubjectGroupSelect';
+import { TeachingClasses } from '@/components/TeachingClasses';
 import { DateField } from '@/components/DateField';
 import {
   EmergencyContactFields,
@@ -216,6 +217,11 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
             value={form.subjectGroup}
             onChange={setV('subjectGroup')}
             hint="เลือกจากรายการกลุ่มสาระของโรงเรียน — แก้ไขรายการได้ที่หน้า “กลุ่มสาระ”"
+            style={{ gridColumn: '1 / -1' }}
+          />
+          <TeachingClasses
+            url={`/api/users/teachers/${id}/teaching`}
+            stored={d.gradeTaught}
             style={{ gridColumn: '1 / -1' }}
           />
           <MonthYearField label="เดือน / ปีที่เข้าทำงาน (พ.ศ.)" value={form.workStart} onChange={setV('workStart')} />

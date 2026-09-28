@@ -20,6 +20,7 @@ import {
 import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
 } from '@/lib/options';
+import { TeachingClasses } from '@/components/TeachingClasses';
 import { CitizenIdField, ClosedNotice, Field, Locked, SaveBar, Section } from './parts';
 
 /**
@@ -220,7 +221,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
           onChange={setCitizenId}
         />
         <Locked label="กลุ่มสาระที่สอน" value={me.subjectGroup} />
-        <Locked label="ชั้นที่สอน" value={me.gradeTaught} />
+        <TeachingClasses url="/api/users/me/teaching" stored={me.gradeTaught} style={{ gridColumn: '1 / -1' }} />
       </Section>
 
       {/* The three lists — the same editor an admin gets on the teacher page. */}
