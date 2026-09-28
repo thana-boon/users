@@ -167,7 +167,7 @@ export function EducationList({
             onChange={set('institution')}
             options={UNIVERSITY_OPTIONS}
             normalize={false}
-            placeholder="พิมพ์ชื่อเพื่อค้นหา เช่น ราชภัฏ"
+            placeholder="พิมพ์ชื่อมหาวิทยาลัยหรือสถาบันเพื่อค้นหา"
           />
           <Field
             label="ปีที่สำเร็จการศึกษา (พ.ศ.) — ไม่บังคับ"
