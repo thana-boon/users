@@ -133,8 +133,8 @@ function UserMenu({ session, onLogout }: { session: SessionInfo; onLogout: () =>
             <div className="muted mono" style={{ fontSize: 11 }}>{session.role}</div>
           </div>
           {/* The other half of the mode switch (/users/me has the way back).
-              Everyone who can see this shell is an admin, so it is always
-              offered: an admin is a teacher too, with a record of their own. */}
+              Everyone who can see this shell is staff (admin or moderator), so it is always
+              offered: they are teachers too, with a record of their own. */}
           {/* A plain <a>, not <Link>: /users/me is served by a rewrite onto a
               different root layout (src/app/me), so switching mode is a real
               page load rather than a client-side navigation inside this shell. */}
@@ -190,6 +190,7 @@ const NAV: NavNode[] = [
   { href: '/users/academic-years', label: 'ปีการศึกษา', Icon: IconCalendar },
   { href: '/users/archive', label: 'ถังขยะ', Icon: IconTrash },
   { href: '/users/settings', label: 'ตั้งค่าระบบ', Icon: IconSettings },
+  { href: '/users/permissions', label: 'จัดการสิทธิ์', Icon: IconShield },
   { href: '/users/api-manager', label: 'API Manager', Icon: IconKey },
   { href: '/users/backups', label: 'สำรอง/กู้คืนข้อมูล', Icon: IconDatabase },
   { href: '/users/audit', label: 'บันทึกการใช้งาน', Icon: IconAudit },
@@ -199,6 +200,13 @@ const NAV: NavNode[] = [
 // its first child there so the bar stays compact).
 const MOBILE_NAV: Leaf[] = NAV.map((n) =>
   isGroup(n) ? { ...n.children[0], label: n.label, Icon: n.Icon } : n,
+);
+
+// A moderator (users:students) sees the นักเรียน group and nothing else, laid
+// out flat since it is the whole menu. Middleware is what actually keeps them
+// out of the rest; this only stops the menu offering pages that would bounce.
+const STUDENT_NAV: Leaf[] = NAV.flatMap((n) =>
+  isGroup(n) && n.label === 'นักเรียน' ? n.children : [],
 );
 
 function isActive(pathname: string, href: string, exact?: boolean) {
@@ -212,16 +220,21 @@ function groupActive(pathname: string, g: Group) {
 
 export function AppShell({
   session,
+  isAdmin,
   signedOutUrl,
   children,
 }: {
   session: SessionInfo;
+  /** False for a moderator — student pages only. */
+  isAdmin: boolean;
   /** Where signing out lands — the platform portal. Built server-side in the
    *  layout, because lib/platform reads an env var a client bundle cannot see. */
   signedOutUrl: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const nav: NavNode[] = isAdmin ? NAV : STUDENT_NAV;
+  const mobileNav: Leaf[] = isAdmin ? MOBILE_NAV : STUDENT_NAV;
 
   async function logout() {
     await fetch(withBase('/api/auth/logout'), { method: 'POST' });
@@ -269,10 +282,10 @@ export function AppShell({
         <div className="row" style={{ gap: 12 }}>
           <span
             className="badge badge-gold"
-            title="สิทธิ์เข้าถึงเฉพาะผู้มีสิทธิ์ users:write"
+            title={isAdmin ? 'สิทธิ์ผู้ดูแลระบบ (users:write)' : 'สิทธิ์จัดการข้อมูลนักเรียน (users:students)'}
             style={{ display: 'inline-flex', alignItems: 'center' }}
           >
-            <IconShield width={13} height={13} /> ผู้ดูแล
+            <IconShield width={13} height={13} /> {isAdmin ? 'ผู้ดูแล' : 'Moderator'}
           </span>
           <UserMenu session={session} onLogout={logout} />
         </div>
@@ -281,7 +294,7 @@ export function AppShell({
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {/* Sidebar (desktop) */}
         <nav className="sidebar-desktop" aria-label="เมนูหลัก">
-          {NAV.map((node) =>
+          {nav.map((node) =>
             isGroup(node) ? (
               <NavGroup key={node.label} group={node} pathname={pathname} />
             ) : (
@@ -314,7 +327,7 @@ export function AppShell({
 
       {/* Bottom nav (mobile) */}
       <nav className="bottom-nav" aria-label="เมนูหลัก (มือถือ)">
-        {MOBILE_NAV.map(({ href, label, Icon, exact }) => {
+        {mobileNav.map(({ href, label, Icon, exact }) => {
           const active = isActive(pathname, href, exact);
           return (
             <Link key={href} href={href} className="bottom-item" data-active={active} aria-current={active ? 'page' : undefined}>

@@ -3,7 +3,7 @@ import { and, eq, ilike, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { phoneField } from '@/lib/phone';
 import { db } from '@/db';
-import { teachers } from '@/db/schema';
+import { teachers, TEACHER_ROLES, type TeacherRole } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, created, badRequest, handleError } from '@/lib/http';
 import { encrypt } from '@/lib/crypto';
@@ -25,8 +25,8 @@ export async function GET(req: NextRequest) {
 
     const conds = [eq(teachers.isArchived, false)];
     if (subject) conds.push(eq(teachers.subjectGroup, subject));
-    if (role === 'teacher' || role === 'teacher-admin')
-      conds.push(eq(teachers.role, role));
+    if ((TEACHER_ROLES as readonly string[]).includes(role))
+      conds.push(eq(teachers.role, role as TeacherRole));
     if (status === 'active' || status === 'resigned')
       conds.push(eq(teachers.employmentStatus, status));
     if (q) {
@@ -90,7 +90,7 @@ const createSchema = z.object({
   religion: z.string().nullable().optional(),
   nationality: z.string().nullable().optional(),
   ethnicity: z.string().nullable().optional(),
-  role: z.enum(['teacher', 'teacher-admin']).default('teacher'),
+  role: z.enum(TEACHER_ROLES).default('teacher'),
   citizenId: z.string().nullable().optional(),
   // Trimmed on the way in so a password can never be STORED with edge
   // whitespace — the login path only tolerates it, it does not want more of it.

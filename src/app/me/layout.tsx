@@ -3,7 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { students, teachers } from '@/db/schema';
 import { getSession } from '@/lib/auth';
-import { hasPermission, idleTimeoutMs, sessionExpiresAt, USERS_WRITE } from '@/lib/jwt';
+import { hasPermission, idleTimeoutMs, sessionExpiresAt, USERS_STUDENTS, USERS_WRITE } from '@/lib/jwt';
 import { platformHomeUrl } from '@/lib/platform';
 import { MeShell } from '@/components/MeShell';
 import { SessionGuard } from '@/components/SessionGuard';
@@ -75,9 +75,16 @@ export default async function MeLayout({ children }: { children: React.ReactNode
             name={name}
             initial={(firstName || name).trim().slice(0, 1)}
             hasPhoto={hasPhoto}
-            // The mode switch is for admins only — a plain teacher or a student
-            // has no other mode to be in, so the button is simply absent.
-            isAdmin={hasPermission(session, USERS_WRITE)}
+            // The mode switch is for staff only (admin, or a moderator for the
+            // student pages) — a plain teacher or a student has no other mode
+            // to be in, so the button is simply absent.
+            staffMode={
+              hasPermission(session, USERS_WRITE)
+                ? 'admin'
+                : hasPermission(session, USERS_STUDENTS)
+                  ? 'moderator'
+                  : null
+            }
             signedOutUrl={platformHomeUrl()}
           >
             {children}

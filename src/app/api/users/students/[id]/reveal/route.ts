@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { students, guardians } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireStudentManager } from '@/lib/rbac';
 import { ok, notFound, badRequest, handleError } from '@/lib/http';
 import { decrypt } from '@/lib/crypto';
 import { recordAudit, type AuditAction } from '@/lib/audit';
@@ -31,7 +31,7 @@ const ACTION: Record<string, AuditAction> = {
 };
 
 export async function POST(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);

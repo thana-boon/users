@@ -26,7 +26,10 @@ import { relations } from 'drizzle-orm';
 
 // -- Enums (shared role model across the system) --------------------
 export const STUDENT_ROLES = ['student', 'teacher', 'teacher-admin'] as const;
-export const TEACHER_ROLES = ['teacher', 'teacher-admin'] as const;
+// `moderator` = student records only (see USERS_STUDENTS in lib/permissions.ts).
+// Appended, not inserted: Postgres adds an enum value at the end cleanly.
+export const TEACHER_ROLES = ['teacher', 'teacher-admin', 'moderator'] as const;
+export type TeacherRole = (typeof TEACHER_ROLES)[number];
 export const ADDRESS_TYPES = ['household', 'birth_place', 'current', 'hometown'] as const;
 export const GUARDIAN_TYPES = ['guardian', 'father', 'mother'] as const;
 

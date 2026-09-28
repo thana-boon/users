@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireStudentManager } from '@/lib/rbac';
 import { ok, handleError } from '@/lib/http';
 import { listFormerStudents } from '@/lib/services/students';
 
@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
  * `status` narrows to just withdrawn or just graduated.
  */
 export async function GET(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const sp = req.nextUrl.searchParams;

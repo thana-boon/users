@@ -3,7 +3,7 @@ import { and, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { students } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireStudentManager } from '@/lib/rbac';
 import { ok, notFound, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { maskCitizenId, tryDecrypt } from '@/lib/crypto';
@@ -25,7 +25,7 @@ type Ctx = { params: Promise<{ id: string }> };
  */
 
 export async function GET(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -114,7 +114,7 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -155,7 +155,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);

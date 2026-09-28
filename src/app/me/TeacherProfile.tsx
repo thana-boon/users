@@ -144,7 +144,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
             <h1 className="page-title">{me.prefix}{me.firstName} {me.lastName}</h1>
             <p className="muted mono" style={{ margin: '4px 0 0' }}>{me.teacherCode}</p>
             <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-              <span className={`badge ${me.role === 'teacher-admin' ? 'badge-gold' : 'badge-muted'}`}>
+              <span className={`badge ${me.role === 'teacher-admin' ? 'badge-gold' : me.role === 'moderator' ? 'badge-purple' : 'badge-muted'}`}>
                 {me.role}
               </span>
               <span className={`badge ${me.employmentStatus === 'resigned' ? 'badge-muted' : 'badge-success'}`}>

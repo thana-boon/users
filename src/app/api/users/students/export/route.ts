@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { students, enrollments } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireStudentManager } from '@/lib/rbac';
 import { handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { buildStudentExport, type StudentExportRow } from '@/lib/excel-io';
@@ -18,7 +18,7 @@ export const maxDuration = 120;
  * and every export is audit-logged.
  */
 export async function GET(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const sp = req.nextUrl.searchParams;

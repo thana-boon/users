@@ -11,23 +11,24 @@ import { IconLogout, IconShield } from './Icons';
  * twenty admin pages, every one of which a plain teacher is refused. Here there
  * is exactly one page, so the chrome is a header and nothing else.
  *
- * `isAdmin` is what turns this into a MODE rather than a separate app. An
- * admin lands here as themselves and can step back into the module with one
- * click; the button is absent for everyone else, because for them there is no
- * other mode to be in.
+ * `staffMode` is what turns this into a MODE rather than a separate app. An
+ * admin (or a moderator, for the student pages) lands here as themselves and
+ * can step back into the module with one click; the button is absent for
+ * everyone else, because for them there is no other mode to be in.
  */
 export function MeShell({
   name,
   initial,
   hasPhoto,
-  isAdmin,
+  staffMode,
   signedOutUrl,
   children,
 }: {
   name: string;
   initial: string;
   hasPhoto: boolean;
-  isAdmin: boolean;
+  /** Which staff mode this person can switch back to, if any. */
+  staffMode: 'admin' | 'moderator' | null;
   /** Where signing out lands — the platform portal, built server-side. */
   signedOutUrl: string;
   children: React.ReactNode;
@@ -72,8 +73,12 @@ export function MeShell({
               one of them reached through a rewrite. A full load is also the
               honest thing here — the admin shell re-reads the session it is
               gated on. */}
-          {isAdmin && (
-            <a href="/users" className="mode-btn" title="กลับไปหน้าจัดการข้อมูลนักเรียนและครู">
+          {staffMode && (
+            <a
+              href={staffMode === 'admin' ? '/users' : '/users/students'}
+              className="mode-btn"
+              title={staffMode === 'admin' ? 'กลับไปหน้าจัดการข้อมูลนักเรียนและครู' : 'กลับไปหน้าจัดการข้อมูลนักเรียน'}
+            >
               <IconShield width={14} height={14} />
               <span className="hide-mobile">สลับเป็นโหมดผู้ดูแล</span>
               <span className="only-mobile">ผู้ดูแล</span>

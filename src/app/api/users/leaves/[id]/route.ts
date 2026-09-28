@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { students, studentLeaves } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireStudentManager } from '@/lib/rbac';
 import { ok, notFound, badRequest, conflict, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { endLeave, deleteLeave } from '@/lib/services/leaves';
@@ -40,7 +40,7 @@ async function leaveTarget(leaveId: number) {
  * nothing to reinstate.
  */
 export async function PATCH(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 
 /** DELETE /api/users/leaves/[id] — remove an episode recorded by mistake. */
 export async function DELETE(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);

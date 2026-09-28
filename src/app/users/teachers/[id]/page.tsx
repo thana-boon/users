@@ -179,7 +179,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
                 <h1 className="page-title">{d.prefix}{d.firstName} {d.lastName}</h1>
                 <p className="muted mono" style={{ margin: '4px 0 0' }}>{d.teacherCode}</p>
               </div>
-              <span className={`badge ${d.role === 'teacher-admin' ? 'badge-gold' : 'badge-muted'}`} style={{ padding: '6px 12px' }}>{d.role}</span>
+              <span className={`badge ${d.role === 'teacher-admin' ? 'badge-gold' : d.role === 'moderator' ? 'badge-purple' : 'badge-muted'}`} style={{ padding: '6px 12px' }}>{d.role}</span>
             </div>
 
             <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -229,9 +229,10 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
             <label className="form-label">สิทธิ์ (role)</label>
             <select className="form-select" value={form.role ?? 'teacher'} onChange={set('role')}>
               <option value="teacher">teacher</option>
+              <option value="moderator">moderator</option>
               <option value="teacher-admin">teacher-admin</option>
             </select>
-            <p className="form-hint">การเปลี่ยนเป็น teacher-admin ให้สิทธิ์เข้าโมดูลนี้</p>
+            <p className="form-hint">teacher-admin เข้าได้ทุกเมนู · moderator จัดการได้เฉพาะข้อมูลนักเรียน (ดูหน้า “จัดการสิทธิ์”)</p>
           </div>
         </div>
 

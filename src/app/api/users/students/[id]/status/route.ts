@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { students } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireStudentManager } from '@/lib/rbac';
 import { ok, notFound, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { setStudentStatus } from '@/lib/services/students';
@@ -44,7 +44,7 @@ const schema = z.object({
  * Optionally records a จบช่วงชั้น milestone (e.g. graduating the final stage).
  */
 export async function POST(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);

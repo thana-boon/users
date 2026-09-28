@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { students, enrollments } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireStudentManager } from '@/lib/rbac';
 import { ok, handleError } from '@/lib/http';
 import { resolveActiveYearId } from '@/lib/services/students';
 import { gradeRank, roomRank, roomText } from '@/lib/grade-sql';
@@ -22,7 +22,7 @@ export const runtime = 'nodejs';
  * on, and a row that is already จบแล้ว is only there to be misread.
  */
 export async function GET(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const sp = req.nextUrl.searchParams;

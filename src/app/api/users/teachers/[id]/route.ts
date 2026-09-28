@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { teachers } from '@/db/schema';
+import { teachers, TEACHER_ROLES } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, notFound, handleError } from '@/lib/http';
 import { encrypt } from '@/lib/crypto';
@@ -40,7 +40,7 @@ const patchSchema = teacherListsSchema.merge(teacherProfileFieldsSchema).extend(
   email: z.string().nullable().optional(),
   subjectGroup: z.string().nullable().optional(),
   gradeTaught: z.string().nullable().optional(),
-  role: z.enum(['teacher', 'teacher-admin']).optional(),
+  role: z.enum(TEACHER_ROLES).optional(),
   password: z.string().trim().min(1).optional(), // set new password (re-encrypted, trimmed)
   citizenId: z.string().optional(), // set new เลขบัตร ปชช. (blank = keep, per student convention)
 });

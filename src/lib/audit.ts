@@ -34,6 +34,7 @@ export type AuditAction =
   | 'leave_start'
   | 'leave_end'
   | 'resign'
+  | 'change_role'
   | 'reveal_api_key'
   | 'create_api_key'
   | 'revoke_api_key'

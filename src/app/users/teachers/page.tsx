@@ -90,6 +90,7 @@ export default function TeachersPage() {
           <select className="form-select" style={{ width: 170 }} value={role} onChange={(e) => setRole(e.target.value)} aria-label="สิทธิ์">
             <option value="">ทุกสิทธิ์</option>
             <option value="teacher">teacher</option>
+            <option value="moderator">moderator</option>
             <option value="teacher-admin">teacher-admin</option>
           </select>
           <select className="form-select" style={{ width: 150 }} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="สถานะ">
@@ -127,7 +128,7 @@ export default function TeachersPage() {
                   <td style={{ fontSize: 13 }}>{r.subjectGroup ?? '-'}</td>
                   <td className="mono" style={{ fontSize: 13 }}>{r.email ?? '-'}</td>
                   <td>
-                    <span className={`badge ${r.role === 'teacher-admin' ? 'badge-gold' : 'badge-muted'}`}>{r.role}</span>
+                    <span className={`badge ${r.role === 'teacher-admin' ? 'badge-gold' : r.role === 'moderator' ? 'badge-purple' : 'badge-muted'}`}>{r.role}</span>
                   </td>
                   <td>
                     <span className={`badge ${r.employmentStatus === 'resigned' ? 'badge-muted' : 'badge-success'}`}>
@@ -226,6 +227,7 @@ function NewTeacher({ onClose, onCreated }: { onClose: () => void; onCreated: ()
               <label className="form-label">สิทธิ์ (role)</label>
               <select className="form-select" value={f.role} onChange={set('role')}>
                 <option value="teacher">teacher</option>
+                <option value="moderator">moderator</option>
                 <option value="teacher-admin">teacher-admin</option>
               </select>
             </div>

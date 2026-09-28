@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { hasPermission } from '@/lib/jwt';
-import { USERS_WRITE } from '@/lib/permissions';
+import { canManageStudentsPerms, isAdminPerms, STUDENT_HOME } from '@/lib/permissions';
 import LoginForm from './LoginForm';
 
 /**
@@ -44,7 +43,10 @@ export default async function LoginPage({
   const session = await getSession();
 
   // Already signed in AND allowed in — the whole point of the SSO check.
-  if (hasPermission(session, USERS_WRITE)) redirect(next);
+  if (isAdminPerms(session?.permissions)) redirect(next);
+  // A moderator: straight to the student pages (middleware would bounce any
+  // other `next` there anyway).
+  if (canManageStudentsPerms(session?.permissions)) redirect(STUDENT_HOME);
 
   // Signed in, but this account cannot enter the module. Deliberately NOT a
   // redirect: middleware would only bounce them right back here, and the two

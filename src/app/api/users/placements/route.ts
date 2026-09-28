@@ -3,7 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { academicYears, students } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireStudentManager } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { placeStudents } from '@/lib/services/promotion';
@@ -45,7 +45,7 @@ const schema = z.object({
  * against the DB and within the batch) before committing.
  */
 export async function POST(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const body = schema.parse(await req.json());

@@ -253,7 +253,7 @@ export default function ArchivePage() {
                     </td>
                     <td>{fullName(t)}</td>
                     <td style={{ fontSize: 13 }}>{t.subjectGroup ?? '-'}</td>
-                    <td><span className={`badge ${t.role === 'teacher-admin' ? 'badge-gold' : 'badge-muted'}`}>{t.role}</span></td>
+                    <td><span className={`badge ${t.role === 'teacher-admin' ? 'badge-gold' : t.role === 'moderator' ? 'badge-purple' : 'badge-muted'}`}>{t.role}</span></td>
                     <td>
                       <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
                         <button className="btn btn-ghost btn-sm" disabled={restoringId === t.id}

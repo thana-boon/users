@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { and, asc, eq, gte, ilike, inArray, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { academicYears, homeroomTeachers, teachers } from '@/db/schema';
+import { academicYears, homeroomTeachers, teachers, TEACHER_ROLES, type TeacherRole } from '@/db/schema';
 import { requireApiScope, actorHasScope, apiError, insufficientScope } from '@/lib/apiauth';
 import { ok, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
 
     const conds = [eq(teachers.isArchived, false)];
     if (subjectGroup) conds.push(eq(teachers.subjectGroup, subjectGroup));
-    if (role === 'teacher' || role === 'teacher-admin') conds.push(eq(teachers.role, role));
+    if ((TEACHER_ROLES as readonly string[]).includes(role)) conds.push(eq(teachers.role, role as TeacherRole));
     if (status !== 'all' && (status === 'active' || status === 'resigned')) {
       conds.push(eq(teachers.employmentStatus, status));
     }

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { sessionClient, withBase } from '@/lib/client';
-import { USERS_WRITE } from '@/lib/permissions';
+import { canManageStudentsPerms } from '@/lib/permissions';
 
 /**
  * The credential form itself — only ever rendered once the server has
@@ -48,7 +48,7 @@ export default function LoginForm({ next, denied, expired, signedInAs }: LoginFo
       const res = await fetch(withBase('/api/auth/session'));
       const data = await res.json();
       if (!data?.valid) return true; // nothing useful learned; let middleware rule
-      return Boolean(data.user?.permissions?.includes(USERS_WRITE));
+      return canManageStudentsPerms(data.user?.permissions);
     } catch {
       return true;
     }
@@ -79,7 +79,7 @@ export default function LoginForm({ next, denied, expired, signedInAs }: LoginFo
         router.refresh(); // the server page above must re-read the new cookie
       } else {
         setError(
-          'เข้าสู่ระบบสำเร็จ แต่บัญชีนี้ไม่มีสิทธิ์ users:write — โมดูลนี้เปิดให้เฉพาะผู้ดูแล (teacher-admin) เท่านั้น',
+          'เข้าสู่ระบบสำเร็จ แต่บัญชีนี้ไม่มีสิทธิ์เข้าโมดูลนี้ — เปิดให้เฉพาะผู้ดูแล (teacher-admin) และ moderator เท่านั้น',
         );
       }
     } catch (e) {

@@ -5,6 +5,7 @@ import { db } from '@/db';
 import { students, teachers } from '@/db/schema';
 import { getSessionFromRequest } from './auth';
 import { hasPermission, USERS_WRITE, type SessionClaims } from './jwt';
+import { canManageStudentsPerms } from './permissions';
 import type { SelfEditAudience } from './services/settings';
 
 /**
@@ -55,6 +56,26 @@ export async function requireTeacherAdmin(req: NextRequest): Promise<Guard> {
     return {
       ok: false,
       response: deny(403, 'ไม่มีสิทธิ์เข้าถึงโมดูลนี้ (ต้องมีสิทธิ์ users:write)'),
+    };
+  }
+  return { ok: true, session };
+}
+
+/**
+ * Require a token that may work on STUDENT records: an admin (`users:write`) or
+ * a moderator (`users:students`). Used by every route in the student surface
+ * (lib/permissions.ts isStudentScopePath) instead of requireTeacherAdmin, so
+ * the two gates — middleware and route — agree on who gets in.
+ */
+export async function requireStudentManager(req: NextRequest): Promise<Guard> {
+  const session = await getSessionFromRequest(req);
+  if (!session) {
+    return { ok: false, response: deny(401, 'ต้องเข้าสู่ระบบก่อนใช้งาน') };
+  }
+  if (!canManageStudentsPerms(session.permissions)) {
+    return {
+      ok: false,
+      response: deny(403, 'ไม่มีสิทธิ์จัดการข้อมูลนักเรียน'),
     };
   }
   return { ok: true, session };

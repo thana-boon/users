@@ -3,7 +3,7 @@ import { and, eq, isNotNull } from 'drizzle-orm';
 import { db } from '@/db';
 import { enrollments, teachers, specialTeachers, academicYears } from '@/db/schema';
 import { listActiveNames } from '@/lib/services/subject-groups';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireStudentManager } from '@/lib/rbac';
 import { ok, handleError } from '@/lib/http';
 import { resolveActiveYearId } from '@/lib/services/students';
 import { compareGrades } from '@/lib/grades';
@@ -15,7 +15,7 @@ const byRoom = (a: string, b: string) => a.localeCompare(b, 'th', { numeric: tru
 
 /** Distinct values that populate the filter dropdowns. */
 export async function GET(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireStudentManager(req);
   if (!guard.ok) return guard.response;
   try {
     const sp = req.nextUrl.searchParams;
