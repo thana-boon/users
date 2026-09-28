@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { specialTeachers, subjectGroups, teachers } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, notFound, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { cleanGroupName, countGroupUsage } from '@/lib/services/subject-groups';
@@ -32,7 +32,7 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -102,7 +102,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
  * name no longer in any list, which is exactly the mess this table replaced.
  */
 export async function DELETE(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);

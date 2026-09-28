@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { teachers } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { buildTeacherExport } from '@/lib/excel-io';
@@ -10,7 +10,7 @@ import { buildTeacherExport } from '@/lib/excel-io';
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     // The three qualification lists ride along into their own sheets, ordered

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { phoneField } from '@/lib/phone';
 import { db } from '@/db';
 import { students, enrollments } from '@/db/schema';
-import { requireStudentManager } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, created, handleError, badRequest } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { resolveActiveYearId, upsertStudentFull } from '@/lib/services/students';
@@ -23,7 +23,7 @@ export const runtime = 'nodejs';
  */
 
 export async function GET(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const sp = req.nextUrl.searchParams;
@@ -137,7 +137,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const body = createSchema.parse(await req.json());

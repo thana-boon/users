@@ -9,6 +9,7 @@ import { IconSearch, IconPlus, IconDownload, IconUpload, IconImage } from '@/com
 import { ImportDialog } from '@/components/ImportDialog';
 import { PhotoImportDialog } from '@/components/PhotoImportDialog';
 import { PhotoThumb, PhotoLightbox } from '@/components/PhotoThumb';
+import { useAccess } from '@/components/Access';
 import { Combo } from '@/components/Combo';
 import { SubjectGroupSelect, SubjectGroupFilter } from '@/components/SubjectGroupSelect';
 import { DateField } from '@/components/DateField';
@@ -28,6 +29,8 @@ interface Row {
 export default function TeachersPage() {
   const toast = useToast();
   const search = useSearchParams();
+  // Re-import overwrites passwords (admin only); export is staff.sensitive.
+  const { can } = useAccess();
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -73,10 +76,12 @@ export default function TeachersPage() {
       <div className="row-between">
         <h1 className="page-title">ครู</h1>
         <div className="row" style={{ gap: 8 }}>
-          <a className="btn btn-ghost btn-sm" href={withBase('/api/users/teachers/template')}>เทมเพลต</a>
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(true)}><IconUpload width={16} height={16} /> นำเข้า</button>
+          {can('/api/users/teachers/import', 'POST') && <>
+            <a className="btn btn-ghost btn-sm" href={withBase('/api/users/teachers/template')}>เทมเพลต</a>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(true)}><IconUpload width={16} height={16} /> นำเข้า</button>
+          </>}
           <button className="btn btn-ghost btn-sm" onClick={() => setShowPhotos(true)}><IconImage width={16} height={16} /> นำเข้ารูป</button>
-          <a className="btn btn-secondary btn-sm" href={withBase('/api/users/teachers/export')}><IconDownload width={16} height={16} /> ส่งออก</a>
+          {can('/api/users/teachers/export') && <a className="btn btn-secondary btn-sm" href={withBase('/api/users/teachers/export')}><IconDownload width={16} height={16} /> ส่งออก</a>}
           <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}><IconPlus width={16} height={16} /> เพิ่ม</button>
         </div>
       </div>
@@ -89,9 +94,8 @@ export default function TeachersPage() {
           </div>
           <select className="form-select" style={{ width: 170 }} value={role} onChange={(e) => setRole(e.target.value)} aria-label="สิทธิ์">
             <option value="">ทุกสิทธิ์</option>
-            <option value="teacher">teacher</option>
-            <option value="moderator">moderator</option>
-            <option value="teacher-admin">teacher-admin</option>
+            <option value="teacher">ครูทั่วไป</option>
+            <option value="teacher-admin">ผู้ดูแลระบบ</option>
           </select>
           <select className="form-select" style={{ width: 150 }} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="สถานะ">
             <option value="">ทุกสถานะ</option>
@@ -128,7 +132,9 @@ export default function TeachersPage() {
                   <td style={{ fontSize: 13 }}>{r.subjectGroup ?? '-'}</td>
                   <td className="mono" style={{ fontSize: 13 }}>{r.email ?? '-'}</td>
                   <td>
-                    <span className={`badge ${r.role === 'teacher-admin' ? 'badge-gold' : r.role === 'moderator' ? 'badge-purple' : 'badge-muted'}`}>{r.role}</span>
+                    {r.role === 'teacher-admin'
+                      ? <span className="badge badge-gold">ผู้ดูแลระบบ</span>
+                      : <span className="muted" style={{ fontSize: 13 }}>-</span>}
                   </td>
                   <td>
                     <span className={`badge ${r.employmentStatus === 'resigned' ? 'badge-muted' : 'badge-success'}`}>
@@ -181,7 +187,7 @@ function NewTeacher({ onClose, onCreated }: { onClose: () => void; onCreated: ()
   const [f, setF] = useState({
     teacherCode: '', prefix: 'นาย', firstName: '', lastName: '', email: '',
     phone: '', lineId: '', birthDate: '',
-    subjectGroup: '', gradeTaught: '', role: 'teacher', password: '',
+    subjectGroup: '', gradeTaught: '', password: '',
     gender: '', religion: 'พุทธ', nationality: 'ไทย', ethnicity: 'ไทย',
   });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -221,17 +227,9 @@ function NewTeacher({ onClose, onCreated }: { onClose: () => void; onCreated: ()
           </div>
           <DateField label="วันเดือนปีเกิด" value={f.birthDate} onChange={setV('birthDate')} />
           <SubjectGroupSelect label="กลุ่มสาระที่สอน" value={f.subjectGroup} onChange={setV('subjectGroup')} />
-          <div className="grid-2">
-            <div><label className="form-label">อีเมล</label><input className="form-input" value={f.email} onChange={set('email')} /></div>
-            <div>
-              <label className="form-label">สิทธิ์ (role)</label>
-              <select className="form-select" value={f.role} onChange={set('role')}>
-                <option value="teacher">teacher</option>
-                <option value="moderator">moderator</option>
-                <option value="teacher-admin">teacher-admin</option>
-              </select>
-            </div>
-          </div>
+          {/* No role here: a new account is a plain teacher; access is given
+              on the จัดการสิทธิ์ page. */}
+          <div><label className="form-label">อีเมล</label><input className="form-input" value={f.email} onChange={set('email')} /></div>
           <div><label className="form-label">รหัสผ่าน</label><input className="form-input" value={f.password} onChange={set('password')} /></div>
         </div>
         <div className="row-between card-pad" style={{ paddingTop: 0 }}>

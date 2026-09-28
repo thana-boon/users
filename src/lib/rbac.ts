@@ -5,7 +5,8 @@ import { db } from '@/db';
 import { students, teachers } from '@/db/schema';
 import { getSessionFromRequest } from './auth';
 import { hasPermission, USERS_WRITE, type SessionClaims } from './jwt';
-import { canManageStudentsPerms } from './permissions';
+import { capsAllow, needFor, type Capability } from './permissions';
+import { grantsOfCode } from './services/grants';
 import type { SelfEditAudience } from './services/settings';
 
 /**
@@ -19,7 +20,14 @@ import type { SelfEditAudience } from './services/settings';
  */
 
 export type Guard =
-  | { ok: true; session: SessionClaims }
+  | {
+      ok: true;
+      session: SessionClaims;
+      /** Set by requireAccess: false for a moderator acting on a grant. */
+      isAdmin?: boolean;
+      /** Set by requireAccess: the moderator's current grants (from the DB). */
+      caps?: Capability[];
+    }
   | { ok: false; response: NextResponse };
 
 /** The signed-in person's own row, for the self-service routes. */
@@ -62,23 +70,32 @@ export async function requireTeacherAdmin(req: NextRequest): Promise<Guard> {
 }
 
 /**
- * Require a token that may work on STUDENT records: an admin (`users:write`) or
- * a moderator (`users:students`). Used by every route in the student surface
- * (lib/permissions.ts isStudentScopePath) instead of requireTeacherAdmin, so
- * the two gates — middleware and route — agree on who gets in.
+ * Require access to THIS route: an admin (`users:write`), or a moderator whose
+ * grants open this path + method in the rule table (lib/permissions.ts) — the
+ * same table middleware gates on, so the two layers agree.
+ *
+ * A moderator's grants are read from the database here, not trusted from the
+ * token, so a capability the admin takes away stops working on the very next
+ * request. The path comes from the request itself (never from the caller's
+ * idea of where it is), with BASE_PATH stripped the way middleware does.
  */
-export async function requireStudentManager(req: NextRequest): Promise<Guard> {
+export async function requireAccess(req: NextRequest): Promise<Guard> {
   const session = await getSessionFromRequest(req);
   if (!session) {
     return { ok: false, response: deny(401, 'ต้องเข้าสู่ระบบก่อนใช้งาน') };
   }
-  if (!canManageStudentsPerms(session.permissions)) {
-    return {
-      ok: false,
-      response: deny(403, 'ไม่มีสิทธิ์จัดการข้อมูลนักเรียน'),
-    };
-  }
-  return { ok: true, session };
+  if (hasPermission(session, USERS_WRITE)) return { ok: true, session, isAdmin: true };
+
+  const base = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  let path = req.nextUrl.pathname;
+  if (base && path.startsWith(`${base}/api/`)) path = path.slice(base.length);
+
+  const forbidden = { ok: false as const, response: deny(403, 'บัญชีนี้ไม่มีสิทธิ์ใช้งานส่วนนี้') };
+  if (needFor(path, req.method) === 'admin' || session.role !== 'teacher') return forbidden;
+
+  const caps = await grantsOfCode(session.sub);
+  if (!capsAllow(caps, path, req.method)) return forbidden;
+  return { ok: true, session, isAdmin: false, caps };
 }
 
 /**

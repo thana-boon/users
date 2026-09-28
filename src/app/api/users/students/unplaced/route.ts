@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { and, asc, eq, ilike, inArray, notExists, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { students, enrollments, academicYears } from '@/db/schema';
-import { requireStudentManager } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 
 export const runtime = 'nodejs';
@@ -16,7 +16,7 @@ export const runtime = 'nodejs';
  * came from (e.g. last year's ป.6/2).
  */
 export async function GET(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const sp = req.nextUrl.searchParams;

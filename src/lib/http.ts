@@ -19,6 +19,10 @@ export function notFound(message = 'ไม่พบข้อมูลที่�
 }
 
 /** The request was fine, the server just cannot do it right now (e.g. busy). */
+export function forbidden(message = 'ไม่มีสิทธิ์ทำรายการนี้') {
+  return NextResponse.json({ error: message }, { status: 403 });
+}
+
 export function conflict(message: string) {
   return NextResponse.json({ error: message }, { status: 409 });
 }

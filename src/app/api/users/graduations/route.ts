@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { academicYears } from '@/db/schema';
-import { requireStudentManager } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { bulkSetStudentStatus, bulkReinstateStudents, listExitHistory } from '@/lib/services/students';
@@ -21,7 +21,7 @@ const schema = z.object({
 
 /** GET /api/users/graduations — history of graduated students (newest year first). */
 export async function GET(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const data = await listExitHistory('graduated');
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
  * milestone for each student's grade that year.
  */
 export async function POST(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const body = schema.parse(await req.json());
@@ -83,7 +83,7 @@ const revertSchema = z.object({
  * students to กำลังศึกษา and clear their exit metadata (undo a whole ชุด at once).
  */
 export async function DELETE(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const body = revertSchema.parse(await req.json());

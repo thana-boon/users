@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { phoneField } from '@/lib/phone';
 import { db } from '@/db';
 import { workers } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, notFound, handleError } from '@/lib/http';
 import { encrypt, maskCitizenId, tryDecrypt } from '@/lib/crypto';
 import { recordAudit } from '@/lib/audit';
@@ -14,7 +14,7 @@ export const runtime = 'nodejs';
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -42,7 +42,7 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -75,7 +75,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);

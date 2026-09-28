@@ -5,7 +5,7 @@ import { eq, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { teachers } from '@/db/schema';
 import { issueSession } from '@/lib/jwt';
-import { permissionsForRole } from '@/lib/permissions';
+import { sessionPermissions } from '@/lib/services/grants';
 import { decrypt, passwordMatches } from '@/lib/crypto';
 import { badRequest, handleError } from '@/lib/http';
 import type { LockScope } from '@/lib/rate-limit';
@@ -22,8 +22,9 @@ export const runtime = 'nodejs';
  * the address we mail them was otherwise locked out of every service.
  *
  * A DB `teacher-admin` is issued a session carrying `users:read`/`users:write`,
- * a `moderator` one carrying `users:students` (student records only); a plain
- * `teacher` gets a valid session but is rejected by this module's RBAC.
+ * a teacher with rows in `staff_grants` (a moderator) carries `users:<capability>`
+ * for each grant; a plain `teacher` gets a valid session but is rejected by this
+ * module's RBAC.
  *
  * A successful login sets the platform session cookies, `sso_session` among them
  * (see lib/jwt.ts) — which is what makes this the SSO sign-in for every other
@@ -153,13 +154,13 @@ async function handler(req: NextRequest) {
 
     lockout.clear();
     // Session role is always `teacher`; what the DB role adds (admin, or
-    // moderator) rides in `permissions` — see permissionsForRole().
+    // moderator grants) rides in `permissions` — see sessionPermissions().
     const session = await issueSession({
       sub: row.teacherCode,
       role: 'teacher',
       name: `${row.firstName} ${row.lastName}`.trim(),
       code: row.teacherCode,
-      permissions: permissionsForRole(row.role),
+      permissions: await sessionPermissions(row),
       client: body.client,
     });
 

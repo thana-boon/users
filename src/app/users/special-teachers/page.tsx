@@ -16,6 +16,7 @@ import {
   IconSearch, IconPlus, IconEdit, IconTrash, IconUpload, IconDownload, IconImage,
 } from '@/components/Icons';
 import { STAFF_PREFIX_OPTIONS } from '@/lib/options';
+import { useAccess } from '@/components/Access';
 
 /**
  * อาจารย์พิเศษ — วิทยากร/ครูพิเศษที่มาสอนเป็นรายวิชา.
@@ -38,6 +39,7 @@ interface Row {
 }
 
 export default function SpecialTeachersPage() {
+  const { can } = useAccess();
   const toast = useToast();
   const confirm = useConfirm();
   const search = useSearchParams();
@@ -107,9 +109,11 @@ export default function SpecialTeachersPage() {
           <button className="btn btn-ghost btn-sm" onClick={() => setShowPhotos(true)}>
             <IconImage width={16} height={16} /> นำเข้ารูป
           </button>
-          <a className="btn btn-secondary btn-sm" href={withBase('/api/users/special-teachers/export')}>
-            <IconDownload width={16} height={16} /> ส่งออก
-          </a>
+          {can('/api/users/special-teachers/export') && (
+            <a className="btn btn-secondary btn-sm" href={withBase('/api/users/special-teachers/export')}>
+              <IconDownload width={16} height={16} /> ส่งออก
+            </a>
+          )}
           <button className="btn btn-primary btn-sm" onClick={() => setEditing('new')}>
             <IconPlus width={16} height={16} /> เพิ่ม
           </button>

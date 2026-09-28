@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { students } from '@/db/schema';
-import { requireStudentManager } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import {
@@ -45,7 +45,7 @@ const spec: PhotoImportSpec = {
 };
 
 export async function POST(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     if (req.headers.get('content-type')?.includes('application/json')) {

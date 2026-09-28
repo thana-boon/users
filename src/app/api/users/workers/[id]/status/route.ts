@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { workers } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, notFound, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 
@@ -20,7 +20,7 @@ const schema = z.object({
 
 /** POST /api/users/workers/[id]/status — ทำงานอยู่ / ลาออก (see teacher status route). */
 export async function POST(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);

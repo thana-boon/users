@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { phoneField } from '@/lib/phone';
 import { db } from '@/db';
 import { teachers, TEACHER_ROLES, type TeacherRole } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, created, badRequest, handleError } from '@/lib/http';
 import { encrypt } from '@/lib/crypto';
 import { recordAudit } from '@/lib/audit';
@@ -12,7 +12,7 @@ import { recordAudit } from '@/lib/audit';
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const sp = req.nextUrl.searchParams;
@@ -90,7 +90,6 @@ const createSchema = z.object({
   religion: z.string().nullable().optional(),
   nationality: z.string().nullable().optional(),
   ethnicity: z.string().nullable().optional(),
-  role: z.enum(TEACHER_ROLES).default('teacher'),
   citizenId: z.string().nullable().optional(),
   // Trimmed on the way in so a password can never be STORED with edge
   // whitespace — the login path only tolerates it, it does not want more of it.
@@ -98,7 +97,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const body = createSchema.parse(await req.json());
@@ -125,7 +124,8 @@ export async function POST(req: NextRequest) {
         religion: body.religion ?? null,
         nationality: body.nationality ?? null,
         ethnicity: body.ethnicity ?? null,
-        role: body.role,
+        // Always a plain teacher: roles are given on /users/permissions.
+        role: 'teacher',
         citizenIdEncrypted: encrypt(body.citizenId ?? null),
         passwordEncrypted: encrypt(body.password ?? null),
       })

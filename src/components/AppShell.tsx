@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { withBase } from '@/lib/client';
+import { allows, isAdminPerms } from '@/lib/permissions';
+import { AccessProvider } from './Access';
 import {
   IconDashboard,
   IconStudents,
@@ -202,12 +204,16 @@ const MOBILE_NAV: Leaf[] = NAV.map((n) =>
   isGroup(n) ? { ...n.children[0], label: n.label, Icon: n.Icon } : n,
 );
 
-// A moderator (users:students) sees the นักเรียน group and nothing else, laid
-// out flat since it is the whole menu. Middleware is what actually keeps them
-// out of the rest; this only stops the menu offering pages that would bounce.
-const STUDENT_NAV: Leaf[] = NAV.flatMap((n) =>
-  isGroup(n) && n.label === 'นักเรียน' ? n.children : [],
-);
+// A moderator sees only the pages their grants open (same rule table as
+// middleware); a group left with no pages disappears. Middleware is what
+// actually keeps them out — this only stops the menu offering pages that bounce.
+function navFor(perms: readonly string[]): NavNode[] {
+  return NAV.flatMap((n): NavNode[] => {
+    if (!isGroup(n)) return allows(perms, n.href) ? [n] : [];
+    const children = n.children.filter((c) => allows(perms, c.href));
+    return children.length ? [{ ...n, children }] : [];
+  });
+}
 
 function isActive(pathname: string, href: string, exact?: boolean) {
   if (exact) return pathname === href;
@@ -220,21 +226,25 @@ function groupActive(pathname: string, g: Group) {
 
 export function AppShell({
   session,
-  isAdmin,
+  perms,
   signedOutUrl,
   children,
 }: {
   session: SessionInfo;
-  /** False for a moderator — student pages only. */
-  isAdmin: boolean;
+  /** The session's permissions — decides the menu (and, via AccessProvider,
+   *  which buttons pages show). */
+  perms: readonly string[];
   /** Where signing out lands — the platform portal. Built server-side in the
    *  layout, because lib/platform reads an env var a client bundle cannot see. */
   signedOutUrl: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const nav: NavNode[] = isAdmin ? NAV : STUDENT_NAV;
-  const mobileNav: Leaf[] = isAdmin ? MOBILE_NAV : STUDENT_NAV;
+  const isAdmin = isAdminPerms(perms);
+  const nav: NavNode[] = isAdmin ? NAV : navFor(perms);
+  const mobileNav: Leaf[] = isAdmin
+    ? MOBILE_NAV
+    : nav.map((n) => (isGroup(n) ? { ...n.children[0], label: n.label, Icon: n.Icon } : n));
 
   async function logout() {
     await fetch(withBase('/api/auth/logout'), { method: 'POST' });
@@ -282,7 +292,7 @@ export function AppShell({
         <div className="row" style={{ gap: 12 }}>
           <span
             className="badge badge-gold"
-            title={isAdmin ? 'สิทธิ์ผู้ดูแลระบบ (users:write)' : 'สิทธิ์จัดการข้อมูลนักเรียน (users:students)'}
+            title={isAdmin ? 'สิทธิ์ผู้ดูแลระบบ (users:write)' : 'สิทธิ์เฉพาะส่วนที่ได้รับมอบหมาย'}
             style={{ display: 'inline-flex', alignItems: 'center' }}
           >
             <IconShield width={13} height={13} /> {isAdmin ? 'ผู้ดูแล' : 'Moderator'}
@@ -321,7 +331,7 @@ export function AppShell({
             paddingBottom: 88,
           }}
         >
-          {children}
+          <AccessProvider perms={perms}>{children}</AccessProvider>
         </main>
       </div>
 

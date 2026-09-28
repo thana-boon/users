@@ -3,14 +3,14 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { academicYears, enrollments } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, created, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const rows = await db
@@ -49,7 +49,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const body = createSchema.parse(await req.json());

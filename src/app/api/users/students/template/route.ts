@@ -1,12 +1,12 @@
 import type { NextRequest } from 'next/server';
-import { requireStudentManager } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { handleError } from '@/lib/http';
 import { buildStudentTemplate } from '@/lib/excel-io';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const buf = await buildStudentTemplate();

@@ -10,6 +10,7 @@ import { useConfirm } from '@/components/Confirm';
 import { useNotice } from '@/components/Notice';
 import { SensitiveLock } from '@/components/SensitiveLock';
 import { RevealButton } from '@/components/RevealButton';
+import { useAccess } from '@/components/Access';
 import { IconBack, IconEdit, IconTrash } from '@/components/Icons';
 import { formatThaiDate, ageFromThaiDate } from '@/lib/thai';
 import { StatusDialog } from '@/components/StatusDialog';
@@ -139,9 +140,20 @@ function withoutSensitive(g: Dict | undefined, unlocked: boolean): Dict {
 
 const hasAny = (d: Dict) => Object.values(d).some((v) => v !== null && v !== undefined && String(v).trim() !== '');
 
+/** Stands in for RevealButton when the viewer may not reveal. */
+function NoReveal(_: { endpoint: string; field: string; guardianId?: number; label: string }) {
+  return <span className="muted" style={{ fontSize: 12 }}>ไม่มีสิทธิ์ดู</span>;
+}
+
 export default function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  // Moderators reach this page from any student tool; only the ones who were
+  // given the registry may edit, and only students.sensitive may reveal.
+  const { can } = useAccess();
+  const canEdit = can(`/api/users/students/${id}`, 'PATCH');
+  const canReveal = can(`/api/users/students/${id}/reveal`, 'POST');
+  const Reveal = canReveal ? RevealButton : NoReveal;
   const toast = useToast();
   const confirm = useConfirm();
   const notice = useNotice();
@@ -312,10 +324,10 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       <div className="row-between">
         <Link href="/users/students" className="btn btn-ghost btn-sm"><IconBack width={16} height={16} /> กลับรายชื่อ</Link>
         <div className="row" style={{ gap: 8 }}>
-          {!editing && <button className="btn btn-secondary btn-sm" onClick={beginEdit}><IconEdit width={16} height={16} /> แก้ไข</button>}
+          {!editing && canEdit && <button className="btn btn-secondary btn-sm" onClick={beginEdit}><IconEdit width={16} height={16} /> แก้ไข</button>}
           {editing && <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>ยกเลิก</button>}
           {editing && <button className="btn btn-primary btn-sm" onClick={save} disabled={busy}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>}
-          {!editing && <button className="btn btn-danger btn-sm" onClick={archive}><IconTrash width={16} height={16} /> ย้ายไปถังขยะ</button>}
+          {!editing && canEdit && <button className="btn btn-danger btn-sm" onClick={archive}><IconTrash width={16} height={16} /> ย้ายไปถังขยะ</button>}
         </div>
       </div>
 
@@ -518,11 +530,11 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
             <div>
               <div className="muted" style={{ fontSize: 12 }}>เลขบัตรประชาชน</div>
               <div className="mono">{d.citizenIdMasked ?? <span className="muted">-</span>}</div>
-              {d.hasCitizenId && <div style={{ marginTop: 4 }}><RevealButton endpoint={`/api/users/students/${id}/reveal`} field="citizen_id" label="แสดงเลขเต็ม" /></div>}
+              {d.hasCitizenId && <div style={{ marginTop: 4 }}><Reveal endpoint={`/api/users/students/${id}/reveal`} field="citizen_id" label="แสดงเลขเต็ม" /></div>}
             </div>
             <div>
               <div className="muted" style={{ fontSize: 12 }}>รหัสผ่าน</div>
-              {d.hasPassword ? <RevealButton endpoint={`/api/users/students/${id}/reveal`} field="password" label="ดูรหัสผ่าน" /> : <span className="muted">ไม่มี</span>}
+              {d.hasPassword ? <Reveal endpoint={`/api/users/students/${id}/reveal`} field="password" label="ดูรหัสผ่าน" /> : <span className="muted">ไม่มี</span>}
             </div>
           </div>
         ) : (
@@ -565,11 +577,11 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                     <Field label="เลขบัตรประชาชน" value={g?.hasCitizenId ? (
                       <span className="row" style={{ gap: 6 }}>
                         <span className="mono">{g.citizenIdMasked}</span>
-                        <RevealButton endpoint={`/api/users/students/${id}/reveal`} field="citizen_id" guardianId={g.id} label="เลขบัตร" />
+                        <Reveal endpoint={`/api/users/students/${id}/reveal`} field="citizen_id" guardianId={g.id} label="เลขบัตร" />
                       </span>
                     ) : null} />
                     <Field label="รายได้" value={g?.hasIncome ? (
-                      <RevealButton endpoint={`/api/users/students/${id}/reveal`} field="income" guardianId={g.id} label="ดูรายได้" />
+                      <Reveal endpoint={`/api/users/students/${id}/reveal`} field="income" guardianId={g.id} label="ดูรายได้" />
                     ) : null} />
                   </div>
                 ) : (

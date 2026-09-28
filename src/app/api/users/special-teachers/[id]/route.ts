@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { phoneField } from '@/lib/phone';
 import { db } from '@/db';
 import { specialTeachers } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, notFound, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 
@@ -14,7 +14,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /** GET/PATCH/DELETE one อาจารย์พิเศษ. DELETE = ย้ายไปถังขยะ (soft), as everywhere else. */
 export async function GET(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -45,7 +45,7 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -92,7 +92,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);

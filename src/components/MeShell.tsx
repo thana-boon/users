@@ -75,9 +75,11 @@ export function MeShell({
               gated on. */}
           {staffMode && (
             <a
-              href={staffMode === 'admin' ? '/users' : '/users/students'}
+              // A moderator also goes to /users: middleware forwards them to
+              // the first page their grants open.
+              href="/users"
               className="mode-btn"
-              title={staffMode === 'admin' ? 'กลับไปหน้าจัดการข้อมูลนักเรียนและครู' : 'กลับไปหน้าจัดการข้อมูลนักเรียน'}
+              title="กลับไปหน้าจัดการข้อมูล"
             >
               <IconShield width={14} height={14} />
               <span className="hide-mobile">สลับเป็นโหมดผู้ดูแล</span>

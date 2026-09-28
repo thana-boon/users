@@ -9,6 +9,7 @@ import { ImportDialog } from '@/components/ImportDialog';
 import { NewStudentDialog } from '@/components/NewStudentDialog';
 import { PhotoImportDialog } from '@/components/PhotoImportDialog';
 import { PhotoThumb, PhotoLightbox } from '@/components/PhotoThumb';
+import { useAccess } from '@/components/Access';
 
 interface Row {
   id: number; studentCode: string; prefix: string | null;
@@ -26,6 +27,10 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function StudentsPage() {
+  // A moderator sees only the buttons their grants back (the API enforces it).
+  const { can } = useAccess();
+  const canWrite = can('/api/users/students', 'POST');
+  const canExport = can('/api/users/students/export');
   const toast = useToast();
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
@@ -88,13 +93,15 @@ export default function StudentsPage() {
       <div className="row-between">
         <h1 className="page-title">นักเรียน</h1>
         <div className="row" style={{ gap: 8 }}>
-          <Link className="btn btn-ghost btn-sm" href="/users/former-students">นักเรียนเก่า</Link>
-          <Link className="btn btn-ghost btn-sm" href={`/users/class-numbers${grade ? `?grade=${encodeURIComponent(grade)}${classroom ? `&classroom=${encodeURIComponent(classroom)}` : ''}` : ''}`}>จัดเลขที่</Link>
-          <a className="btn btn-ghost btn-sm" href={withBase('/api/users/students/template')}>เทมเพลต</a>
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(true)}><IconUpload width={16} height={16} /> นำเข้า</button>
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowPhotoImport(true)}><IconUpload width={16} height={16} /> นำเข้ารูป</button>
-          <button className="btn btn-secondary btn-sm" onClick={exportXlsx}><IconDownload width={16} height={16} /> ส่งออก</button>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}><IconPlus width={16} height={16} /> เพิ่ม</button>
+          {can('/users/former-students') && <Link className="btn btn-ghost btn-sm" href="/users/former-students">นักเรียนเก่า</Link>}
+          {can('/users/class-numbers') && <Link className="btn btn-ghost btn-sm" href={`/users/class-numbers${grade ? `?grade=${encodeURIComponent(grade)}${classroom ? `&classroom=${encodeURIComponent(classroom)}` : ''}` : ''}`}>จัดเลขที่</Link>}
+          {canWrite && <>
+            <a className="btn btn-ghost btn-sm" href={withBase('/api/users/students/template')}>เทมเพลต</a>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(true)}><IconUpload width={16} height={16} /> นำเข้า</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowPhotoImport(true)}><IconUpload width={16} height={16} /> นำเข้ารูป</button>
+          </>}
+          {canExport && <button className="btn btn-secondary btn-sm" onClick={exportXlsx}><IconDownload width={16} height={16} /> ส่งออก</button>}
+          {canWrite && <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}><IconPlus width={16} height={16} /> เพิ่ม</button>}
         </div>
       </div>
 

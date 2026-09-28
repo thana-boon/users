@@ -3,7 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { academicYears, students, enrollments } from '@/db/schema';
-import { requireStudentManager } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { importPlacements } from '@/lib/services/promotion';
@@ -47,7 +47,7 @@ const fullName = (s: { prefix: string | null; firstName: string; lastName: strin
   `${s.prefix ?? ''}${s.firstName} ${s.lastName}`.trim();
 
 export async function POST(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const body = schema.parse(await req.json());

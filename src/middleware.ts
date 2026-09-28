@@ -9,7 +9,7 @@ import {
   type ResolvedSession,
 } from '@/lib/jwt';
 import { platformHomeUrl, publicOrigin } from '@/lib/platform';
-import { isStudentScopePath, STUDENT_HOME, USERS_STUDENTS } from '@/lib/permissions';
+import { allows, canEnterPerms, homeFor } from '@/lib/permissions';
 
 /**
  * Edge middleware - the first, fail-closed RBAC gate.
@@ -18,9 +18,9 @@ import { isStudentScopePath, STUDENT_HOME, USERS_STUDENTS } from '@/lib/permissi
  *   /users/**            - UI
  *   /api/users/**        - REST API
  *
- * Moderators (`users:students`, no `users:write`) get the student subset only
- * — see isStudentScopePath(). Anything else under /users sends them back to the
- * student registry; anything else under /api/users is a 403.
+ * Moderators (no `users:write`, one or more `users:<capability>` grants) get
+ * exactly what the rule table in lib/permissions.ts opens for those grants.
+ * Any other page sends them to their first allowed page; any other API is 403.
  *
  * Self-service (any valid session — teacher OR student, no `users:write`):
  *   /users/me            - own record (rewritten to src/app/me)
@@ -98,25 +98,24 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(platformHomeUrl({ next: pathname }));
   }
 
-  // A moderator: in for the student pages and their APIs, and nowhere else.
-  // Handled before the admin branch so a moderator is never mistaken for the
-  // plain teacher that branch sends off to /users/me.
+  // A moderator: in for what their grants open, and nowhere else. Handled
+  // before the admin branch so a moderator is never mistaken for the plain
+  // teacher that branch sends off to /users/me. The route guard re-checks the
+  // grants against the database (a revoked one stops working at once).
   if (
     resolved &&
     !hasPermission(resolved.session, USERS_WRITE) &&
-    hasPermission(resolved.session, USERS_STUDENTS)
+    canEnterPerms(resolved.session.permissions)
   ) {
-    if (isStudentScopePath(path)) return upkeep(resolved);
+    const perms = resolved.session.permissions;
+    if (allows(perms, path, req.method)) return upkeep(resolved);
     if (isProtectedApi) {
-      return NextResponse.json(
-        { error: 'ไม่มีสิทธิ์ — บัญชี moderator จัดการได้เฉพาะข้อมูลนักเรียน' },
-        { status: 403 },
-      );
+      return NextResponse.json({ error: 'บัญชีนี้ไม่มีสิทธิ์ใช้งานส่วนนี้' }, { status: 403 });
     }
-    // The dashboard, staff pages, settings…: back to the registry rather than
-    // an error page — it is the only place they have to be.
+    // The dashboard, or a page they were not given: to the first page they
+    // were, rather than an error — that is where they have work to do.
     const origin = publicOrigin(req.headers, req.nextUrl.origin);
-    return NextResponse.redirect(new URL(STUDENT_HOME, origin));
+    return NextResponse.redirect(new URL(homeFor(perms) ?? '/users/me', origin));
   }
 
   if (!resolved || !hasPermission(resolved.session, USERS_WRITE)) {

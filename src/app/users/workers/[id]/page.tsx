@@ -10,6 +10,7 @@ import { useConfirm } from '@/components/Confirm';
 import { useNotice } from '@/components/Notice';
 import { SensitiveLock } from '@/components/SensitiveLock';
 import { RevealButton } from '@/components/RevealButton';
+import { useAccess } from '@/components/Access';
 import { EmploymentStatusDialog } from '@/components/EmploymentStatusDialog';
 import { PhotoCard } from '@/components/PhotoCard';
 import { IconBack, IconTrash } from '@/components/Icons';
@@ -25,6 +26,7 @@ interface Detail {
 export default function WorkerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { can } = useAccess();
   const toast = useToast();
   const confirm = useConfirm();
   const notice = useNotice();
@@ -163,7 +165,7 @@ export default function WorkerDetailPage({ params }: { params: Promise<{ id: str
           <div>
             <div className="muted" style={{ fontSize: 12 }}>เลขบัตรประชาชน</div>
             <div className="mono">{d.citizenIdMasked ?? <span className="muted">ไม่มี</span>}</div>
-            {d.hasCitizenId && <div style={{ marginTop: 4 }}><RevealButton endpoint={`/api/users/workers/${id}/reveal`} field="citizen_id" label="แสดงเลขเต็ม" /></div>}
+            {d.hasCitizenId && can(`/api/users/workers/${id}/reveal`, 'POST') && <div style={{ marginTop: 4 }}><RevealButton endpoint={`/api/users/workers/${id}/reveal`} field="citizen_id" label="แสดงเลขเต็ม" /></div>}
           </div>
           <div style={{ gridColumn: '1 / -1' }}>
             <SensitiveLock

@@ -2,9 +2,10 @@ import type { NextRequest } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { teachers, TEACHER_ROLES } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
-import { ok, notFound, handleError } from '@/lib/http';
+import { teachers } from '@/db/schema';
+import { requireAccess } from '@/lib/rbac';
+import { ok, notFound, forbidden, handleError } from '@/lib/http';
+import { isPrivilegedTeacher } from '@/lib/services/grants';
 import { encrypt } from '@/lib/crypto';
 import { recordAudit } from '@/lib/audit';
 import {
@@ -21,7 +22,7 @@ export const runtime = 'nodejs';
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -40,13 +41,15 @@ const patchSchema = teacherListsSchema.merge(teacherProfileFieldsSchema).extend(
   email: z.string().nullable().optional(),
   subjectGroup: z.string().nullable().optional(),
   gradeTaught: z.string().nullable().optional(),
-  role: z.enum(TEACHER_ROLES).optional(),
+  // No `role`: roles change only on /users/permissions, which also keeps the
+  // moderator grants and the last-admin rule straight. A `role` sent here (the
+  // edit form used to) is stripped by zod and ignored.
   password: z.string().trim().min(1).optional(), // set new password (re-encrypted, trimmed)
   citizenId: z.string().optional(), // set new เลขบัตร ปชช. (blank = keep, per student convention)
 });
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -56,6 +59,13 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       columns: { id: true, teacherCode: true, firstName: true, lastName: true, role: true },
     });
     if (!t) return notFound();
+
+    // A moderator (staff.records) edits the record, not the account: setting a
+    // password would let them sign in as whoever they chose, an admin included.
+    if (!guard.isAdmin && body.password) return forbidden('เปลี่ยนรหัสผ่านครูได้เฉพาะผู้ดูแลระบบ');
+    if (!guard.isAdmin && body.citizenId?.trim() && !guard.caps?.includes('staff.sensitive')) {
+      return forbidden('แก้ไขเลขบัตรประชาชนต้องมีสิทธิ์ข้อมูลลับบุคลากร');
+    }
 
     const { password, citizenId, educations, scoutQualifications, trainings, ...rest } = body;
     // profileColumns fans the nested ที่อยู่ out into its addr_* columns.
@@ -72,21 +82,18 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const lists = { educations, scoutQualifications, trainings };
     await replaceTeacherLists(id, lists);
 
-    const changedRole = body.role && body.role !== t.role;
     await recordAudit({
       session: guard.session,
       action: 'update',
       targetType: 'teacher',
       targetId: id,
       targetLabel: `${t.teacherCode} ${t.firstName} ${t.lastName}`,
-      detail: changedRole
-        ? `เปลี่ยน role: ${t.role} -> ${body.role}`
-        : `แก้ไข: ${[
-            ...Object.keys(rest),
-            ...(password ? ['รหัสผ่าน'] : []),
-            ...(citizenId?.trim() ? ['เลขบัตร ปชช.'] : []),
-            ...describeLists(lists),
-          ].join(', ')}`,
+      detail: `แก้ไข: ${[
+        ...Object.keys(rest),
+        ...(password ? ['รหัสผ่าน'] : []),
+        ...(citizenId?.trim() ? ['เลขบัตร ปชช.'] : []),
+        ...describeLists(lists),
+      ].join(', ')}`,
       req,
     });
     return ok({ ok: true });
@@ -96,7 +103,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -105,6 +112,9 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
       columns: { id: true, teacherCode: true, firstName: true, lastName: true },
     });
     if (!t) return notFound();
+    if (!guard.isAdmin && (await isPrivilegedTeacher(id))) {
+      return forbidden('บัญชีนี้มีสิทธิ์ในระบบ — ให้ผู้ดูแลระบบเป็นผู้ย้ายลงถังขยะ');
+    }
     await db.update(teachers).set({ isArchived: true }).where(eq(teachers.id, id));
     await recordAudit({
       session: guard.session,

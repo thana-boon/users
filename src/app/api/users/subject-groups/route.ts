@@ -3,7 +3,7 @@ import { asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { specialTeachers, subjectGroups, teachers } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, created, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { cleanGroupName, ensureSubjectGroups } from '@/lib/services/subject-groups';
@@ -22,7 +22,7 @@ export const runtime = 'nodejs';
  */
 
 export async function GET(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     // Cheap after the first call, and it means a group typed straight into the
@@ -95,7 +95,7 @@ const createSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const body = createSchema.parse(await req.json());
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
 const reorderSchema = z.object({ ids: z.array(z.number().int().positive()).min(1) });
 
 export async function PUT(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const { ids } = reorderSchema.parse(await req.json());

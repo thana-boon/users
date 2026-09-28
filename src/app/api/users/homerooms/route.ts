@@ -3,7 +3,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { academicYears, enrollments, homeroomTeachers, students, teachers } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { resolveActiveYearId } from '@/lib/services/students';
@@ -38,7 +38,7 @@ export interface HomeroomRoom {
  * teacher list for the picker, saving the page a second round trip.
  */
 export async function GET(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const sp = req.nextUrl.searchParams;
@@ -141,7 +141,7 @@ const saveSchema = z.object({
 
 /** POST — replace the homeroom teacher list of one room (year+grade+classroom). */
 export async function POST(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const body = saveSchema.parse(await req.json());

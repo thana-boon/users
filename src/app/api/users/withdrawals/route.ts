@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { academicYears } from '@/db/schema';
-import { requireStudentManager } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { bulkSetStudentStatus, listExitHistory } from '@/lib/services/students';
@@ -20,7 +20,7 @@ const schema = z.object({
 
 /** GET /api/users/withdrawals — history of withdrawn/จำหน่าย students (newest first). */
 export async function GET(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const data = await listExitHistory('withdrawn');
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
  * type/date/reason + exit year (fed to the future document-export API).
  */
 export async function POST(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const body = schema.parse(await req.json());

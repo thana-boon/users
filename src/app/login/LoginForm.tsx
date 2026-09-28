@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { sessionClient, withBase } from '@/lib/client';
-import { canManageStudentsPerms } from '@/lib/permissions';
+import { canEnterPerms } from '@/lib/permissions';
 
 /**
  * The credential form itself — only ever rendered once the server has
@@ -48,7 +48,7 @@ export default function LoginForm({ next, denied, expired, signedInAs }: LoginFo
       const res = await fetch(withBase('/api/auth/session'));
       const data = await res.json();
       if (!data?.valid) return true; // nothing useful learned; let middleware rule
-      return canManageStudentsPerms(data.user?.permissions);
+      return canEnterPerms(data.user?.permissions);
     } catch {
       return true;
     }

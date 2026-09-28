@@ -220,7 +220,7 @@ export function sessionExpiresAt(session: SessionClaims): number {
  * server-side callers that already import them from '@/lib/jwt' keep working,
  * while a Client Component can import the constant without pulling in `jose`.
  */
-export { USERS_READ, USERS_WRITE, USERS_STUDENTS } from './permissions';
+export { USERS_READ, USERS_WRITE } from './permissions';
 
 function secret(): Uint8Array {
   const s = process.env.JWT_SECRET;

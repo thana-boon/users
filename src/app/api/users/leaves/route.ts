@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { academicYears } from '@/db/schema';
-import { requireStudentManager } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { listLeaves, startLeave } from '@/lib/services/leaves';
@@ -26,7 +26,7 @@ const schema = z.object({
  * `open` (default) = students away right now; `all` includes returned ones.
  */
 export async function GET(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const scope = req.nextUrl.searchParams.get('scope') === 'all' ? 'all' : 'open';
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
  * promoted normally (see schema.ts). Students already on leave are skipped.
  */
 export async function POST(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const body = schema.parse(await req.json());

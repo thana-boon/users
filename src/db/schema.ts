@@ -26,10 +26,14 @@ import { relations } from 'drizzle-orm';
 
 // -- Enums (shared role model across the system) --------------------
 export const STUDENT_ROLES = ['student', 'teacher', 'teacher-admin'] as const;
-// `moderator` = student records only (see USERS_STUDENTS in lib/permissions.ts).
-// Appended, not inserted: Postgres adds an enum value at the end cleanly.
+// `moderator` is a LEGACY value: it was briefly written by a first version of
+// the role page and is kept only so `drizzle-kit push` never has to drop an
+// enum value (a DROP/CREATE TYPE cast fails if any row still holds it). It is
+// never written any more and means the same as `teacher` — what a moderator
+// may do lives in `staff_grants`. Writable roles are WRITABLE_TEACHER_ROLES.
 export const TEACHER_ROLES = ['teacher', 'teacher-admin', 'moderator'] as const;
 export type TeacherRole = (typeof TEACHER_ROLES)[number];
+export const WRITABLE_TEACHER_ROLES = ['teacher', 'teacher-admin'] as const;
 export const ADDRESS_TYPES = ['household', 'birth_place', 'current', 'hometown'] as const;
 export const GUARDIAN_TYPES = ['guardian', 'father', 'mother'] as const;
 
@@ -743,6 +747,21 @@ export const apiKeys = pgTable(
     activeIdx: index('api_keys_active_idx').on(t.isActive),
   }),
 );
+
+// -- staff_grants (what a moderator may do) ------------------------
+// One row per teacher who has been given part of the module without being an
+// admin. `capabilities` holds keys from CAPABILITIES in src/lib/permissions.ts,
+// which is the source of truth for what each one opens. No row (or an admin,
+// whose row is deleted on promotion) = no grants. No SQL default on the array
+// for the same drizzle-push reason as api_keys.scopes.
+export const staffGrants = pgTable('staff_grants', {
+  teacherId: integer('teacher_id')
+    .primaryKey()
+    .references(() => teachers.id, { onDelete: 'cascade' }),
+  capabilities: text('capabilities').array().notNull(),
+  updatedByLabel: varchar('updated_by_label', { length: 128 }),
+  updatedAt: timestamp('updated_at').notNull().defaultNow().$onUpdate(now),
+});
 
 // -- audit_logs (who viewed/changed sensitive data & passwords) ----
 export const auditLogs = pgTable(

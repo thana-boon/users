@@ -2,14 +2,14 @@ import type { NextRequest } from 'next/server';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { auditLogs } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, handleError } from '@/lib/http';
 
 export const runtime = 'nodejs';
 
 /** GET /api/users/audit?action=&targetType=&page= — read the audit trail. */
 export async function GET(req: NextRequest) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const sp = req.nextUrl.searchParams;

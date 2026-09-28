@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { requireStudentManager } from '@/lib/rbac';
+import { requireAccess } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { saveClassNumbers, enrollmentIdsInYear } from '@/lib/services/promotion';
@@ -28,7 +28,7 @@ const schema = z.object({
  * manual edits); the server validates the ids belong to the year and writes.
  */
 export async function POST(req: NextRequest) {
-  const guard = await requireStudentManager(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const body = schema.parse(await req.json());

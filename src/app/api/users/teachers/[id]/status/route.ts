@@ -3,8 +3,9 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { teachers } from '@/db/schema';
-import { requireTeacherAdmin } from '@/lib/rbac';
-import { ok, notFound, badRequest, handleError } from '@/lib/http';
+import { requireAccess } from '@/lib/rbac';
+import { isPrivilegedTeacher } from '@/lib/services/grants';
+import { ok, notFound, badRequest, forbidden, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -24,7 +25,7 @@ const schema = z.object({
  *   active   : คืนสถานะทำงาน (clears exit fields).
  */
 export async function POST(req: NextRequest, { params }: Ctx) {
-  const guard = await requireTeacherAdmin(req);
+  const guard = await requireAccess(req);
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
@@ -40,6 +41,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       columns: { id: true, teacherCode: true, firstName: true, lastName: true },
     });
     if (!t) return notFound();
+    if (!guard.isAdmin && (await isPrivilegedTeacher(id))) {
+      return forbidden('บัญชีนี้มีสิทธิ์ในระบบ — ให้ผู้ดูแลระบบเป็นผู้เปลี่ยนสถานะ');
+    }
 
     const set =
       body.status === 'resigned'

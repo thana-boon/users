@@ -1,115 +1,153 @@
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { and, asc, eq, ilike, ne, or, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { teachers, TEACHER_ROLES, type TeacherRole } from '@/db/schema';
+import { staffGrants, teachers } from '@/db/schema';
 import { requireTeacherAdmin } from '@/lib/rbac';
 import { ok, badRequest, notFound, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
+import { CAPABILITIES, CAPABILITY_KEYS, isCapability, type Capability } from '@/lib/permissions';
 
 export const runtime = 'nodejs';
 
 /**
- * GET   /api/users/permissions?q=&role=  — every active teacher account and its role.
- * PATCH /api/users/permissions           — { teacherId, role }: change one account's role.
+ * GET /api/users/permissions               — the accounts that HOLD access
+ *                                            (admins + moderators), nobody else.
+ * GET /api/users/permissions?candidates=q  — teachers to add, by code / name.
+ * PUT /api/users/permissions               — { teacherId, access, capabilities }
+ *     access 'admin'     → teachers.role = teacher-admin, grants row removed
+ *     access 'moderator' → role = teacher, grants row = capabilities (≥ 1)
+ *     access 'none'      → role = teacher, grants row removed (ถอนสิทธิ์)
  *
- * Admin-only. The role lives on `teachers.role` and is turned into session
- * permissions at login (lib/permissions.ts permissionsForRole), so a change
- * takes effect the next time that person signs in — the page says so.
+ * Admin-only. Two changes are refused because they cannot be undone from this
+ * page: changing your OWN access (an admin who demotes themselves is locked out
+ * of the page that would put it back), and demoting the LAST active admin.
  *
- * Two changes are refused because they cannot be undone from this page:
- * changing your OWN role (an admin demoting themselves is locked out of the
- * very page that would put it back), and demoting the LAST active admin.
+ * The session carries permissions from login, so a new grant shows up at that
+ * person's next sign-in; a removed one stops working at once, because the route
+ * guard re-reads grants from the database on every moderator request.
  */
 
-const patchSchema = z.object({
+const ACCESS = ['admin', 'moderator', 'none'] as const;
+type Access = (typeof ACCESS)[number];
+
+const putSchema = z.object({
   teacherId: z.number().int().positive(),
-  role: z.enum(TEACHER_ROLES),
+  access: z.enum(ACCESS),
+  capabilities: z.array(z.string()).default([]),
 });
 
-const ROLE_LABEL: Record<TeacherRole, string> = {
-  teacher: 'ครู',
-  moderator: 'moderator',
-  'teacher-admin': 'ผู้ดูแลระบบ',
+const capLabel = (c: Capability) => CAPABILITIES.find((x) => x.key === c)!.label;
+
+function describe(access: Access, caps: Capability[]): string {
+  if (access === 'admin') return 'ผู้ดูแลระบบ';
+  if (access === 'none') return 'ไม่มีสิทธิ์';
+  return `moderator (${caps.map(capLabel).join(', ')})`;
+}
+
+const personCols = {
+  id: teachers.id,
+  teacherCode: teachers.teacherCode,
+  prefix: teachers.prefix,
+  firstName: teachers.firstName,
+  lastName: teachers.lastName,
+  subjectGroup: teachers.subjectGroup,
+  role: teachers.role,
+  employmentStatus: teachers.employmentStatus,
+  // Never the base64 itself — see the list routes.
+  hasPhoto: sql<boolean>`${teachers.photoBase64} is not null`,
+  capabilities: staffGrants.capabilities,
+  grantedBy: staffGrants.updatedByLabel,
+  grantedAt: staffGrants.updatedAt,
 };
+
+function shape(r: {
+  role: string;
+  capabilities: string[] | null;
+} & Record<string, unknown>) {
+  const caps = (r.capabilities ?? []).filter(isCapability);
+  const access: Access = r.role === 'teacher-admin' ? 'admin' : caps.length ? 'moderator' : 'none';
+  return { ...r, access, capabilities: access === 'moderator' ? caps : [] };
+}
 
 export async function GET(req: NextRequest) {
   const guard = await requireTeacherAdmin(req);
   if (!guard.ok) return guard.response;
   try {
-    const sp = req.nextUrl.searchParams;
-    const q = (sp.get('q') ?? '').trim();
-    const role = (sp.get('role') ?? '').trim();
+    const candidates = req.nextUrl.searchParams.get('candidates');
 
-    const conds = [eq(teachers.isArchived, false)];
-    if ((TEACHER_ROLES as readonly string[]).includes(role)) {
-      conds.push(eq(teachers.role, role as TeacherRole));
-    }
-    if (q) {
+    if (candidates !== null) {
+      const q = candidates.trim();
+      if (!q) return ok({ rows: [] });
       const like = `%${q}%`;
-      conds.push(
-        or(
-          ilike(teachers.teacherCode, like),
-          ilike(teachers.firstName, like),
-          ilike(teachers.lastName, like),
-          ilike(sql`${teachers.firstName} || ' ' || ${teachers.lastName}`, like),
-        )!,
-      );
+      const rows = await db
+        .select(personCols)
+        .from(teachers)
+        .leftJoin(staffGrants, eq(staffGrants.teacherId, teachers.id))
+        .where(
+          and(
+            eq(teachers.isArchived, false),
+            or(
+              ilike(teachers.teacherCode, like),
+              ilike(teachers.firstName, like),
+              ilike(teachers.lastName, like),
+              ilike(sql`${teachers.firstName} || ' ' || ${teachers.lastName}`, like),
+            ),
+          ),
+        )
+        .orderBy(asc(teachers.teacherCode))
+        .limit(20);
+      return ok({ rows: rows.map(shape) });
     }
 
-    const [rows, counts] = await Promise.all([
-      db
-        .select({
-          id: teachers.id,
-          teacherCode: teachers.teacherCode,
-          prefix: teachers.prefix,
-          firstName: teachers.firstName,
-          lastName: teachers.lastName,
-          subjectGroup: teachers.subjectGroup,
-          role: teachers.role,
-          employmentStatus: teachers.employmentStatus,
-          // Never the base64 itself — see the list routes.
-          hasPhoto: sql<boolean>`${teachers.photoBase64} is not null`,
-        })
-        .from(teachers)
-        .where(and(...conds))
-        // Privileged accounts first: they are what this page is for.
-        .orderBy(
-          sql`case ${teachers.role} when 'teacher-admin' then 0 when 'moderator' then 1 else 2 end`,
-          asc(teachers.teacherCode),
+    const rows = await db
+      .select(personCols)
+      .from(teachers)
+      .leftJoin(staffGrants, eq(staffGrants.teacherId, teachers.id))
+      .where(
+        and(
+          eq(teachers.isArchived, false),
+          or(eq(teachers.role, 'teacher-admin'), sql`${staffGrants.teacherId} is not null`),
         ),
-      db
-        .select({ role: teachers.role, n: sql<number>`count(*)::int` })
-        .from(teachers)
-        .where(eq(teachers.isArchived, false))
-        .groupBy(teachers.role),
-    ]);
+      )
+      .orderBy(
+        sql`case ${teachers.role} when 'teacher-admin' then 0 else 1 end`,
+        asc(teachers.teacherCode),
+      );
 
-    const byRole = Object.fromEntries(TEACHER_ROLES.map((r) => [r, 0])) as Record<TeacherRole, number>;
-    for (const c of counts) byRole[c.role] = c.n;
-
-    return ok({ rows, counts: byRole, me: guard.session.sub });
+    return ok({
+      // A grants row whose keys all went stale is nobody's access — hide it.
+      rows: rows.map(shape).filter((r) => r.access !== 'none'),
+      me: guard.session.sub,
+    });
   } catch (err) {
     return handleError(err);
   }
 }
 
-export async function PATCH(req: NextRequest) {
+export async function PUT(req: NextRequest) {
   const guard = await requireTeacherAdmin(req);
   if (!guard.ok) return guard.response;
   try {
-    const body = patchSchema.parse(await req.json());
+    const body = putSchema.parse(await req.json());
+    const caps = [...new Set(body.capabilities)].filter(isCapability);
+    if (body.capabilities.some((c) => !isCapability(c))) {
+      return badRequest('มีสิทธิ์ที่ระบบไม่รู้จัก');
+    }
+    if (body.access === 'moderator' && caps.length === 0) {
+      return badRequest('เลือกอย่างน้อย 1 สิทธิ์ให้ moderator');
+    }
+
     const t = await db.query.teachers.findFirst({
       where: and(eq(teachers.id, body.teacherId), eq(teachers.isArchived, false)),
       columns: { id: true, teacherCode: true, firstName: true, lastName: true, role: true },
     });
     if (!t) return notFound('ไม่พบบัญชีครูนี้');
-    if (t.role === body.role) return ok({ ok: true, role: t.role });
 
     if (t.teacherCode === guard.session.sub) {
       return badRequest('เปลี่ยนสิทธิ์ของตนเองไม่ได้ — ให้ผู้ดูแลคนอื่นเป็นผู้เปลี่ยน');
     }
-    if (t.role === 'teacher-admin') {
+    if (t.role === 'teacher-admin' && body.access !== 'admin') {
       const [{ n }] = await db
         .select({ n: sql<number>`count(*)::int` })
         .from(teachers)
@@ -124,17 +162,46 @@ export async function PATCH(req: NextRequest) {
       if (n === 0) return badRequest('ต้องมีผู้ดูแลระบบอย่างน้อย 1 คน — เพิ่มผู้ดูแลคนอื่นก่อน');
     }
 
-    await db.update(teachers).set({ role: body.role }).where(eq(teachers.id, t.id));
+    const before = await db.query.staffGrants.findFirst({
+      where: eq(staffGrants.teacherId, t.id),
+      columns: { capabilities: true },
+    });
+    const beforeCaps = (before?.capabilities ?? []).filter(isCapability);
+    const beforeAccess: Access =
+      t.role === 'teacher-admin' ? 'admin' : beforeCaps.length ? 'moderator' : 'none';
+
+    // Keep CAPABILITY_KEYS order so the stored list (and the audit line) reads
+    // the same way the tick-boxes do.
+    const ordered = CAPABILITY_KEYS.filter((c) => caps.includes(c));
+
+    await db.transaction(async (tx) => {
+      // `moderator` in the enum is legacy — normalise it away on any change.
+      const role = body.access === 'admin' ? 'teacher-admin' : 'teacher';
+      if (t.role !== role) await tx.update(teachers).set({ role }).where(eq(teachers.id, t.id));
+
+      if (body.access === 'moderator') {
+        await tx
+          .insert(staffGrants)
+          .values({ teacherId: t.id, capabilities: ordered, updatedByLabel: guard.session.sub })
+          .onConflictDoUpdate({
+            target: staffGrants.teacherId,
+            set: { capabilities: ordered, updatedByLabel: guard.session.sub, updatedAt: new Date() },
+          });
+      } else {
+        await tx.delete(staffGrants).where(inArray(staffGrants.teacherId, [t.id]));
+      }
+    });
+
     await recordAudit({
       session: guard.session,
       action: 'change_role',
       targetType: 'teacher',
       targetId: t.id,
       targetLabel: `${t.teacherCode} ${t.firstName} ${t.lastName}`,
-      detail: `เปลี่ยนสิทธิ์: ${ROLE_LABEL[t.role]} -> ${ROLE_LABEL[body.role]}`,
+      detail: `เปลี่ยนสิทธิ์: ${describe(beforeAccess, beforeCaps)} -> ${describe(body.access, ordered)}`,
       req,
     });
-    return ok({ ok: true, role: body.role });
+    return ok({ ok: true });
   } catch (err) {
     return handleError(err);
   }

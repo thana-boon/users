@@ -10,7 +10,7 @@ import {
   USERS_WRITE,
   type SessionClaims,
 } from '@/lib/jwt';
-import { canManageStudentsPerms } from '@/lib/permissions';
+import { canEnterPerms, capsOf, CAPABILITIES } from '@/lib/permissions';
 import { platformHomeUrl } from '@/lib/platform';
 import { AppShell } from '@/components/AppShell';
 import { SessionGuard } from '@/components/SessionGuard';
@@ -66,12 +66,16 @@ export default async function UsersLayout({
   // permission gets the login page, which can actually explain itself.
   const session = await getSession();
   if (!session) redirect(platformHomeUrl({ next: '/users' }));
-  // A moderator gets in too; middleware has already kept them to the student
-  // pages, and the shell below shows them only that part of the menu.
-  if (!canManageStudentsPerms(session.permissions)) {
+  // A moderator gets in too; middleware has already kept them to the pages
+  // their grants open, and the shell below shows them only those in the menu.
+  if (!canEnterPerms(session.permissions)) {
     redirect('/users/login?next=/users&denied=1');
   }
   const isAdmin = hasPermission(session, USERS_WRITE);
+  const caps = capsOf(session.permissions);
+  const roleLabel = isAdmin
+    ? 'ผู้ดูแลระบบ'
+    : `moderator · ${caps.map((c) => CAPABILITIES.find((x) => x.key === c)!.label).join(', ')}`;
 
   const { photoUrl, initial } = await avatarOf(session);
 
@@ -89,11 +93,11 @@ export default async function UsersLayout({
           <AppShell
             session={{
               name: session.name ?? null,
-              role: isAdmin ? 'ผู้ดูแลระบบ' : 'moderator · ข้อมูลนักเรียน',
+              role: roleLabel,
               photoUrl,
               initial,
             }}
-            isAdmin={isAdmin}
+            perms={session.permissions}
             signedOutUrl={platformHomeUrl()}
           >
             {children}

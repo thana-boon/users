@@ -10,6 +10,7 @@ import { useConfirm } from '@/components/Confirm';
 import { useNotice } from '@/components/Notice';
 import { SensitiveLock } from '@/components/SensitiveLock';
 import { RevealButton } from '@/components/RevealButton';
+import { useAccess } from '@/components/Access';
 import { EmploymentStatusDialog } from '@/components/EmploymentStatusDialog';
 import { PhotoCard } from '@/components/PhotoCard';
 import { IconBack, IconTrash } from '@/components/Icons';
@@ -69,6 +70,11 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
   const [address, setAddress] = useState<HouseholdAddressForm>({});
   // เลขบัตร / รหัสผ่าน start locked on every visit — see SensitiveLock.
   const [unlocked, setUnlocked] = useState(false);
+  // A moderator with staff.records edits the record; citizen ids need
+  // staff.sensitive, and passwords and roles stay with admins (the API
+  // enforces all three — this only hides what would 403).
+  const { isAdmin, can } = useAccess();
+  const canSensitive = can(`/api/users/teachers/${id}/reveal`, 'POST');
 
   function load() {
     api<DetailWithLists>(`/api/users/teachers/${id}`)
@@ -105,7 +111,6 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
         subjectGroup: form.subjectGroup, gradeTaught: form.gradeTaught,
         gender: form.gender, religion: form.religion,
         nationality: form.nationality, ethnicity: form.ethnicity,
-        role: form.role,
         emergencyContactName: form.emergencyContactName,
         emergencyPhone: form.emergencyPhone,
         emergencyRelationship: form.emergencyRelationship,
@@ -179,7 +184,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
                 <h1 className="page-title">{d.prefix}{d.firstName} {d.lastName}</h1>
                 <p className="muted mono" style={{ margin: '4px 0 0' }}>{d.teacherCode}</p>
               </div>
-              <span className={`badge ${d.role === 'teacher-admin' ? 'badge-gold' : d.role === 'moderator' ? 'badge-purple' : 'badge-muted'}`} style={{ padding: '6px 12px' }}>{d.role}</span>
+              {d.role === 'teacher-admin' && <span className="badge badge-gold" style={{ padding: '6px 12px' }}>ผู้ดูแลระบบ</span>}
             </div>
 
             <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -225,15 +230,15 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
             style={{ gridColumn: '1 / -1' }}
           />
           <MonthYearField label="เดือน / ปีที่เข้าทำงาน (พ.ศ.)" value={form.workStart} onChange={setV('workStart')} />
-          <div>
-            <label className="form-label">สิทธิ์ (role)</label>
-            <select className="form-select" value={form.role ?? 'teacher'} onChange={set('role')}>
-              <option value="teacher">teacher</option>
-              <option value="moderator">moderator</option>
-              <option value="teacher-admin">teacher-admin</option>
-            </select>
-            <p className="form-hint">teacher-admin เข้าได้ทุกเมนู · moderator จัดการได้เฉพาะข้อมูลนักเรียน (ดูหน้า “จัดการสิทธิ์”)</p>
-          </div>
+          {isAdmin && (
+            <div>
+              <span className="form-label">สิทธิ์ในระบบ</span>
+              <p className="form-hint" style={{ marginTop: 6 }}>
+                ให้หรือถอนสิทธิ์ผู้ดูแล/moderator ได้ที่หน้า{' '}
+                <Link href="/users/permissions" style={{ color: 'var(--skdw-purple)', textDecoration: 'underline' }}>จัดการสิทธิ์</Link>
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="row" style={{ gap: 8, marginTop: 16 }}>
@@ -263,7 +268,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Sensitive data. ตั้งรหัสผ่านใหม่ lives here rather than with the ordinary
           fields above: it belongs beside ดูรหัสผ่าน, and behind the same lock. */}
-      <div className="card">
+      {(isAdmin || canSensitive) && <div className="card">
         <h2 className="section-title">ข้อมูลอ่อนไหว (การดูจะถูกบันทึก)</h2>
         <div className="grid-2" style={{ gap: 16, alignItems: 'center' }}>
           <div>
@@ -271,10 +276,12 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
             <div className="mono">{d.citizenIdMasked ?? <span className="muted">ไม่มี</span>}</div>
             {d.hasCitizenId && <div style={{ marginTop: 4 }}><RevealButton endpoint={`/api/users/teachers/${id}/reveal`} field="citizen_id" label="แสดงเลขเต็ม" /></div>}
           </div>
-          <div>
-            <div className="muted" style={{ fontSize: 12 }}>รหัสผ่าน</div>
-            {d.hasPassword ? <RevealButton endpoint={`/api/users/teachers/${id}/reveal`} field="password" label="ดูรหัสผ่าน" /> : <span className="muted">ไม่มี</span>}
-          </div>
+          {isAdmin && (
+            <div>
+              <div className="muted" style={{ fontSize: 12 }}>รหัสผ่าน</div>
+              {d.hasPassword ? <RevealButton endpoint={`/api/users/teachers/${id}/reveal`} field="password" label="ดูรหัสผ่าน" /> : <span className="muted">ไม่มี</span>}
+            </div>
+          )}
           <div style={{ gridColumn: '1 / -1' }}>
             <SensitiveLock
               unlocked={unlocked}
@@ -290,15 +297,17 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
                 <label className="form-label">แก้ไขเลขบัตรประชาชน (เว้นว่าง=ไม่เปลี่ยน)</label>
                 <input className="form-input mono" value={form.citizenId ?? ''} onChange={set('citizenId')} placeholder="เลข 13 หลัก" disabled={!unlocked} />
               </div>
-              <div>
-                <label className="form-label">ตั้งรหัสผ่านใหม่ (เว้นว่าง=ไม่เปลี่ยน)</label>
-                <input className="form-input" value={form.password ?? ''} onChange={set('password')} disabled={!unlocked} />
-              </div>
+              {isAdmin && (
+                <div>
+                  <label className="form-label">ตั้งรหัสผ่านใหม่ (เว้นว่าง=ไม่เปลี่ยน)</label>
+                  <input className="form-input" value={form.password ?? ''} onChange={set('password')} disabled={!unlocked} />
+                </div>
+              )}
             </div>
             <p className="form-hint">พิมพ์ค่าใหม่แล้วกด “บันทึก” ด้านล่าง — ระบบจะเข้ารหัสและบันทึกการแก้ไข</p>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* วุฒิการศึกษา / วุฒิลูกเสือ / การอบรม — the same editor the teacher gets
           on /users/me. Saved by the same “บันทึก” as the fields above, so the

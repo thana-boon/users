@@ -3,7 +3,8 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { students, teachers } from '@/db/schema';
 import { getSession } from '@/lib/auth';
-import { hasPermission, idleTimeoutMs, sessionExpiresAt, USERS_STUDENTS, USERS_WRITE } from '@/lib/jwt';
+import { hasPermission, idleTimeoutMs, sessionExpiresAt, USERS_WRITE } from '@/lib/jwt';
+import { canEnterPerms } from '@/lib/permissions';
 import { platformHomeUrl } from '@/lib/platform';
 import { MeShell } from '@/components/MeShell';
 import { SessionGuard } from '@/components/SessionGuard';
@@ -81,7 +82,7 @@ export default async function MeLayout({ children }: { children: React.ReactNode
             staffMode={
               hasPermission(session, USERS_WRITE)
                 ? 'admin'
-                : hasPermission(session, USERS_STUDENTS)
+                : canEnterPerms(session.permissions)
                   ? 'moderator'
                   : null
             }
