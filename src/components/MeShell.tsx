@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { withBase } from '@/lib/client';
+import { confirmLeave } from '@/lib/useUnsavedChanges';
 import { IconLogout, IconShield } from './Icons';
 
 /**
@@ -36,6 +37,8 @@ export function MeShell({
   const [photoFailed, setPhotoFailed] = useState(false);
 
   async function logout() {
+    // Asked BEFORE the session is killed — staying must still leave a way to save.
+    if (!(await confirmLeave())) return;
     await fetch(withBase('/api/auth/logout'), { method: 'POST' });
     window.location.href = signedOutUrl;
   }

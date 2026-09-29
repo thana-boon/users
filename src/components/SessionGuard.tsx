@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { withBase } from '@/lib/client';
+import { discardUnsaved } from '@/lib/useUnsavedChanges';
 
 /**
  * The visible half of the idle timeout.
@@ -110,7 +111,9 @@ export function SessionGuard({
       .finally(() => {
         // An absolute URL from the server (see the prop above), so withBase()
         // has nothing to do with it — that one prefixes root-relative API/asset
-        // paths for the gateway.
+        // paths for the gateway. Unsaved edits cannot be saved on a dead
+        // session anyway, so no "ยังไม่ได้บันทึก" prompt stands in the way.
+        discardUnsaved();
         window.location.href = expiredUrl;
       });
   }, [expiredUrl]);

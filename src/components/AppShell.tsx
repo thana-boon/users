@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { withBase } from '@/lib/client';
+import { confirmLeave } from '@/lib/useUnsavedChanges';
 import { allows, isAdminPerms } from '@/lib/permissions';
 import { AccessProvider } from './Access';
 import {
@@ -234,6 +235,8 @@ export function AppShell({
     : nav.map((n) => (isGroup(n) ? { ...n.children[0], label: n.label, Icon: n.Icon } : n));
 
   async function logout() {
+    // Asked BEFORE the session is killed — staying must still leave a way to save.
+    if (!(await confirmLeave())) return;
     await fetch(withBase('/api/auth/logout'), { method: 'POST' });
     // A full navigation, not router.push(): the portal is its own origin in dev
     // and the Next router cannot leave the app. It also guarantees every page

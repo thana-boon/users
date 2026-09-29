@@ -1,28 +1,38 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useConfirm, type ConfirmOptions } from '@/components/Confirm';
 
 /**
  * "ยังไม่ได้บันทึก" — warn before leaving a page with edits nobody saved.
  *
  * Any number of components can hold unsaved work at once (the page's own form,
  * a วุฒิ row open for editing), so each registers itself here and the guard is
- * up while ANY of them is dirty. Two ways out are covered:
+ * up while ANY of them is dirty. The question is asked in the app's own modal
+ * (Confirm), never window.confirm:
  *
- *  - closing the tab, reloading, or a full navigation (ออกจากระบบ sets
- *    location.href) — the browser's own beforeunload prompt; its wording is the
- *    browser's, not ours.
- *  - clicking a link inside the app — a Next <Link> navigates client-side and
- *    never fires beforeunload, so link clicks are caught in the capture phase,
- *    ahead of React's handler, and asked about first.
+ *  - clicking a link — caught in the capture phase, ahead of React's handler
+ *    (a Next <Link> navigates client-side and never fires beforeunload). The
+ *    click is held, the modal asked, and on "ออกเลย" the same link is clicked
+ *    again with the guard dropped.
+ *  - ออกจากระบบ and the like — {@link confirmLeave} before navigating.
  *
- * The browser's back button is not covered: the App Router has no hook to
- * cancel a popstate, and faking one is worse than the gap.
+ * Closing the tab or reloading still gets the BROWSER's prompt: that is the
+ * only thing a page may show at that moment — no page script can put its own
+ * dialog there. The browser's back button is not covered: the App Router has
+ * no hook to cancel a popstate.
  */
 
-export const UNSAVED_MESSAGE = 'ยังไม่ได้บันทึกข้อมูลที่แก้ไข — ออกจากหน้านี้เลยหรือไม่? ข้อมูลที่แก้จะหายไป';
-
 const dirty = new Set<symbol>();
+let ask: ((o: ConfirmOptions) => Promise<boolean>) | null = null;
+
+const LEAVE: ConfirmOptions = {
+  title: 'ยังไม่ได้บันทึกข้อมูล',
+  message: 'ข้อมูลที่แก้ไขในหน้านี้ยังไม่ได้บันทึก\nถ้าออกจากหน้านี้ ข้อมูลที่แก้จะหายไป',
+  confirmText: 'ออกโดยไม่บันทึก',
+  cancelText: 'อยู่ต่อเพื่อบันทึก',
+  danger: true,
+};
 
 function onBeforeUnload(e: BeforeUnloadEvent) {
   if (!dirty.size) return;
@@ -40,10 +50,14 @@ function onClick(e: MouseEvent) {
   const to = new URL(a.href, location.href);
   // A same-page #anchor is not leaving.
   if (to.pathname === location.pathname && to.search === location.search) return;
-  if (!window.confirm(UNSAVED_MESSAGE)) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
+
+  e.preventDefault();
+  e.stopPropagation();
+  void confirmLeave().then((go) => {
+    // The guard is down now, so this click goes straight through — to the
+    // Next router for a <Link>, to the browser for a plain <a>.
+    if (go) a.click();
+  });
 }
 
 function sync() {
@@ -56,10 +70,31 @@ function sync() {
   }
 }
 
+/**
+ * Ask before leaving, if anything is unsaved. True = go ahead, and the guard is
+ * dropped so the navigation that follows is not asked about a second time.
+ */
+export async function confirmLeave(): Promise<boolean> {
+  if (!dirty.size) return true;
+  const go = ask ? await ask(LEAVE) : true;
+  if (go) discardUnsaved();
+  return go;
+}
+
+/** Drop the guard without asking — for leaving that is not a choice (session expired). */
+export function discardUnsaved() {
+  dirty.clear();
+  sync();
+}
+
 /** Keep the leave-page warning up for as long as `isDirty` is true. */
 export function useUnsavedChanges(isDirty: boolean) {
+  const confirm = useConfirm();
   const id = useRef<symbol>(null);
   if (!id.current) id.current = Symbol('unsaved');
+  useEffect(() => {
+    ask = confirm;
+  }, [confirm]);
   useEffect(() => {
     if (!isDirty) return;
     const me = id.current!;
