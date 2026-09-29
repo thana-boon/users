@@ -54,6 +54,52 @@ export function photoResponse(req: Request, photo: StoredPhoto | undefined | nul
   });
 }
 
+/**
+ * List-table thumbnails (`?thumb=1`). The registry shows 25 faces a page at
+ * 32x40, but bulk-imported photos are full camera JPEGs — shipping and
+ * decoding those on every page turn is what made the table stutter. A small
+ * WebP is resized once per photo and kept in memory, keyed by the content hash
+ * the caller computes in SQL, so a 304 or a cache hit never reads the base64.
+ */
+const THUMB_W = 96;
+const THUMB_H = 120;
+const THUMB_CACHE_MAX = 4000; // ~4 KB each: a whole school fits in ~16 MB
+const thumbCache = new Map<string, Buffer>();
+
+export async function thumbResponse(
+  req: Request,
+  /** md5(photo_base64) from the database, or null when there is no photo. */
+  hash: string | null | undefined,
+  loadPhoto: () => Promise<StoredPhoto | undefined | null>,
+): Promise<Response | null> {
+  if (!hash) return null;
+  const etag = `"t-${hash}"`;
+  const headers = { ETag: etag, 'Cache-Control': CACHE_CONTROL };
+  if (req.headers.get('if-none-match') === etag) return new NextResponse(null, { status: 304, headers });
+
+  let thumb = thumbCache.get(hash);
+  if (!thumb) {
+    const photo = await loadPhoto();
+    if (!photo?.photoBase64) return null;
+    try {
+      const { default: sharp } = await import('sharp');
+      thumb = await sharp(Buffer.from(photo.photoBase64, 'base64'))
+        .rotate()
+        .resize(THUMB_W, THUMB_H, { fit: 'cover' })
+        .webp({ quality: 72 })
+        .toBuffer();
+    } catch {
+      // Something sharp can't read — the original still renders in a browser.
+      return photoResponse(req, photo);
+    }
+    if (thumbCache.size >= THUMB_CACHE_MAX) thumbCache.delete(thumbCache.keys().next().value!);
+    thumbCache.set(hash, thumb);
+  }
+  return new NextResponse(new Uint8Array(thumb), {
+    headers: { ...headers, 'Content-Type': 'image/webp', 'Content-Length': String(thumb.byteLength) },
+  });
+}
+
 /** `data:image/webp;base64,...` — the bulk endpoint's per-row payload. */
 export function photoDataUrl(photo: StoredPhoto): string {
   return `data:${photo.photoMime || 'image/jpeg'};base64,${photo.photoBase64}`;

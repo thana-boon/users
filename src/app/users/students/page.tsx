@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { api, withBase } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { IconSearch, IconPlus, IconDownload, IconUpload } from '@/components/Icons';
@@ -10,6 +11,7 @@ import { NewStudentDialog } from '@/components/NewStudentDialog';
 import { PhotoImportDialog } from '@/components/PhotoImportDialog';
 import { PhotoThumb, PhotoLightbox } from '@/components/PhotoThumb';
 import { useAccess } from '@/components/Access';
+import { rememberStudentList, lastStudentId } from '@/lib/student-list-nav';
 
 interface Row {
   id: number; studentCode: string; prefix: string | null;
@@ -32,25 +34,43 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function StudentsPage() {
+  return (
+    <Suspense fallback={<div className="skeleton" style={{ height: 200 }} />}>
+      <Registry />
+    </Suspense>
+  );
+}
+
+/** What the roll on screen was loaded for — the table is drawn from this, not
+ *  from the filters, so its columns never switch before the new rows arrive. */
+interface View { rows: Row[]; total: number; page: number; inRoom: boolean; q: string }
+
+function Registry() {
   // A moderator sees only the buttons their grants back (the API enforces it).
   const { can } = useAccess();
   const canWrite = can('/api/users/students', 'POST');
   const canExport = can('/api/users/students/export');
   const toast = useToast();
-  const [rows, setRows] = useState<Row[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [q, setQ] = useState('');
-  const [grade, setGrade] = useState('');
-  const [classroom, setClassroom] = useState('');
+  // Filters live in the URL, so Back from a student's record (or a reload)
+  // returns to the same ชั้น/ห้อง/page instead of the whole school.
+  const search = useSearchParams();
+  const [q, setQ] = useState(() => search.get('q') ?? '');
+  const [qd, setQd] = useState(q); // debounced — only typing waits
+  const [grade, setGrade] = useState(() => search.get('grade') ?? '');
+  const [classroom, setClassroom] = useState(() => search.get('classroom') ?? '');
+  const [page, setPage] = useState(() => Math.max(1, Number(search.get('page')) || 1));
+  const [reloadKey, setReloadKey] = useState(0);
+  const [view, setView] = useState<View | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastId, setLastId] = useState<number | null>(null);
   const [meta, setMeta] = useState<Meta>({ grades: [], classrooms: [], rooms: [], roster: [] });
   const [showImport, setShowImport] = useState(false);
   const [showPhotoImport, setShowPhotoImport] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [zoom, setZoom] = useState<Row | null>(null);
   const pageSize = 25;
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const seq = useRef(0);
+  const scrolledToLast = useRef(false);
 
   const loadMeta = useCallback(() => {
     api<Meta>('/api/users/meta')
@@ -58,35 +78,60 @@ export default function StudentsPage() {
       .catch(() => {});
   }, []);
   useEffect(loadMeta, [loadMeta]);
+  useEffect(() => setLastId(lastStudentId()), []);
 
-  const load = useCallback(async (p: number) => {
-    setLoading(true);
-    try {
-      const sp = new URLSearchParams({ page: String(p), pageSize: String(pageSize) });
-      if (q) sp.set('q', q);
-      if (grade) sp.set('grade', grade);
-      if (classroom) sp.set('classroom', classroom);
-      // Registry shows only students still on the roll — จบ/จำหน่าย/ลาออก live
-      // on the นักเรียนเก่า page (/users/former-students).
-      sp.set('status', 'studying');
-      const res = await api<{ data: Row[]; total: number }>(`/api/users/students?${sp}`);
-      setRows(res.data);
-      setTotal(res.total);
-      setPage(p);
-    } catch (e) {
-      toast((e as Error).message, 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [q, grade, classroom, toast]);
-
-  // debounce search + filter changes
   useEffect(() => {
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => load(1), 300);
-    return () => clearTimeout(debounceRef.current);
-  }, [q, grade, classroom, load]);
+    if (q === qd) return;
+    const t = setTimeout(() => { setQd(q); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [q, qd]);
 
+  useEffect(() => {
+    const filters = new URLSearchParams();
+    if (qd) filters.set('q', qd);
+    if (grade) filters.set('grade', grade);
+    if (classroom) filters.set('classroom', classroom);
+    if (page > 1) filters.set('page', String(page));
+    const qs = filters.size ? `?${filters}` : '';
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs}`);
+    rememberStudentList(qs);
+
+    const sp = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    if (qd) sp.set('q', qd);
+    if (grade) sp.set('grade', grade);
+    if (classroom) sp.set('classroom', classroom);
+    // Registry shows only students still on the roll — จบ/จำหน่าย/ลาออก live
+    // on the นักเรียนเก่า page (/users/former-students).
+    sp.set('status', 'studying');
+
+    // A slower earlier request must not overwrite a newer one's rows.
+    const my = ++seq.current;
+    setLoading(true);
+    api<{ data: Row[]; total: number }>(`/api/users/students?${sp}`)
+      .then((res) => {
+        if (my !== seq.current) return;
+        const last = Math.max(1, Math.ceil(res.total / pageSize));
+        // A remembered page past the end (the roll shrank since) → its last page.
+        if (page > last) { setPage(last); return; }
+        setView({ rows: res.data, total: res.total, page, inRoom: !!(grade && classroom), q: qd });
+      })
+      .catch((e) => { if (my === seq.current) toast((e as Error).message, 'error'); })
+      .finally(() => { if (my === seq.current) setLoading(false); });
+  }, [qd, grade, classroom, page, reloadKey, toast]);
+
+  // Coming back from a record: bring the student just viewed into sight, so
+  // the next one down is right there.
+  useEffect(() => {
+    if (scrolledToLast.current || !view || lastId == null) return;
+    scrolledToLast.current = true;
+    if (view.rows.some((r) => r.id === lastId)) {
+      document.getElementById(`stu-${lastId}`)?.scrollIntoView({ block: 'center' });
+    }
+  }, [view, lastId]);
+
+  const rows = view?.rows ?? [];
+  const total = view?.total ?? 0;
+  const inRoom = view?.inRoom ?? false;
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
   // Grade tabs and room tiles come from the roster, so a ชั้น or ห้อง with no
@@ -107,10 +152,14 @@ export default function StudentsPage() {
   function pickGrade(g: string) {
     setGrade(g);
     setClassroom('');
+    setPage(1);
+  }
+  function pickRoom(c: string) {
+    setClassroom(c);
+    setPage(1);
   }
 
   const scope = grade ? (classroom ? `${grade}/${classroom}` : grade) : 'ทุกชั้น';
-  const inRoom = !!(grade && classroom);
 
   function exportXlsx() {
     const sp = new URLSearchParams();
@@ -120,7 +169,8 @@ export default function StudentsPage() {
   }
 
   function refresh() {
-    load(1);
+    setPage(1);
+    setReloadKey((k) => k + 1);
     loadMeta();
   }
 
@@ -166,7 +216,7 @@ export default function StudentsPage() {
 
         {grade && roomTiles.length > 0 && (
           <div className="reg-rooms" role="group" aria-label={`ห้องของ ${grade}`}>
-            <button type="button" className="reg-room reg-room-all" aria-pressed={!classroom} onClick={() => setClassroom('')}>
+            <button type="button" className="reg-room reg-room-all" aria-pressed={!classroom} onClick={() => pickRoom('')}>
               ทุกห้อง
             </button>
             {roomTiles.map((r) => (
@@ -176,7 +226,7 @@ export default function StudentsPage() {
                 className="reg-room"
                 aria-pressed={classroom === r.classroom}
                 aria-label={`ห้อง ${r.classroom} ${r.count} คน`}
-                onClick={() => setClassroom(r.classroom)}
+                onClick={() => pickRoom(r.classroom)}
               >
                 <span className="reg-room-no">{r.classroom}</span>
                 <span className="reg-room-n">{r.count} คน</span>
@@ -191,43 +241,43 @@ export default function StudentsPage() {
         <header className="reg-roll-head">
           <h2 className="reg-scope">{scope}</h2>
           <p className="reg-count">
-            {loading && rows.length === 0 ? 'กำลังโหลด…' : (
+            {!view ? 'กำลังโหลด…' : (
               <>
-                {q ? 'พบ ' : ''}{total.toLocaleString('th-TH')} คน
-                {grade && !classroom && !q && roomTiles.length > 1 && <> ใน {roomTiles.length} ห้อง</>}
+                {view.q ? 'พบ ' : ''}{total.toLocaleString('th-TH')} คน
+                {grade && !classroom && !view.q && roomTiles.length > 1 && <> ใน {roomTiles.length} ห้อง</>}
               </>
             )}
           </p>
         </header>
         <div className="table-wrap">
-          <table className="table reg-table">
+          <table className="table reg-table" aria-busy={loading} data-stale={loading && !!view ? '' : undefined}>
             <thead>
               <tr>
                 {inRoom && <th className="reg-no">เลขที่</th>}
-                <th style={{ width: 48 }}><span className="sr-only">รูป</span></th>
-                <th>ชื่อ-นามสกุล</th><th>ชื่อเล่น</th><th>เพศ</th><th>รหัส</th>
-                {!inRoom && <><th>ชั้น/ห้อง</th><th className="reg-no">เลขที่</th></>}
-                <th><span className="sr-only">เปิดประวัติ</span></th>
+                <th className="reg-c-photo"><span className="sr-only">รูป</span></th>
+                <th>ชื่อ-นามสกุล</th><th className="reg-c-nick">ชื่อเล่น</th><th className="reg-c-gender">เพศ</th><th className="reg-c-code">รหัส</th>
+                {!inRoom && <><th className="reg-c-room">ชั้น/ห้อง</th><th className="reg-no">เลขที่</th></>}
+                <th className="reg-c-open"><span className="sr-only">เปิดประวัติ</span></th>
               </tr>
             </thead>
             <tbody>
-              {loading && rows.length === 0 &&
+              {!view &&
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i}><td colSpan={8}><div className="skeleton" style={{ height: 20 }} /></td></tr>
                 ))}
-              {!loading && rows.length === 0 && (
+              {view && rows.length === 0 && (
                 <tr><td colSpan={8} className="reg-empty">
-                  {q
-                    ? <>ไม่มีนักเรียนตรงกับ “{q}” ใน{scope} <button type="button" className="reg-linkbtn" onClick={() => setQ('')}>ล้างคำค้น</button></>
+                  {view.q
+                    ? <>ไม่มีนักเรียนตรงกับ “{view.q}” ใน{scope} <button type="button" className="reg-linkbtn" onClick={() => setQ('')}>ล้างคำค้น</button></>
                     : <>ยังไม่มีนักเรียนใน{scope}{canWrite && <> <button type="button" className="reg-linkbtn" onClick={() => setShowNew(true)}>เพิ่มนักเรียน</button></>}</>}
                 </td></tr>
               )}
               {rows.map((r) => (
-                <tr key={r.id}>
+                <tr key={r.id} id={`stu-${r.id}`} className={r.id === lastId ? 'reg-row-last' : undefined}>
                   {inRoom && <td className="reg-no mono">{r.classNumber ?? '–'}</td>}
                   <td style={{ paddingTop: 6, paddingBottom: 6 }}>
                     <PhotoThumb
-                      src={r.hasPhoto ? `/api/users/students/${r.id}/photo` : null}
+                      src={r.hasPhoto ? `/api/users/students/${r.id}/photo?thumb=1` : null}
                       initials={(r.firstName[0] ?? '') + (r.lastName[0] ?? '')}
                       alt={`${r.firstName} ${r.lastName}`}
                       onClick={() => setZoom(r)}
@@ -263,8 +313,8 @@ export default function StudentsPage() {
           <div className="row-between reg-pager">
             <span className="muted">หน้า {page} จาก {pages}</span>
             <div className="row" style={{ gap: 8 }}>
-              <button className="btn btn-ghost btn-sm" disabled={page <= 1 || loading} onClick={() => load(page - 1)}>ก่อนหน้า</button>
-              <button className="btn btn-ghost btn-sm" disabled={page >= pages || loading} onClick={() => load(page + 1)}>ถัดไป</button>
+              <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>ก่อนหน้า</button>
+              <button className="btn btn-ghost btn-sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>ถัดไป</button>
             </div>
           </div>
         )}

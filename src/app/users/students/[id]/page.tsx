@@ -11,6 +11,7 @@ import { useNotice } from '@/components/Notice';
 import { SensitiveLock } from '@/components/SensitiveLock';
 import { RevealButton } from '@/components/RevealButton';
 import { useAccess } from '@/components/Access';
+import { studentListHref, rememberLastStudent } from '@/lib/student-list-nav';
 import { IconBack, IconEdit, IconTrash } from '@/components/Icons';
 import { formatThaiDate, ageFromThaiDate } from '@/lib/thai';
 import { StatusDialog } from '@/components/StatusDialog';
@@ -165,6 +166,12 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const [statusMode, setStatusMode] = useState<null | 'withdrawn'>(null);
   const [reinstateOpen, setReinstateOpen] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
+  // Back to the roll as it was left (filters + page), not a reset one.
+  const [listHref, setListHref] = useState('/users/students');
+  useEffect(() => {
+    setListHref(studentListHref());
+    rememberLastStudent(Number(id));
+  }, [id]);
 
   // Editable form state (nested). Kept as string-only dicts so the PATCH payload
   // stays clean (no id/studentId numbers leaking into the child collections).
@@ -307,7 +314,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     try {
       await api(`/api/users/students/${id}`, { method: 'DELETE' });
       toast('ย้ายไปถังขยะแล้ว', 'success');
-      router.push('/users/students');
+      router.push(listHref);
     } catch (e) {
       toast((e as Error).message, 'error');
     }
@@ -322,7 +329,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div className="row-between">
-        <Link href="/users/students" className="btn btn-ghost btn-sm"><IconBack width={16} height={16} /> กลับรายชื่อ</Link>
+        <Link href={listHref} className="btn btn-ghost btn-sm"><IconBack width={16} height={16} /> กลับรายชื่อ</Link>
         <div className="row" style={{ gap: 8 }}>
           {!editing && canEdit && <button className="btn btn-secondary btn-sm" onClick={beginEdit}><IconEdit width={16} height={16} /> แก้ไข</button>}
           {editing && <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>ยกเลิก</button>}

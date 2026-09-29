@@ -1,11 +1,11 @@
 import type { NextRequest } from 'next/server';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { students } from '@/db/schema';
 import { requireAccess } from '@/lib/rbac';
 import { ok, badRequest, notFound, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
-import { photoResponse } from '@/lib/services/photos';
+import { photoResponse, thumbResponse } from '@/lib/services/photos';
 
 export const runtime = 'nodejs';
 
@@ -26,10 +26,18 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   if (!guard.ok) return guard.response;
   try {
     const id = Number((await params).id);
-    const s = await db.query.students.findFirst({
+    const load = () => db.query.students.findFirst({
       where: eq(students.id, id),
       columns: { photoBase64: true, photoMime: true },
     });
+    if (req.nextUrl.searchParams.has('thumb')) {
+      const [row] = await db
+        .select({ hash: sql<string | null>`md5(${students.photoBase64})` })
+        .from(students)
+        .where(eq(students.id, id));
+      return (await thumbResponse(req, row?.hash, load)) ?? notFound('ยังไม่มีรูปภาพ');
+    }
+    const s = await load();
     // Same ETag/304 contract as the public feed. The registry table renders 25
     // thumbnails a page; with `no-cache` and no validator every page turn
     // re-sent ~1 MB of images and re-decoded that much base64 server-side.

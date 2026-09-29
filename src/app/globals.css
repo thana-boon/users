@@ -364,6 +364,7 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 
 .reg-grades {
   display: flex; gap: var(--space-1);
+  min-height: 48px; /* holds its row while the grade counts load */
   border-bottom: 1px solid var(--skdw-border);
   overflow-x: auto; scrollbar-width: thin;
 }
@@ -405,7 +406,21 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 }
 .reg-scope { font-size: var(--text-2xl); font-weight: 700; color: var(--skdw-purple); letter-spacing: -0.01em; }
 .reg-count { margin: 0; font-size: var(--text-md); color: var(--skdw-muted); font-variant-numeric: tabular-nums; }
-.reg-table .reg-no { width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+/* Fixed layout: every page of the roll keeps the same column widths, instead
+   of the browser re-measuring (and shifting) them on each set of 25 names. */
+.reg-table { table-layout: fixed; min-width: 760px; }
+.reg-table .reg-c-photo { width: 64px; }
+.reg-table .reg-c-nick { width: 120px; }
+.reg-table .reg-c-gender { width: 72px; }
+.reg-table .reg-c-code { width: 112px; }
+.reg-table .reg-c-room { width: 96px; }
+.reg-table .reg-c-open { width: 104px; }
+/* The previous rows stay put, dimmed, while the next set loads — no collapse. */
+.reg-table tbody { transition: opacity var(--transition-fast); }
+.reg-table[data-stale] tbody { opacity: 0.55; }
+/* The student opened last, so "the next one" is easy to spot on return. */
+.reg-table tbody tr.reg-row-last td { background: var(--skdw-purple-pale); }
+.reg-table .reg-no { width: 72px; text-align: right; font-variant-numeric: tabular-nums; }
 .reg-table td.reg-no { font-weight: 600; color: var(--skdw-purple); }
 .reg-name { font-weight: 500; }
 .reg-name:hover { color: var(--skdw-purple); text-decoration: underline; text-underline-offset: 3px; }

@@ -29,7 +29,7 @@ export function PhotoThumb({
       }}
     >
       {src
-        ? <img src={withBase(src)} alt={alt} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ? <img src={withBase(src)} alt={alt} loading="lazy" decoding="async" width={32} height={40} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         : <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--skdw-purple)' }}>{initials || '—'}</span>}
     </div>
   );
