@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { api, withBase } from '@/lib/client';
+import { api, jsonBody, withBase } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 import { IconSearch, IconPlus, IconDownload, IconUpload } from '@/components/Icons';
 import { ImportDialog } from '@/components/ImportDialog';
@@ -18,6 +18,7 @@ interface Row {
   firstName: string; lastName: string; nickname: string | null;
   gender: string | null; status: string;
   gradeLevel: string | null; classroom: string | null; classNumber: string | null;
+  enrollmentId: number;
   hasPhoto: boolean;
   /** Leave type when the student is พักการเรียน right now; status stays 'studying'. */
   onLeave: string | null;
@@ -68,7 +69,9 @@ function Registry() {
   const [showPhotoImport, setShowPhotoImport] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [zoom, setZoom] = useState<Row | null>(null);
-  const pageSize = 25;
+  // A room is a roll book: the whole class on one page, so a clashing เลขที่
+  // is always in sight.
+  const pageSize = grade && classroom ? 100 : 25;
   const seq = useRef(0);
   const scrolledToLast = useRef(false);
 
@@ -117,7 +120,7 @@ function Registry() {
       })
       .catch((e) => { if (my === seq.current) toast((e as Error).message, 'error'); })
       .finally(() => { if (my === seq.current) setLoading(false); });
-  }, [qd, grade, classroom, page, reloadKey, toast]);
+  }, [qd, grade, classroom, page, pageSize, reloadKey, toast]);
 
   // Coming back from a record: bring the student just viewed into sight, so
   // the next one down is right there.
@@ -133,6 +136,17 @@ function Registry() {
   const total = view?.total ?? 0;
   const inRoom = view?.inRoom ?? false;
   const pages = Math.max(1, Math.ceil(total / pageSize));
+
+  // เลขที่ held by more than one student of the same room, among the rows shown.
+  const clashes = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const r of rows) if (r.classNumber) seen.set(seatKey(r), (seen.get(seatKey(r)) ?? 0) + 1);
+    return new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k));
+  }, [rows]);
+
+  function numberSaved(id: number, classNumber: string | null) {
+    setView((v) => v && { ...v, rows: v.rows.map((r) => (r.id === id ? { ...r, classNumber } : r)) });
+  }
 
   // Grade tabs and room tiles come from the roster, so a ชั้น or ห้อง with no
   // one on the roll never shows up to be picked.
@@ -274,7 +288,11 @@ function Registry() {
               )}
               {rows.map((r) => (
                 <tr key={r.id} id={`stu-${r.id}`} className={r.id === lastId ? 'reg-row-last' : undefined}>
-                  {inRoom && <td className="reg-no mono">{r.classNumber ?? '–'}</td>}
+                  {inRoom && <td className="reg-no mono">
+                      {canWrite
+                        ? <ClassNumberInput row={r} clash={!!r.classNumber && clashes.has(seatKey(r))} onSaved={numberSaved} />
+                        : r.classNumber ?? '–'}
+                    </td>}
                   <td style={{ paddingTop: 6, paddingBottom: 6 }}>
                     <PhotoThumb
                       src={r.hasPhoto ? `/api/users/students/${r.id}/photo?thumb=1` : null}
@@ -301,7 +319,11 @@ function Registry() {
                   <td className="mono muted">{r.studentCode}</td>
                   {!inRoom && <>
                     <td>{r.gradeLevel ? `${r.gradeLevel}${r.classroom ? `/${r.classroom}` : ''}` : <span className="muted">–</span>}</td>
-                    <td className="reg-no mono">{r.classNumber ?? '–'}</td>
+                    <td className="reg-no mono">
+                      {canWrite
+                        ? <ClassNumberInput row={r} clash={!!r.classNumber && clashes.has(seatKey(r))} onSaved={numberSaved} />
+                        : r.classNumber ?? '–'}
+                    </td>
                   </>}
                   <td style={{ textAlign: 'right' }}><Link href={`/users/students/${r.id}`} className="chip">ดู/แก้ไข</Link></td>
                 </tr>
@@ -350,5 +372,73 @@ function Registry() {
         />
       )}
     </div>
+  );
+}
+
+const seatKey = (r: Row) => `${r.gradeLevel ?? ''}/${r.classroom ?? ''}#${r.classNumber}`;
+
+/** เลขที่ typed straight into the roll: saved on Enter (which drops to the
+ *  next student's box) or on leaving the box; Esc puts the old number back. */
+function ClassNumberInput({ row, clash, onSaved }: {
+  row: Row; clash: boolean; onSaved: (id: number, classNumber: string | null) => void;
+}) {
+  const toast = useToast();
+  const [draft, setDraft] = useState(row.classNumber ?? '');
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setDraft(row.classNumber ?? ''), [row.classNumber]);
+
+  async function commit() {
+    const v = draft.trim();
+    if (v === (row.classNumber ?? '')) return;
+    if (v && !/^\d{1,3}$/.test(v)) {
+      toast('เลขที่ต้องเป็นตัวเลข', 'error');
+      setDraft(row.classNumber ?? '');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api<{ classNumber: string | null; duplicates: { prefix: string | null; firstName: string; lastName: string }[] }>(
+        `/api/users/students/${row.id}/class-number`,
+        jsonBody({ enrollmentId: row.enrollmentId, classNumber: v || null }),
+      );
+      setDraft(res.classNumber ?? '');
+      onSaved(row.id, res.classNumber);
+      if (res.duplicates.length) {
+        const who = res.duplicates.map((d) => `${d.prefix ?? ''}${d.firstName} ${d.lastName}`).join(', ');
+        toast(`เลขที่ ${res.classNumber} ซ้ำกับ ${who} ในห้องเดียวกัน`, 'error');
+      }
+    } catch (e) {
+      toast((e as Error).message, 'error');
+      setDraft(row.classNumber ?? '');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <input
+      className={`form-input mono reg-no-input${clash ? ' error' : ''}`}
+      inputMode="numeric"
+      maxLength={3}
+      value={draft}
+      disabled={saving}
+      aria-label={`เลขที่ของ ${row.firstName} ${row.lastName}`}
+      aria-invalid={clash || undefined}
+      title={clash ? 'เลขที่ซ้ำกับนักเรียนอีกคนในห้อง' : undefined}
+      onChange={(e) => setDraft(e.target.value.replace(/\D/g, ''))}
+      onFocus={(e) => e.target.select()}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const boxes = [...document.querySelectorAll<HTMLInputElement>('.reg-no-input')];
+          const next = boxes[boxes.indexOf(e.currentTarget) + 1];
+          if (next) next.focus(); else e.currentTarget.blur();
+        } else if (e.key === 'Escape') {
+          setDraft(row.classNumber ?? '');
+          requestAnimationFrame(() => (e.target as HTMLInputElement).blur());
+        }
+      }}
+    />
   );
 }

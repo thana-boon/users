@@ -422,6 +422,14 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 .reg-table tbody tr.reg-row-last td { background: var(--skdw-purple-pale); }
 .reg-table .reg-no { width: 72px; text-align: right; font-variant-numeric: tabular-nums; }
 .reg-table td.reg-no { font-weight: 600; color: var(--skdw-purple); }
+.reg-no-input {
+  width: 100%; padding: 4px 8px; text-align: right;
+  font-weight: 600; color: var(--skdw-purple);
+  background: transparent; border-color: transparent;
+}
+.reg-no-input:hover { border-color: var(--skdw-border); }
+.reg-no-input:focus { background: var(--skdw-white); border-color: var(--skdw-purple-light); }
+.reg-no-input.error { color: var(--color-error); background: var(--color-error-bg); border-color: var(--color-error); }
 .reg-name { font-weight: 500; }
 .reg-name:hover { color: var(--skdw-purple); text-decoration: underline; text-underline-offset: 3px; }
 .reg-empty { text-align: center; padding: 48px 16px !important; color: var(--skdw-muted); }
