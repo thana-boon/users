@@ -32,6 +32,15 @@ export function roomRank(col: AnyColumn | SQL): SQL<number> {
   return sql<number>`coalesce(nullif(regexp_replace(${col}, '\\D', '', 'g'), '')::int, 999)`;
 }
 
+/**
+ * เลขที่ as a number, so a room reads 1, 2 … 10 by the number on the roll
+ * rather than by seq_order, which imports and manual edits leave out of step.
+ * Blank or non-numeric เลขที่ is NULL — put it last with `nulls last`.
+ */
+export function classNumberRank(col: AnyColumn | SQL): SQL<number> {
+  return sql<number>`(case when ${col} ~ '^[0-9]+$' then ${col}::int end) nulls last`;
+}
+
 /** Tie-breaker for rooms that share a number (e.g. '1/พิเศษ') or have none. */
 export function roomText(col: AnyColumn | SQL): SQL<string> {
   return sql<string>`coalesce(${col}, '')`;

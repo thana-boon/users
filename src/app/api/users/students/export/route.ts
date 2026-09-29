@@ -7,7 +7,7 @@ import { handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { buildStudentExport, type StudentExportRow } from '@/lib/excel-io';
 import { resolveActiveYearId } from '@/lib/services/students';
-import { gradeRank, roomRank, roomText } from '@/lib/grade-sql';
+import { gradeRank, roomRank, roomText, classNumberRank } from '@/lib/grade-sql';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
         gradeRank(enrollments.gradeLevel),
         roomRank(enrollments.classroom),
         roomText(enrollments.classroom),
+        classNumberRank(enrollments.classNumber),
         enrollments.seqOrder,
         students.studentCode,
       );

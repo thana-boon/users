@@ -3,7 +3,7 @@
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, withBase } from '@/lib/client';
+import { api, jsonBody, withBase } from '@/lib/client';
 import { cropToFace, preloadFaceDetector } from '@/lib/face-crop';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
@@ -139,6 +139,10 @@ function withoutSensitive(g: Dict | undefined, unlocked: boolean): Dict {
   return rest;
 }
 
+interface Classmate { id: number; prefix: string | null; firstName: string; lastName: string; classNumber: string | null }
+/** "07" and "7" are the same seat — the API stores the second. */
+const seat = (v: string | null | undefined) => (v && /^\d+$/.test(v.trim()) ? String(Number(v)) : (v ?? '').trim());
+
 const hasAny = (d: Dict) => Object.values(d).some((v) => v !== null && v !== undefined && String(v).trim() !== '');
 
 /** Stands in for RevealButton when the viewer may not reveal. */
@@ -183,6 +187,9 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const [sensitive, setSensitive] = useState<{ citizenId: string; password: string }>({ citizenId: '', password: '' });
   // เลขบัตร / รหัสผ่าน / รายได้ผู้ปกครอง start locked on every edit — see SensitiveLock.
   const [unlocked, setUnlocked] = useState(false);
+  // เลขที่ is saved through its own endpoint, checked against the rest of the room.
+  const [classNo, setClassNo] = useState('');
+  const [classmates, setClassmates] = useState<Classmate[]>([]);
 
   function load() {
     api<Detail>(`/api/users/students/${id}`).then((x) => setD(x)).catch((e) => setError(e.message));
@@ -223,6 +230,18 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     setGuards(gm);
     setSensitive({ citizenId: '', password: '' });
     setUnlocked(false);
+    const en = d.enrollments.find((e) => e.academicYear.isActive) ?? d.enrollments[0];
+    setClassNo(en?.classNumber ?? '');
+    setClassmates([]);
+    if (en?.gradeLevel && en.classroom) {
+      const sp = new URLSearchParams({
+        yearId: String(en.academicYearId), grade: en.gradeLevel, classroom: en.classroom,
+        status: 'studying', pageSize: '100',
+      });
+      api<{ data: Classmate[] }>(`/api/users/students?${sp}`)
+        .then((res) => setClassmates(res.data.filter((c) => c.id !== d.id)))
+        .catch(() => {});
+    }
     setEditing(true);
   }
 
@@ -238,8 +257,24 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const guardByType = Object.fromEntries(d.guardians.map((g) => [g.guardianType, g]));
   const photoUrl = d.hasPhoto ? withBase(`/api/users/students/${id}/photo?v=${photoVer}`) : null;
   const initials = (d.firstName?.[0] ?? '') + (d.lastName?.[0] ?? '');
+  const classNoBad = classNo.trim() !== '' && !/^\d{1,3}$/.test(classNo.trim());
+  const clashes = classNo.trim() && !classNoBad
+    ? classmates.filter((c) => seat(c.classNumber) === seat(classNo))
+    : [];
+  const clashNames = clashes.map((c) => `${c.prefix ?? ''}${c.firstName} ${c.lastName}`).join(', ');
+  const classNoChanged = !!activeEnrollment && seat(classNo) !== seat(activeEnrollment.classNumber);
 
   async function save() {
+    if (classNoChanged && classNoBad) {
+      notice({ kind: 'error', message: 'เลขที่ต้องเป็นตัวเลข 1–3 หลัก' });
+      return;
+    }
+    if (classNoChanged && clashes.length && !(await confirm({
+      title: 'เลขที่ซ้ำ',
+      message: `เลขที่ ${seat(classNo)} ซ้ำกับ ${clashNames} ในห้องเดียวกัน — บันทึกต่อหรือไม่?`,
+      confirmText: 'บันทึกทั้งที่ซ้ำ',
+      danger: true,
+    }))) return;
     setBusy(true);
     try {
       const payload = {
@@ -258,6 +293,12 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           .map((t) => ({ ...withoutSensitive(guards[t], unlocked), guardianType: t })),
       };
       await api(`/api/users/students/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      if (classNoChanged) {
+        await api(`/api/users/students/${id}/class-number`, jsonBody({
+          enrollmentId: activeEnrollment.id,
+          classNumber: classNo.trim() || null,
+        }));
+      }
       setEditing(false);
       setUnlocked(false);
       load();
@@ -510,21 +551,42 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* Current enrollment — read-only. Class/room moves go through เลื่อนชั้น/ย้ายห้อง;
-          เลขที่ through จัดเลขที่. Editing here is intentionally disabled. */}
+      {/* Current enrollment. Class/room moves go through เลื่อนชั้น/ย้ายห้อง; only
+          เลขที่ is editable here, checked against the rest of the room. */}
       {editing && (
         <div className="card">
-          <h2 className="section-title">ชั้น / ห้อง (ปีปัจจุบัน)</h2>
-          <div className="row" style={{ gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span className="badge badge-purple" style={{ fontSize: 13, padding: '6px 12px' }}>
-              {activeEnrollment?.gradeLevel ?? '-'} / ห้อง {activeEnrollment?.classroom ?? '-'} / เลขที่ {activeEnrollment?.classNumber ?? '-'}
+          <h2 className="section-title">ชั้น / ห้อง / เลขที่ (ปีปัจจุบัน)</h2>
+          <div className="row" style={{ gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <span className="badge badge-purple" style={{ fontSize: 13, padding: '6px 12px', marginTop: 28 }}>
+              {activeEnrollment?.gradeLevel ?? '-'} / ห้อง {activeEnrollment?.classroom ?? '-'}
             </span>
-            <span className="muted" style={{ fontSize: 13 }}>
-              แก้ไขชั้น/ห้องที่นี่ไม่ได้ — ย้ายที่หน้า{' '}
-              <Link href="/users/promotions" style={{ color: 'var(--skdw-purple)', textDecoration: 'underline' }}>เลื่อนชั้น / ย้ายห้อง</Link>{' '}
-              และแก้เลขที่ที่หน้า{' '}
-              <Link href="/users/class-numbers" style={{ color: 'var(--skdw-purple)', textDecoration: 'underline' }}>จัดเลขที่</Link>
-            </span>
+            {activeEnrollment && (
+              <div style={{ width: 120 }}>
+                <label className="form-label" htmlFor="class-no">เลขที่</label>
+                <input
+                  id="class-no"
+                  className={`form-input mono${classNoBad || clashes.length ? ' error' : ''}`}
+                  inputMode="numeric"
+                  maxLength={3}
+                  value={classNo}
+                  onChange={(e) => setClassNo(e.target.value.replace(/\D/g, ''))}
+                  aria-invalid={classNoBad || clashes.length > 0 || undefined}
+                  aria-describedby="class-no-msg"
+                />
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 220, marginTop: 28, fontSize: 13 }} id="class-no-msg">
+              {clashes.length > 0 ? (
+                <span style={{ color: 'var(--color-error)' }}>
+                  เลขที่ {seat(classNo)} ซ้ำกับ {clashNames} ในห้องเดียวกัน
+                </span>
+              ) : (
+                <span className="muted">
+                  ย้ายชั้น/ห้องที่หน้า{' '}
+                  <Link href="/users/promotions" style={{ color: 'var(--skdw-purple)', textDecoration: 'underline' }}>เลื่อนชั้น / ย้ายห้อง</Link>
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}

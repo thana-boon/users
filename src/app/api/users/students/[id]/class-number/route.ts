@@ -18,9 +18,8 @@ const schema = z.object({
 
 /**
  * POST /api/users/students/[id]/class-number — set one student's เลขที่ from
- * the registry. A number already held by someone else in the same room is
- * still saved (two rows swapping numbers pass through a clash), but the
- * clashing classmates come back so the roll can flag them.
+ * their record. The page warns about a clash before saving; the classmates
+ * still holding the number come back so it can say who to fix next.
  */
 export async function POST(req: NextRequest, { params }: Ctx) {
   const guard = await requireAccess(req);
@@ -47,10 +46,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     if (!row) return notFound();
 
     if (row.classNumber !== classNumber) {
-      // The roll is ordered by seqOrder, so it follows the number.
       await db
         .update(enrollments)
-        .set(classNumber ? { classNumber, seqOrder: Number(classNumber) } : { classNumber })
+        .set({ classNumber })
         .where(eq(enrollments.id, body.enrollmentId));
       await recordAudit({
         session: guard.session,

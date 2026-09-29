@@ -9,7 +9,7 @@ import { ok, created, handleError, badRequest } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { resolveActiveYearId, upsertStudentFull } from '@/lib/services/students';
 import { openLeavesFor } from '@/lib/services/leaves';
-import { gradeRank, roomRank, roomText } from '@/lib/grade-sql';
+import { gradeRank, roomRank, roomText, classNumberRank } from '@/lib/grade-sql';
 import type { ParsedStudent } from '@/lib/excel-map';
 
 export const runtime = 'nodejs';
@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
           gradeRank(enrollments.gradeLevel),
           roomRank(enrollments.classroom),
           roomText(enrollments.classroom),
+          classNumberRank(enrollments.classNumber),
           enrollments.seqOrder,
         )
         .limit(pageSize)
