@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { enrollments, teachers, specialTeachers, academicYears } from '@/db/schema';
+import { enrollments, students, teachers, specialTeachers, academicYears } from '@/db/schema';
 import { listActiveNames } from '@/lib/services/subject-groups';
 import { requireAccess } from '@/lib/rbac';
 import { ok, handleError } from '@/lib/http';
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const yearId = sp.get('yearId') ? Number(sp.get('yearId')) : await resolveActiveYearId();
 
-    const [grades, rooms, pairs, subjects, specialSubjects, managedGroups, years] = await Promise.all([
+    const [grades, rooms, pairs, roster, subjects, specialSubjects, managedGroups, years] = await Promise.all([
       db
         .selectDistinct({ v: enrollments.gradeLevel })
         .from(enrollments)
@@ -42,6 +42,26 @@ export async function GET(req: NextRequest) {
             isNotNull(enrollments.classroom),
           ),
         ),
+      // Headcount per (ชั้น, ห้อง) for the students the registry lists — on the
+      // roll and not archived — so its room filter skips rooms nobody is in.
+      // A grade with unroomed students still counts them (classroom null).
+      db
+        .select({
+          gradeLevel: enrollments.gradeLevel,
+          classroom: enrollments.classroom,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(enrollments)
+        .innerJoin(students, eq(students.id, enrollments.studentId))
+        .where(
+          and(
+            eq(enrollments.academicYearId, yearId),
+            eq(students.status, 'studying'),
+            eq(students.isArchived, false),
+            isNotNull(enrollments.gradeLevel),
+          ),
+        )
+        .groupBy(enrollments.gradeLevel, enrollments.classroom),
       db
         .selectDistinct({ v: teachers.subjectGroup })
         .from(teachers)
@@ -70,6 +90,9 @@ export async function GET(req: NextRequest) {
         .filter((r) => r.gradeLevel && r.classroom)
         .map((r) => ({ gradeLevel: r.gradeLevel!, classroom: r.classroom! }))
         .sort((a, b) => compareGrades(a.gradeLevel, b.gradeLevel) || byRoom(a.classroom, b.classroom)),
+      roster: roster
+        .map((r) => ({ gradeLevel: r.gradeLevel!, classroom: r.classroom, count: Number(r.count) }))
+        .sort((a, b) => compareGrades(a.gradeLevel, b.gradeLevel) || byRoom(a.classroom ?? '', b.classroom ?? '')),
       subjectGroups: [
         ...new Set([
           ...managedGroups,
