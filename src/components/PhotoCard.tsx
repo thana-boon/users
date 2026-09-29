@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { api, withBase } from '@/lib/client';
 import { cropToFace, preloadFaceDetector } from '@/lib/face-crop';
 import { useToast } from './Toast';
+import { useConfirm } from './Confirm';
 
 /**
  * Square-ish profile photo with อัปโหลด/เปลี่ยน/ลบ, shared by ครู/คนงาน detail
@@ -23,6 +24,7 @@ export function PhotoCard({
   onChange: (hasPhoto: boolean) => void;
 }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const inputRef = useRef<HTMLInputElement>(null);
   const [ver, setVer] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -44,6 +46,12 @@ export function PhotoCard({
   }
 
   async function remove() {
+    if (!(await confirm({
+      title: 'ลบรูป',
+      message: 'ลบรูปนี้ออกจากระบบหรือไม่? ต้องอัปโหลดใหม่หากต้องการใช้อีก',
+      confirmText: 'ลบรูป',
+      danger: true,
+    }))) return;
     setBusy(true);
     try {
       await api(baseEndpoint, { method: 'DELETE' });
@@ -70,17 +78,32 @@ export function PhotoCard({
         ref={inputRef} type="file" accept="image/*" hidden
         onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }}
       />
-      <div className="row" style={{ gap: 4 }}>
+      {/* Stacked, full width: side by side they only fit at 12px text on 4px
+          padding — far below a fingertip on the phone most people use. */}
+      <div className="stack" style={{ gap: 6, width: '100%' }}>
         <button
-          className="btn btn-ghost btn-sm" style={{ fontSize: 12, padding: '4px 8px' }}
+          type="button"
+          className="btn btn-secondary btn-sm"
+          style={{ width: '100%' }}
           // Start fetching the model now: the user is about to spend a few
           // seconds in the file picker, which hides the download entirely.
           onClick={() => { preloadFaceDetector(); inputRef.current?.click(); }}
           disabled={busy}
+          aria-busy={busy}
         >
-          {hasPhoto ? 'เปลี่ยนรูป' : 'อัปโหลดรูป'}
+          {busy ? 'กำลังทำงาน…' : hasPhoto ? 'เปลี่ยนรูป' : 'อัปโหลดรูป'}
         </button>
-        {hasPhoto && <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, padding: '4px 8px', color: 'var(--color-error)' }} onClick={remove} disabled={busy}>ลบ</button>}
+        {hasPhoto && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ width: '100%', color: 'var(--color-error)' }}
+            onClick={remove}
+            disabled={busy}
+          >
+            ลบรูป
+          </button>
+        )}
       </div>
     </div>
   );

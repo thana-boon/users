@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Combo } from './Combo';
 import { PhoneInput } from './PhoneInput';
 import { EMERGENCY_RELATIONSHIP_OPTIONS, PROVINCE_OPTIONS } from '@/lib/options';
@@ -33,6 +33,7 @@ function Text({
   placeholder,
   disabled,
   inputMode,
+  maxLength,
 }: {
   label: string;
   value: string | null | undefined;
@@ -40,11 +41,16 @@ function Text({
   placeholder?: string;
   disabled?: boolean;
   inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  maxLength?: number;
 }) {
+  const id = useId();
   return (
     <div>
-      <label className="form-label">{label}</label>
+      <label className="form-label" htmlFor={id}>{label}</label>
       <input
+        id={id}
+        maxLength={maxLength}
+        autoComplete="off"
         className="form-input"
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
@@ -85,6 +91,7 @@ export function HouseholdAddressFields({
         value={value.postalCode}
         onChange={set('postalCode')}
         inputMode="numeric"
+        maxLength={5}
         disabled={disabled}
       />
       <Text
@@ -169,6 +176,7 @@ export function MonthYearField({
     return { month: m ? String(Number(m[1]) || '') : '', year: m ? m[2] : '' };
   };
   const [parts, setParts] = useState(() => parse(value));
+  const id = useId();
   // Follow a value that changes from outside (a reload after save).
   useEffect(() => setParts(parse(value)), [value]);
 
@@ -180,15 +188,16 @@ export function MonthYearField({
 
   return (
     <div>
-      <label className="form-label">{label}</label>
+      <label className="form-label" htmlFor={id}>{label}</label>
       <div className="row" style={{ gap: 8 }}>
         <select
+          id={id}
           className="form-select"
           value={parts.month}
           onChange={(e) => emit({ ...parts, month: e.target.value })}
           disabled={disabled}
           aria-label="เดือน"
-          style={{ flex: 1 }}
+          style={{ flex: 1, minWidth: 0 }}
         >
           <option value="">— เดือน —</option>
           {TH_MONTHS_FULL.map((name, i) => (
@@ -203,7 +212,7 @@ export function MonthYearField({
           inputMode="numeric"
           disabled={disabled}
           aria-label="ปี พ.ศ."
-          style={{ width: 110 }}
+          style={{ width: 104, flex: 'none' }}
         />
       </div>
       {hint && <p className="form-hint">{hint}</p>}

@@ -152,33 +152,27 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div className="card">
-        <div className="row" style={{ gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div
-            style={{
-              width: 116, aspectRatio: '3 / 4', borderRadius: 'var(--radius-md)', overflow: 'hidden',
-              background: 'var(--skdw-bg)', border: '0.5px solid var(--skdw-border)',
-              display: 'grid', placeItems: 'center', color: 'var(--skdw-muted)',
-              fontSize: 32, fontWeight: 700, flexShrink: 0,
-            }}
-          >
+        <div className="me-hero">
+          <div className="me-photo">
             {me.hasPhoto ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/users/me/photo`}
                 alt="รูปของฉัน"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                width={116}
+                height={155}
               />
             ) : (
               <span aria-hidden>{initials || '?'}</span>
             )}
           </div>
-          <div style={{ flex: 1, minWidth: 240 }}>
+          <div className="me-hero-body">
             <h1 className="page-title">
               {me.prefix}{me.firstName} {me.lastName}
-              {me.nickname ? <span className="muted" style={{ fontSize: 16 }}> ({me.nickname})</span> : null}
+              {me.nickname ? <span className="muted" style={{ fontSize: 16, fontWeight: 500 }}> ({me.nickname})</span> : null}
             </h1>
             <p className="muted mono" style={{ margin: '4px 0 0' }}>{me.studentCode}</p>
-            <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <div className="me-hero-meta">
               <span className={`badge ${me.status === 'studying' ? 'badge-success' : 'badge-muted'}`}>
                 {STATUS_LABEL[me.status]}
               </span>
@@ -189,7 +183,7 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
                 </span>
               )}
             </div>
-            <p className="muted" style={{ fontSize: 12, marginTop: 10, marginBottom: 0 }}>
+            <p className="form-hint" style={{ marginTop: 10 }}>
               รูปติดบัตรและข้อมูลทะเบียนเป็นหน้าที่ของทางโรงเรียน หากไม่ถูกต้องให้แจ้งครูประจำชั้น
             </p>
           </div>
@@ -199,7 +193,7 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
       {ro && me.closedReason && <ClosedNotice reason={me.closedReason} />}
 
       <Section title="ข้อมูลติดต่อ" hint={ro ? undefined : 'ส่วนนี้แก้ไขเองได้'}>
-        <PhoneInput label="เบอร์โทรของฉัน" value={contact.phone} onChange={setC('phone')} disabled={ro} />
+        <PhoneInput label="เบอร์โทรของฉัน" value={contact.phone} onChange={setC('phone')} autoComplete="tel" disabled={ro} />
         <Field label="ชื่อเล่น" value={contact.nickname} onChange={setC('nickname')} disabled={ro} />
         <Field label="ชื่อเล่น (อังกฤษ)" value={contact.nicknameEn} onChange={setC('nicknameEn')} disabled={ro} />
       </Section>
@@ -208,8 +202,8 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
         title="ข้อมูลสุขภาพ"
         hint="ข้อมูลส่วนนี้ใช้เวลาเกิดเหตุฉุกเฉินที่โรงเรียน กรุณากรอกให้เป็นปัจจุบัน โดยเฉพาะการแพ้ยา/แพ้อาหารและโรคประจำตัว"
       >
-        <Field label="น้ำหนัก (กก.)" value={health.weight} onChange={setH('weight')} disabled={ro} />
-        <Field label="ส่วนสูง (ซม.)" value={health.height} onChange={setH('height')} disabled={ro} />
+        <Field label="น้ำหนัก (กก.)" value={health.weight} onChange={setH('weight')} inputMode="decimal" placeholder="เช่น 45" disabled={ro} />
+        <Field label="ส่วนสูง (ซม.)" value={health.height} onChange={setH('height')} inputMode="decimal" placeholder="เช่น 158" disabled={ro} />
         <Field label="กรุ๊ปเลือด" value={health.bloodType} onChange={setH('bloodType')} placeholder="เช่น A, B, O, AB" disabled={ro} />
         <Field label="แพ้อาหาร" value={health.foodAllergy} onChange={setH('foodAllergy')} placeholder="ไม่มี = เว้นว่าง" disabled={ro} />
         <Field label="แพ้ยา" value={health.drugAllergy} onChange={setH('drugAllergy')} disabled={ro} />
@@ -218,8 +212,10 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
         <Field label="โรคร้ายแรง" value={health.seriousDisease} onChange={setH('seriousDisease')} disabled={ro} />
       </Section>
 
+      {/* One `currentAddress` row on the server, shown as two cards: seventeen
+          fields in one block is a very long scroll on a phone. */}
       <Section
-        title="ที่อยู่ปัจจุบัน และผู้ติดต่อฉุกเฉิน"
+        title="ที่อยู่ปัจจุบัน"
         hint="ที่อยู่ที่พักอาศัยจริงในตอนนี้ — ไม่ใช่ที่อยู่ตามทะเบียนบ้าน (ทะเบียนบ้านแก้ไขที่ฝ่ายธุรการ)"
       >
         <Field label="บ้านเลขที่" value={address.houseNo} onChange={setA('houseNo')} disabled={ro} />
@@ -227,15 +223,18 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
         <Field label="ซอย" value={address.soi} onChange={setA('soi')} disabled={ro} />
         <Field label="ถนน" value={address.road} onChange={setA('road')} disabled={ro} />
         <Field label="ตำบล/แขวง" value={address.subDistrict} onChange={setA('subDistrict')} disabled={ro} />
-        <Field label="อำเภอ/เขต" value={address.district} onChange={setA('district')} disabled={ro} />
-        <Field label="จังหวัด" value={address.province} onChange={setA('province')} disabled={ro} />
-        <Field label="รหัสไปรษณีย์" value={address.postalCode} onChange={setA('postalCode')} disabled={ro} />
+        <Field label="อำเภอ/เขต" value={address.district} onChange={setA('district')} autoComplete="address-level2" disabled={ro} />
+        <Field label="จังหวัด" value={address.province} onChange={setA('province')} autoComplete="address-level1" disabled={ro} />
+        <Field label="รหัสไปรษณีย์" value={address.postalCode} onChange={setA('postalCode')} inputMode="numeric" autoComplete="postal-code" maxLength={5} disabled={ro} />
         <PhoneInput label="เบอร์โทรศัพท์บ้าน" value={address.phone} onChange={setA('phone')} disabled={ro} />
         <Field label="ลักษณะบ้าน" value={address.houseType} onChange={setA('houseType')} placeholder="เช่น บ้านตนเอง, บ้านเช่า" disabled={ro} />
         <Field label="ปัจจุบันอาศัยอยู่กับ (ชื่อ)" value={address.livingWith} onChange={setA('livingWith')} disabled={ro} />
         <Field label="นามสกุล" value={address.livingWithLastname} onChange={setA('livingWithLastname')} disabled={ro} />
+      </Section>
+
+      <Section title="ผู้ติดต่อฉุกเฉิน" hint="คนที่โรงเรียนจะติดต่อเมื่อเกิดเหตุฉุกเฉิน">
         <PhoneInput label="เบอร์ติดต่อฉุกเฉิน" value={address.emergencyPhone} onChange={setA('emergencyPhone')} hint="เบอร์ที่โรงเรียนจะโทรหาเป็นอันดับแรก" disabled={ro} />
-        <Field label="อีเมลติดต่อฉุกเฉิน" value={address.emergencyEmail} onChange={setA('emergencyEmail')} disabled={ro} />
+        <Field label="อีเมลติดต่อฉุกเฉิน" value={address.emergencyEmail} onChange={setA('emergencyEmail')} type="email" inputMode="email" placeholder="name@example.com" disabled={ro} />
         <Field label="เพื่อนใกล้บ้าน (ชื่อ)" value={address.nearbyFriendName} onChange={setA('nearbyFriendName')} disabled={ro} />
         <Field label="นามสกุล" value={address.nearbyFriendLastname} onChange={setA('nearbyFriendLastname')} disabled={ro} />
         <PhoneInput label="เบอร์โทรเพื่อนใกล้บ้าน" value={address.nearbyFriendPhone} onChange={setA('nearbyFriendPhone')} disabled={ro} />

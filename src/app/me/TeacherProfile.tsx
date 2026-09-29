@@ -150,7 +150,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
   return (
     <div className="stack" style={{ gap: 20 }}>
       <div className="card">
-        <div className="row" style={{ gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div className="me-hero">
           {ro ? (
             <ReadOnlyPhoto hasPhoto={hasPhoto} initials={initials} />
           ) : (
@@ -162,10 +162,10 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
               onChange={setHasPhoto}
             />
           )}
-          <div style={{ flex: 1, minWidth: 240 }}>
+          <div className="me-hero-body">
             <h1 className="page-title">{me.prefix}{me.firstName} {me.lastName}</h1>
             <p className="muted mono" style={{ margin: '4px 0 0' }}>{me.teacherCode}</p>
-            <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <div className="me-hero-meta">
               <span className={`badge ${me.role === 'teacher-admin' ? 'badge-gold' : me.role === 'moderator' ? 'badge-purple' : 'badge-muted'}`}>
                 {me.role}
               </span>
@@ -181,8 +181,8 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
       {ro && me.closedReason && <ClosedNotice reason={me.closedReason} canChangePassword={false} />}
 
       <Section title="ข้อมูลส่วนตัวและการติดต่อ" hint={ro ? undefined : 'ส่วนนี้แก้ไขเองได้'}>
-        <PhoneInput label="เบอร์โทร" value={form.phone} onChange={setV('phone')} disabled={ro} />
-        <Field label="ไอดีไลน์" value={form.lineId} onChange={setV('lineId')} placeholder="เช่น teacher.somchai" disabled={ro} />
+        <PhoneInput label="เบอร์โทร" value={form.phone} onChange={setV('phone')} autoComplete="tel" disabled={ro} />
+        <Field label="ไอดีไลน์" value={form.lineId} onChange={setV('lineId')} placeholder="เช่น teacher.somchai" autoComplete="off" disabled={ro} />
         {ro ? (
           <>
             <Locked label="วันเดือนปีเกิด" value={form.birthDate} />
@@ -262,7 +262,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
 
       {/* No เปลี่ยนรหัสผ่าน card: staff passwords are set by an admin only
           (api/users/me/password refuses teachers). */}
-      <div className="alert alert-info" style={{ fontSize: 13 }}>
+      <div className="alert alert-info" style={{ fontSize: 'var(--text-sm)' }}>
         ต้องการเปลี่ยนรหัสผ่าน กรุณาติดต่อผู้ดูแลระบบ
       </div>
     </div>
@@ -272,20 +272,14 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
 /** The photo without its อัปโหลด/ลบ buttons, for a closed window. */
 function ReadOnlyPhoto({ hasPhoto, initials }: { hasPhoto: boolean; initials: string }) {
   return (
-    <div
-      style={{
-        width: 116, aspectRatio: '3 / 4', borderRadius: 'var(--radius-md)', overflow: 'hidden',
-        background: 'var(--skdw-bg)', border: '0.5px solid var(--skdw-border)',
-        display: 'grid', placeItems: 'center', color: 'var(--skdw-muted)',
-        fontSize: 32, fontWeight: 700, flexShrink: 0,
-      }}
-    >
+    <div className="me-photo">
       {hasPhoto ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/users/me/photo`}
           alt="รูปของฉัน"
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          width={116}
+          height={155}
         />
       ) : (
         <span aria-hidden>{initials || '?'}</span>

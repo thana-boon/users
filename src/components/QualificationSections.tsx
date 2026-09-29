@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { Combo } from './Combo';
 import { DateField } from './DateField';
 import { RepeatList } from './RepeatList';
@@ -72,17 +73,23 @@ function Field({
   onChange,
   placeholder,
   wide = false,
+  inputMode,
 }: {
   label: string;
   value: string | null | undefined;
   onChange: (v: string) => void;
   placeholder?: string;
   wide?: boolean;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
 }) {
+  const id = useId();
   return (
     <div style={wide ? { gridColumn: '1 / -1' } : undefined}>
-      <label className="form-label">{label}</label>
+      <label className="form-label" htmlFor={id}>{label}</label>
       <input
+        id={id}
+        autoComplete="off"
+        inputMode={inputMode}
         className="form-input"
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
@@ -174,6 +181,7 @@ export function EducationList({
             value={r.graduationYear}
             onChange={set('graduationYear')}
             placeholder="เว้นว่างได้ เช่น 2560"
+            inputMode="numeric"
           />
         </>
       )}
@@ -354,6 +362,7 @@ export function TrainingList({
             value={r.hours}
             onChange={set('hours')}
             placeholder="เช่น 12"
+            inputMode="decimal"
           />
           <Field
             label="เลขที่เกียรติบัตร"

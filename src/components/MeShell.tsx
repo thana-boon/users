@@ -43,35 +43,21 @@ export function MeShell({
     window.location.href = signedOutUrl;
   }
 
+  // Built phone-first: most teachers and students open this from a phone, so
+  // the header is one compact row there and only spreads out on a wide screen.
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
-      <header
-        style={{
-          height: 64, background: 'var(--skdw-purple)', color: '#fff',
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '0 var(--space-6)', boxShadow: 'var(--shadow-md)',
-          position: 'sticky', top: 0, zIndex: 200,
-        }}
-      >
-        <div
-          aria-hidden
-          style={{
-            width: 34, height: 34, borderRadius: 9,
-            background: 'var(--skdw-gold)', color: 'var(--skdw-dark)',
-            display: 'grid', placeItems: 'center', fontWeight: 800,
-            fontFamily: 'var(--font-en)',
-          }}
-        >
-          S
-        </div>
-        <div style={{ lineHeight: 1.1 }}>
+      <a href="#me-main" className="skip-link">ข้ามไปยังเนื้อหา</a>
+      <header className="me-header">
+        <div aria-hidden className="me-logo">S</div>
+        <div style={{ lineHeight: 1.15, minWidth: 0 }}>
           <div style={{ fontWeight: 700 }}>SchoolOS</div>
-          <div style={{ fontSize: 11, opacity: 0.8 }}>ข้อมูลของฉัน</div>
+          <div style={{ fontSize: 12, opacity: 0.85 }}>ข้อมูลของฉัน</div>
         </div>
 
         <div className="spacer" style={{ flex: 1 }} />
 
-        <div className="row" style={{ gap: 10 }}>
+        <div className="row" style={{ gap: 8 }}>
           {/* A plain <a>, not <Link>: the two modes are separate root layouts,
               one of them reached through a rewrite. A full load is also the
               honest thing here — the admin shell re-reads the session it is
@@ -84,20 +70,12 @@ export function MeShell({
               className="mode-btn"
               title="กลับไปหน้าจัดการข้อมูล"
             >
-              <IconShield width={14} height={14} />
+              <IconShield width={16} height={16} />
               <span className="hide-mobile">สลับเป็นโหมดผู้ดูแล</span>
               <span className="only-mobile">ผู้ดูแล</span>
             </a>
           )}
-          <div
-            title={name}
-            style={{
-              width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
-              background: 'var(--skdw-gold)', color: 'var(--skdw-dark)',
-              display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 15,
-              border: '1.5px solid rgba(255,255,255,0.55)',
-            }}
-          >
+          <div className="me-avatar" title={name}>
             {hasPhoto && !photoFailed ? (
               <img
                 src={withBase('/api/users/me/photo')}
@@ -110,20 +88,46 @@ export function MeShell({
             )}
           </div>
           <span style={{ fontSize: 13, opacity: 0.9 }} className="hide-mobile">{name}</span>
-          <button type="button" className="mode-btn" onClick={logout} title="ออกจากระบบ">
-            <IconLogout width={14} height={14} />
+          <button
+            type="button"
+            className="mode-btn"
+            onClick={logout}
+            title="ออกจากระบบ"
+            aria-label="ออกจากระบบ"
+          >
+            <IconLogout width={16} height={16} />
             <span className="hide-mobile">ออกจากระบบ</span>
           </button>
         </div>
       </header>
 
-      <main style={{ flex: 1, padding: 'var(--space-8)', paddingBottom: 96 }}>
+      <main id="me-main" tabIndex={-1} className="me-main">
         <div style={{ maxWidth: 880, margin: '0 auto' }}>{children}</div>
       </main>
 
       <style>{`
+        .me-header {
+          height: 64px; background: var(--skdw-purple); color: #fff;
+          display: flex; align-items: center; gap: 12px;
+          padding: 0 var(--space-6); box-shadow: var(--shadow-md);
+          position: sticky; top: 0; z-index: var(--z-sticky);
+        }
+        .me-logo {
+          width: 34px; height: 34px; border-radius: 9px; flex: none;
+          background: var(--skdw-gold); color: var(--skdw-dark);
+          display: grid; place-items: center; font-weight: 800; font-family: var(--font-en);
+        }
+        .me-avatar {
+          width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+          background: var(--skdw-gold); color: var(--skdw-dark);
+          display: grid; place-items: center; font-weight: 700; font-size: 15px;
+          border: 1.5px solid rgba(255,255,255,0.55);
+        }
+        .me-main { flex: 1; padding: var(--space-8); padding-bottom: 96px; }
+        .me-main:focus { outline: none; }
         .mode-btn {
-          display: inline-flex; align-items: center; gap: 6px;
+          display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+          min-height: 36px; min-width: 36px;
           padding: 6px 12px; border-radius: 999px; cursor: pointer;
           background: rgba(255,255,255,0.12); color: #fff;
           border: 1px solid rgba(255,255,255,0.35);
@@ -131,10 +135,15 @@ export function MeShell({
           transition: background var(--transition-fast);
         }
         .mode-btn:hover { background: rgba(255,255,255,0.24); }
+        .mode-btn:focus-visible { outline-color: var(--skdw-gold); }
         .only-mobile { display: none; }
+        @media (pointer: coarse) { .mode-btn { min-height: 44px; min-width: 44px; } }
         @media (max-width: 720px) {
           .hide-mobile { display: none; }
           .only-mobile { display: inline; }
+          .me-header { height: 56px; padding: 0 var(--space-3) 0 var(--space-4); gap: 10px; }
+          .me-logo { width: 30px; height: 30px; border-radius: 8px; }
+          .me-main { padding: var(--space-4) var(--space-3) 120px; }
         }
       `}</style>
     </div>

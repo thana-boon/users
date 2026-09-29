@@ -55,10 +55,11 @@ export function DateField({
         <div ref={wrapRef} style={{ position: 'relative' }}>
           <input
             className="form-input"
-            style={{ width: 160, paddingRight: 34, ...inputStyle }}
+            style={{ width: 176, paddingRight: 44, ...inputStyle }}
             inputMode="numeric"
             placeholder="ว/ด/ป เช่น 31/03/2569"
             aria-label={label}
+            autoComplete="off"
             value={raw}
             onChange={(e) => onChange(e.target.value)}
             onBlur={() => onChange(normalizeThaiInput(raw))}
@@ -69,13 +70,15 @@ export function DateField({
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}
             style={{
-              position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-              display: 'grid', placeItems: 'center', width: 24, height: 24,
+              // The whole right end of the box, so a thumb cannot miss it.
+              position: 'absolute', right: 0, top: 0, bottom: 0, width: 42,
+              display: 'grid', placeItems: 'center',
               border: 'none', background: 'none', padding: 0,
-              color: 'var(--skdw-muted)', cursor: 'pointer',
+              borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
+              color: 'var(--skdw-purple)', cursor: 'pointer',
             }}
           >
-            <IconCalendar width={16} height={16} />
+            <IconCalendar width={18} height={18} />
           </button>
           {open && (
             <ThaiCalendar

@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { normalizePhone, phoneWarning } from '@/lib/phone';
 
 /**
@@ -25,6 +26,11 @@ import { normalizePhone, phoneWarning } from '@/lib/phone';
  * text, because `type="number"` brings spinners, exponent notation, and a
  * leading zero that some browsers eat — on a field where `08…` is the whole
  * point.
+ *
+ * Autofill is OFF unless asked for: a phone offers the owner's own number to
+ * any `autocomplete="tel"` box, which is wrong for ผู้ติดต่อฉุกเฉิน, a friend,
+ * or a record an admin is editing. Pass `autoComplete="tel"` only on "my own
+ * number".
  */
 export function PhoneInput({
   label,
@@ -34,6 +40,7 @@ export function PhoneInput({
   hint,
   disabled = false,
   wide = false,
+  autoComplete = 'off',
 }: {
   label: string;
   value: string | null | undefined;
@@ -42,17 +49,23 @@ export function PhoneInput({
   hint?: string;
   disabled?: boolean;
   wide?: boolean;
+  autoComplete?: 'tel' | 'off';
 }) {
   const warn = phoneWarning(value);
+  const id = useId();
 
   return (
     <div style={wide ? { gridColumn: '1 / -1' } : undefined}>
-      <label className="form-label">{label}</label>
+      <label className="form-label" htmlFor={id}>{label}</label>
       <input
+        id={id}
         className="form-input mono"
+        type="tel"
         value={value ?? ''}
         inputMode="tel"
-        autoComplete="tel"
+        autoComplete={autoComplete}
+        aria-describedby={warn || hint ? `${id}-hint` : undefined}
+        aria-invalid={warn ? true : undefined}
         placeholder={placeholder}
         disabled={disabled}
         // The filter runs on every change, so a paste is cleaned the same way
@@ -61,11 +74,11 @@ export function PhoneInput({
         onChange={(e) => onChange(normalizePhone(e.target.value) ?? '')}
       />
       {warn ? (
-        <p className="form-hint" style={{ color: 'var(--color-warning)' }}>
+        <p className="form-hint" id={`${id}-hint`} style={{ color: 'var(--color-warning)' }}>
           {warn}
         </p>
       ) : (
-        hint && <p className="form-hint">{hint}</p>
+        hint && <p className="form-hint" id={`${id}-hint`}>{hint}</p>
       )}
     </div>
   );

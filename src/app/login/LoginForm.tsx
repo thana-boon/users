@@ -129,6 +129,10 @@ export default function LoginForm({ next, denied, expired, signedInAs }: LoginFo
             onChange={(e) => setIdentifier(e.target.value)}
             placeholder="เช่น T00001 หรือ name@school.ac.th"
             autoComplete="username"
+            // A phone keyboard would capitalise and "correct" an email.
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             autoFocus
           />
 

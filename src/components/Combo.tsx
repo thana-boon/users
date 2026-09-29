@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { normalizeChoice } from '@/lib/options';
+import { IconChevron } from './Icons';
 
 /**
  * Searchable single-value picker (combobox) for fields that have a short list of
@@ -145,11 +146,12 @@ export function Combo({
       <div ref={wrapRef} style={{ position: 'relative' }}>
         <input
           className="form-input"
-          style={{ paddingRight: 30, ...inputStyle }}
+          style={{ paddingRight: 40, ...inputStyle }}
           role="combobox"
           aria-expanded={open}
           aria-autocomplete="list"
           aria-label={label}
+          autoComplete="off"
           value={text}
           placeholder={placeholder}
           onChange={(e) => { onChange(e.target.value); setTyping(true); setOpen(true); setActive(-1); }}
@@ -157,15 +159,22 @@ export function Combo({
           onBlur={() => { if (normalize && text.trim()) onChange(normalizeChoice(text, options) ?? ''); }}
           onKeyDown={onKeyDown}
         />
+        {/* A 40px-wide strip down the right edge, not a 10px glyph — on a phone
+            this is where a thumb goes to open the list. */}
         <span
           aria-hidden
           onPointerDown={(e) => { e.preventDefault(); setOpen((o) => !o); setTyping(false); }}
           style={{
-            position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-            color: 'var(--skdw-muted)', fontSize: 10, cursor: 'pointer', lineHeight: 1,
+            position: 'absolute', right: 0, top: 0, bottom: 0, width: 40,
+            display: 'grid', placeItems: 'center',
+            color: 'var(--skdw-muted)', cursor: 'pointer',
           }}
         >
-          ▼
+          <IconChevron
+            width={16}
+            height={16}
+            style={{ transition: 'transform var(--transition-fast)', transform: open ? 'rotate(180deg)' : undefined }}
+          />
         </span>
 
         {open && filtered.length > 0 && box && typeof document !== 'undefined' && createPortal(
@@ -178,7 +187,8 @@ export function Combo({
               zIndex: 350,
               left: box.left, width: box.width,
               ...(box.top !== undefined ? { top: box.top } : { bottom: box.bottom }),
-              maxHeight: box.maxHeight, overflowY: 'auto', background: '#fff',
+              maxHeight: box.maxHeight, overflowY: 'auto', overscrollBehavior: 'contain',
+              background: 'var(--card)',
               border: '1px solid var(--skdw-border)', borderRadius: 'var(--radius-sm)',
               boxShadow: 'var(--shadow-md, 0 8px 24px rgba(26,22,37,0.12))',
             }}
@@ -192,8 +202,9 @@ export function Combo({
                   aria-selected={selected}
                   onMouseEnter={() => setActive(i)}
                   onPointerDown={(e) => { e.preventDefault(); commit(o); }}
+                  className="combo-opt"
                   style={{
-                    padding: '8px 12px', cursor: 'pointer', fontSize: 'var(--text-md)',
+                    cursor: 'pointer',
                     background: i === active ? 'var(--skdw-purple-pale)' : 'transparent',
                     fontWeight: selected ? 600 : 400,
                   }}

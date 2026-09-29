@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { api } from '@/lib/client';
 import { IconEye, IconLock, IconUnlock } from '@/components/Icons';
 
@@ -13,7 +13,14 @@ import { IconEye, IconLock, IconUnlock } from '@/components/Icons';
  * know at a glance why they cannot fix it themselves.
  */
 
-/** A field the person owns. Greyed out when the school has closed the window. */
+/**
+ * A field the person owns. Greyed out when the school has closed the window.
+ *
+ * Most people fill this page in on a phone, so each field says which keyboard
+ * it wants (`inputMode` / `type`) and what the browser may autofill — typing a
+ * postcode on a full QWERTY keyboard is the kind of friction that gets a form
+ * abandoned half-way.
+ */
 export function Field({
   label,
   value,
@@ -22,6 +29,10 @@ export function Field({
   hint,
   disabled = false,
   wide = false,
+  inputMode,
+  type = 'text',
+  autoComplete,
+  maxLength,
 }: {
   label: string;
   value: string | null | undefined;
@@ -30,18 +41,30 @@ export function Field({
   hint?: string;
   disabled?: boolean;
   wide?: boolean;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  type?: 'text' | 'email';
+  autoComplete?: string;
+  maxLength?: number;
 }) {
+  const id = useId();
   return (
     <div style={wide ? { gridColumn: '1 / -1' } : undefined}>
-      <label className="form-label">{label}</label>
+      <label className="form-label" htmlFor={id}>{label}</label>
       <input
+        id={id}
         className="form-input"
+        type={type}
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
+        inputMode={inputMode}
+        autoComplete={autoComplete ?? 'off'}
+        autoCapitalize={type === 'email' ? 'none' : undefined}
+        maxLength={maxLength}
+        aria-describedby={hint ? `${id}-hint` : undefined}
       />
-      {hint && <p className="form-hint">{hint}</p>}
+      {hint && <p className="form-hint" id={`${id}-hint`}>{hint}</p>}
     </div>
   );
 }
@@ -56,10 +79,17 @@ export function Locked({
   value: string | null | undefined;
   wide?: boolean;
 }) {
+  const id = useId();
+  // Read-only, not disabled: the value is real and should read (and copy) as
+  // such. The lock says "not yours to change" without leaning on grey alone.
   return (
     <div style={wide ? { gridColumn: '1 / -1' } : undefined}>
-      <label className="form-label">{label}</label>
-      <input className="form-input" value={value?.trim() || '—'} disabled readOnly />
+      <label className="form-label" htmlFor={id}>
+        {label}
+        <IconLock width={12} height={12} className="form-label-icon" />
+        <span className="sr-only"> (แก้ไขเองไม่ได้)</span>
+      </label>
+      <input id={id} className="form-input" value={value?.trim() || '—'} readOnly aria-readonly />
     </div>
   );
 }
@@ -77,14 +107,14 @@ export function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="card">
+    <section className="card me-section" aria-label={title}>
       <div className="row-between" style={{ alignItems: 'flex-start', marginBottom: 4 }}>
         <h2 className="section-title" style={{ marginBottom: hint ? 2 : 0 }}>{title}</h2>
         {badge}
       </div>
-      {hint && <p className="muted" style={{ fontSize: 12, margin: '0 0 12px' }}>{hint}</p>}
-      <div className="grid-2" style={{ gap: 12, marginTop: hint ? 0 : 12 }}>{children}</div>
-    </div>
+      {hint && <p className="me-section-hint">{hint}</p>}
+      <div className="grid-2 me-fields" style={{ marginTop: hint ? 0 : 12 }}>{children}</div>
+    </section>
   );
 }
 
@@ -128,15 +158,22 @@ export function SaveBar({
   /** Edits on the page nobody has saved yet — says so next to the button. */
   dirty?: boolean;
 }) {
+  // Sticky rather than fixed: it rides at the bottom of the screen while the
+  // form scrolls under it, then settles into place above the lists it does not
+  // cover. On a phone the button fills the bar — the one thing a thumb aims for.
   return (
-    <div className="card" style={{ position: 'sticky', bottom: 16, zIndex: 50 }}>
-      <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button className="btn btn-primary" onClick={onSave} disabled={busy}>
-          {busy ? 'กำลังบันทึก…' : label}
-        </button>
-        {dirty && !busy && <span className="badge badge-warning">ยังไม่ได้บันทึก</span>}
-        {hint && <span className="muted" style={{ fontSize: 12 }}>{hint}</span>}
+    <div className="me-savebar" data-dirty={dirty || undefined}>
+      <div className="me-savebar-status" aria-live="polite">
+        {busy ? null : dirty ? (
+          <span className="badge badge-warning">ยังไม่ได้บันทึก</span>
+        ) : (
+          <span className="muted">ไม่มีการเปลี่ยนแปลง</span>
+        )}
+        {hint && <span className="muted me-savebar-hint">{hint}</span>}
       </div>
+      <button className="btn btn-primary me-savebar-btn" onClick={onSave} disabled={busy} aria-busy={busy}>
+        {busy ? 'กำลังบันทึก…' : label}
+      </button>
     </div>
   );
 }
@@ -207,16 +244,23 @@ export function CitizenIdField({
   }
 
   const shown = revealed ?? masked;
+  const id = useId();
 
   return (
     <div style={wide ? { gridColumn: '1 / -1' } : undefined}>
-      <label className="form-label">เลขบัตรประชาชน</label>
+      <label className="form-label" htmlFor={id}>
+        เลขบัตรประชาชน
+        {!unlocked && <IconLock width={12} height={12} className="form-label-icon" />}
+      </label>
 
       {unlocked ? (
         <input
+          id={id}
           className="form-input mono"
           value={draft}
           inputMode="numeric"
+          autoComplete="off"
+          maxLength={17}
           placeholder="กรอก 13 หลัก"
           onChange={(e) => {
             const v = e.target.value;
@@ -227,7 +271,7 @@ export function CitizenIdField({
           }}
         />
       ) : (
-        <input className="form-input mono" value={shown?.trim() || '—'} disabled readOnly />
+        <input id={id} className="form-input mono" value={shown?.trim() || '—'} readOnly aria-readonly />
       )}
 
       <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: 'wrap' }}>

@@ -31,6 +31,7 @@ import {
   IconSpecialTeacher,
   IconSubjectGroup,
   IconSettings,
+  IconMore,
 } from './Icons';
 
 interface SessionInfo {
@@ -150,6 +151,9 @@ type NavNode = Leaf | Group;
 
 const isGroup = (n: NavNode): n is Group => 'children' in n;
 
+/** Most a phone's bottom bar holds before the rest moves into เพิ่มเติม. */
+const MAX_BAR = 5;
+
 const NAV: NavNode[] = [
   { href: '/users', label: 'ภาพรวม', Icon: IconDashboard, exact: true },
   {
@@ -244,23 +248,21 @@ export function AppShell({
     window.location.href = signedOutUrl;
   }
 
+  // A bottom bar holds five at most (Material) — past that each item is a
+  // sliver with 10px text. Four destinations and a เพิ่มเติม that opens the
+  // whole menu, groups and all, so no page is out of reach on a phone.
+  const barItems = mobileNav.length > MAX_BAR ? mobileNav.slice(0, MAX_BAR - 1) : mobileNav;
+  const hasMore = mobileNav.length > MAX_BAR;
+  const inBar = barItems.some((l) => isActive(pathname, l.href, l.exact));
+  const [moreOpen, setMoreOpen] = useState(false);
+  // Any navigation closes the sheet.
+  useEffect(() => setMoreOpen(false), [pathname]);
+
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
+      <a href="#app-main" className="skip-link">ข้ามไปยังเนื้อหา</a>
       {/* Navbar */}
-      <header
-        style={{
-          height: 64,
-          background: 'var(--skdw-purple)',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 var(--space-6)',
-          boxShadow: 'var(--shadow-md)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 200,
-        }}
-      >
+      <header className="app-header">
         <div className="row" style={{ gap: 12 }}>
           <div
             aria-hidden
@@ -275,11 +277,11 @@ export function AppShell({
           </div>
           <div style={{ lineHeight: 1.1 }}>
             <div style={{ fontWeight: 700 }}>SchoolOS</div>
-            <div style={{ fontSize: 11, opacity: 0.8 }}>ข้อมูลนักเรียนและครู</div>
+            <div style={{ fontSize: 12, opacity: 0.85 }} className="hide-mobile">ข้อมูลนักเรียนและครู</div>
           </div>
         </div>
         <div className="spacer" />
-        <div className="row" style={{ gap: 12 }}>
+        <div className="row" style={{ gap: 8 }}>
           {/* The other half of the mode switch (/users/me has the way back).
               Everyone who can see this shell is staff (admin or moderator), so it
               is always offered: they are teachers too, with a record of their
@@ -294,7 +296,7 @@ export function AppShell({
             <span className="only-mobile">โหมดครู</span>
           </a>
           <span
-            className="badge badge-gold"
+            className="badge badge-gold hide-mobile"
             title={isAdmin ? 'สิทธิ์ผู้ดูแลระบบ (users:write)' : 'สิทธิ์เฉพาะส่วนที่ได้รับมอบหมาย'}
             style={{ display: 'inline-flex', alignItems: 'center' }}
           >
@@ -326,21 +328,14 @@ export function AppShell({
         </nav>
 
         {/* Main */}
-        <main
-          style={{
-            flex: 1,
-            minWidth: 0,
-            padding: 'var(--space-8)',
-            paddingBottom: 88,
-          }}
-        >
+        <main id="app-main" tabIndex={-1} className="app-main">
           <AccessProvider perms={perms}>{children}</AccessProvider>
         </main>
       </div>
 
       {/* Bottom nav (mobile) */}
       <nav className="bottom-nav" aria-label="เมนูหลัก (มือถือ)">
-        {mobileNav.map(({ href, label, Icon, exact }) => {
+        {barItems.map(({ href, label, Icon, exact }) => {
           const active = isActive(pathname, href, exact);
           return (
             <Link key={href} href={href} className="bottom-item" data-active={active} aria-current={active ? 'page' : undefined}>
@@ -349,9 +344,31 @@ export function AppShell({
             </Link>
           );
         })}
+        {hasMore && (
+          <button
+            type="button"
+            className="bottom-item"
+            data-active={!inBar}
+            aria-haspopup="dialog"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen(true)}
+          >
+            <IconMore width={22} height={22} />
+            <span>เพิ่มเติม</span>
+          </button>
+        )}
       </nav>
 
+      {moreOpen && <MoreSheet nav={nav} pathname={pathname} onClose={() => setMoreOpen(false)} />}
+
       <style>{`
+        .app-header {
+          height: 64px; background: var(--skdw-purple); color: #fff;
+          display: flex; align-items: center; padding: 0 var(--space-6);
+          box-shadow: var(--shadow-md); position: sticky; top: 0; z-index: var(--z-sticky);
+        }
+        .app-main { flex: 1; min-width: 0; padding: var(--space-8); padding-bottom: 88px; }
+        .app-main:focus { outline: none; }
         .sidebar-desktop {
           width: 240px; background: #fff; border-right: 0.5px solid var(--skdw-border);
           padding: var(--space-4) var(--space-3); display: flex; flex-direction: column; gap: 4px;
@@ -413,31 +430,49 @@ export function AppShell({
         /* Same pill as MeShell's สลับเป็นโหมดผู้ดูแล, so the two halves of the
            switch look like one control. */
         .mode-btn {
-          display: inline-flex; align-items: center; gap: 6px;
-          padding: 6px 12px; border-radius: 999px; cursor: pointer;
+          display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+          min-height: 36px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
           background: rgba(255,255,255,0.12); color: #fff;
           border: 1px solid rgba(255,255,255,0.35);
           font-family: inherit; font-size: 13px; line-height: 1.2;
           transition: background var(--transition-fast);
         }
         .mode-btn:hover { background: rgba(255,255,255,0.24); }
+        .mode-btn:focus-visible, .user-btn:focus-visible { outline-color: var(--skdw-gold); }
         .only-mobile { display: none; }
         .bottom-nav { display: none; }
+        @media (pointer: coarse) {
+          .mode-btn, .user-btn { min-height: 44px; }
+          .side-item, .side-group-btn, .side-subitem, .user-menu-item { min-height: 44px; }
+        }
         @media (max-width: 900px) {
           .sidebar-desktop { display: none; }
           .hide-mobile { display: none; }
           .only-mobile { display: inline; }
+          .app-header { height: 56px; padding: 0 var(--space-3) 0 var(--space-4); }
+          .app-main { padding: var(--space-4) var(--space-3); padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
           .bottom-nav {
-            display: flex; position: fixed; bottom: 0; left: 0; right: 0; height: 64px;
-            background: #fff; border-top: 0.5px solid var(--skdw-border); z-index: 200;
+            display: flex; position: fixed; bottom: 0; left: 0; right: 0;
+            height: calc(64px + env(safe-area-inset-bottom));
+            background: var(--card); border-top: 1px solid var(--skdw-border); z-index: var(--z-sticky);
             padding-bottom: env(safe-area-inset-bottom);
           }
           .bottom-item {
-            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            gap: 2px; font-size: 10px; color: var(--skdw-muted);
+            flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 3px; font-size: 12px; line-height: 1.2; color: var(--skdw-muted);
+            border: none; background: none; font-family: inherit; padding: 0 2px;
           }
+          .bottom-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .bottom-item[data-active="true"] { color: var(--skdw-purple); font-weight: 600; }
+          .bottom-item:active { background: var(--skdw-purple-pale); }
         }
+        .more-sheet-list { display: flex; flex-direction: column; gap: 2px; padding: 0 var(--space-2) var(--space-4); }
+        .more-sheet-group {
+          padding: 12px 14px 4px; font-size: var(--text-xs); font-weight: 600;
+          color: var(--skdw-muted); letter-spacing: 0.02em;
+        }
+        .more-sheet-list .side-item, .more-sheet-list .side-subitem { min-height: 48px; }
+        .more-sheet-list .side-subitem { padding-left: 14px; color: var(--skdw-dark); }
       `}</style>
     </div>
   );
@@ -481,6 +516,79 @@ function NavGroup({ group, pathname }: { group: Group; pathname: string }) {
             </Link>
           );
         })}
+    </div>
+  );
+}
+
+/**
+ * The whole menu for a phone — every page the sidebar offers, groups spelled
+ * out, as a bottom sheet over the page. Esc, the scrim and ปิด all close it.
+ */
+function MoreSheet({
+  nav,
+  pathname,
+  onClose,
+}: {
+  nav: NavNode[];
+  pathname: string;
+  onClose: () => void;
+}) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    // The page underneath should not scroll along with the sheet.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const leaf = (l: Leaf, sub: boolean) => {
+    const a = isActive(pathname, l.href, l.exact);
+    return (
+      <Link
+        key={l.href}
+        href={l.href}
+        className={sub ? 'side-subitem' : 'side-item'}
+        aria-current={a ? 'page' : undefined}
+        data-active={a}
+        onClick={onClose}
+      >
+        <l.Icon width={20} height={20} />
+        <span>{l.label}</span>
+      </Link>
+    );
+  };
+
+  return (
+    <div className="modal-scrim" role="dialog" aria-modal="true" aria-label="เมนูทั้งหมด" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="card-header row-between" style={{ position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }}>
+          <span>เมนูทั้งหมด</span>
+          <button ref={closeRef} type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
+            ปิด
+          </button>
+        </div>
+        <nav className="more-sheet-list" aria-label="เมนูทั้งหมด">
+          {nav.map((n) =>
+            isGroup(n) ? (
+              <div key={n.label}>
+                <div className="more-sheet-group">{n.label}</div>
+                {n.children.map((c) => leaf(c, true))}
+              </div>
+            ) : (
+              leaf(n, false)
+            ),
+          )}
+        </nav>
+      </div>
     </div>
   );
 }

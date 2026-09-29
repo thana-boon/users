@@ -64,7 +64,7 @@
   --color-info: #1e2a5e;
   --color-info-bg: #e9edf7;
 
-  --text-xs: 11px;
+  --text-xs: 12px;
   --text-sm: 13px;
   --text-md: 15px;
   --text-lg: 18px;
@@ -116,6 +116,7 @@
 * { box-sizing: border-box; }
 
 html, body { padding: 0; margin: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 body {
   font-family: var(--font-th);
@@ -148,7 +149,26 @@ h1, h2, h3, h4 { margin: 0; font-weight: 700; line-height: 1.3; }
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; }
 
-:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: var(--radius-sm); }
+/* No 300ms double-tap wait on anything tappable; no grey flash on iOS. */
+a, button, input, select, textarea, label, summary, [role='button'] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* An outline, not a box-shadow + border-radius: the old rule re-shaped whatever
+   got focus (a square table cell became rounded), and a shadow is clipped by
+   any overflow:hidden parent. Inputs keep their own ring below. */
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.form-input:focus-visible, .form-select:focus-visible, .form-textarea:focus-visible { outline: none; }
+
+/* Keyboard users jump past the header straight to the page. */
+.skip-link {
+  position: absolute; left: 12px; top: -48px; z-index: var(--z-tooltip);
+  padding: 10px 16px; border-radius: var(--radius-sm);
+  background: var(--skdw-gold); color: var(--skdw-dark); font-weight: 600;
+  transition: top var(--transition-fast);
+}
+.skip-link:focus { top: 12px; }
 
 /* ── Buttons ── */
 .btn {
@@ -200,11 +220,22 @@ button { font-family: inherit; }
   box-shadow: var(--shadow-focus);
   outline: none;
 }
-.form-input:disabled { background: var(--skdw-bg); color: var(--skdw-muted); }
+.form-input:disabled, .form-select:disabled, .form-textarea:disabled {
+  background: var(--skdw-bg); color: var(--skdw-muted);
+  /* iOS paints disabled text at ~40% on its own — too faint to read a value. */
+  -webkit-text-fill-color: var(--skdw-muted); opacity: 1;
+}
+/* Read-only is not disabled: the value is real and meant to be read (and
+   copied), it just is not yours to change. Darker text than a disabled box. */
+.form-input[readonly]:not(:disabled) {
+  background: var(--skdw-bg); color: var(--skdw-dark); border-style: dashed;
+}
+.form-input[readonly]:not(:disabled):hover { border-color: var(--skdw-border); }
 .form-input.error { border-color: var(--color-error); }
 .form-label { display: block; font-size: var(--text-sm); font-weight: 500; margin-bottom: 6px; }
-.form-hint { font-size: var(--text-xs); color: var(--skdw-muted); margin-top: 4px; }
-.form-error { font-size: var(--text-xs); color: var(--color-error); margin-top: 4px; }
+.form-label .form-label-icon { vertical-align: -2px; margin-left: 4px; color: var(--skdw-muted); }
+.form-hint { font-size: var(--text-xs); line-height: 1.5; color: var(--skdw-muted); margin: 4px 0 0; }
+.form-error { font-size: var(--text-xs); line-height: 1.5; color: var(--color-error); margin: 4px 0 0; }
 .required::after { content: ' *'; color: var(--color-error); }
 
 /* ── Cards ── */
@@ -265,12 +296,15 @@ button { font-family: inherit; }
 .table tbody tr:hover td { background: var(--skdw-bg); }
 .table .num { font-variant-numeric: tabular-nums; }
 
-/* ── Grids ── */
-.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-4); }
-.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
-.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); }
-@media (max-width: 900px) { .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+/* ── Grids ──
+   minmax(0, 1fr), not 1fr: a bare 1fr column grows to its widest child (a
+   <select> sizes itself to its longest option), which pushed whole forms past
+   the edge of a phone screen. */
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
+@media (max-width: 900px) { .grid-3, .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: minmax(0, 1fr); } }
 
 /* ── Stat card ── */
 .stat {
@@ -332,7 +366,8 @@ button { font-family: inherit; }
 }
 .modal {
   background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
-  width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; animation: scale-in 0.3s var(--ease-ci);
+  width: 100%; max-width: 520px; max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain;
+  animation: scale-in 0.25s var(--ease-ci);
 }
 
 /* ── Utilities ── */
@@ -456,6 +491,92 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 @media (max-width: 560px) {
   .reg-search { flex-basis: 100%; margin-left: 0; }
 }
+
+/* ── ข้อมูลของฉัน (/users/me) — built for a phone first ──
+   One column of cards; the save bar rides the bottom of the screen. */
+.me-hero { display: flex; gap: var(--space-4); align-items: flex-start; }
+.me-hero-body { flex: 1; min-width: 0; }
+.me-hero-body .page-title { overflow-wrap: anywhere; }
+.me-hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.me-photo {
+  width: 116px; aspect-ratio: 3 / 4; flex: none; overflow: hidden;
+  border-radius: var(--radius-md); border: 1px solid var(--skdw-border);
+  background: var(--skdw-purple-pale); color: var(--skdw-purple);
+  display: grid; place-items: center; font-size: 32px; font-weight: 700;
+}
+.me-photo img { width: 100%; height: 100%; object-fit: cover; }
+.me-section { scroll-margin-top: 80px; }
+.me-section-hint { font-size: var(--text-sm); line-height: 1.6; color: var(--skdw-muted); margin: 0 0 var(--space-3); }
+.me-fields { gap: var(--space-4) var(--space-3); }
+
+.me-savebar {
+  position: sticky; bottom: 12px; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--card); border: 1px solid var(--skdw-border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  transition: border-color var(--transition-base);
+}
+.me-savebar[data-dirty] { border-color: var(--skdw-gold); }
+.me-savebar-status { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: var(--text-sm); }
+.me-savebar-hint { font-size: var(--text-xs); }
+.me-savebar-btn { flex: none; min-width: 180px; min-height: 44px; }
+
+@media (max-width: 640px) {
+  .me-hero { gap: var(--space-3); }
+  .me-photo { width: 84px; font-size: 26px; }
+  .me-savebar { bottom: 8px; padding: var(--space-2); gap: var(--space-2); }
+  .me-savebar-status { padding-left: var(--space-2); }
+  .me-savebar-hint { display: none; }
+  .me-savebar-btn { flex: 1 1 auto; min-width: 0; max-width: 240px; min-height: 48px; font-weight: 600; }
+}
+
+/* Combo's list (rendered in a portal, so styled here). */
+.combo-opt { padding: 8px 12px; font-size: var(--text-md); }
+
+/* ── Touch & phone sizing ──
+   Two different questions, two queries:
+   · (pointer: coarse) — a finger, at any width (an iPad too). Everything
+     tappable gets a 44px target (Apple HIG / WCAG 2.5.5).
+   · (max-width: 640px) — a phone-sized screen, even under a mouse. Inputs go
+     to 16px text, below which iOS Safari zooms the page on focus and never
+     zooms back out; dialogs become bottom sheets within thumb reach. */
+@media (pointer: coarse) {
+  .btn, .btn-sm { min-height: 44px; }
+  .btn-sm { padding: 8px 14px; }
+  .form-input, .form-select { height: 44px; }
+  .reg-grades { min-height: 46px; }
+  .reg-grade { padding: 10px 14px; }
+  .reg-room { height: 40px; line-height: 38px; padding: 0 14px; }
+  .reg-search .form-input { height: 44px; }
+  .chip { padding: 6px 12px; }
+  .combo-opt { padding: 12px 14px; min-height: 44px; }
+}
+@media (max-width: 640px) {
+  .form-input, .form-select, .form-textarea { font-size: 16px; }
+  .reg-search .form-input { font-size: 16px; }
+  .card { padding: var(--space-4); }
+  .card-pad { padding: var(--space-4); }
+  .card-header { padding: var(--space-3) var(--space-4); }
+  .page-title { font-size: 21px; }
+  .stat { padding: var(--space-4); }
+  .stat-value { font-size: var(--text-xl); }
+
+  .modal-scrim { align-items: flex-end; padding: 0; }
+  .modal {
+    max-width: none !important; max-height: 92dvh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: sheet-up 0.28s var(--ease-ci);
+  }
+  /* The two buttons of a confirm / notice: full-width, primary nearest the thumb. */
+  .modal .row-between > .btn { flex: 1 1 0; }
+
+  /* Above the bottom nav and the floating home button, full width. */
+  .toast-stack { left: 16px; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); }
+  .toast { max-width: none; }
+}
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
 /* ── Motion system (CI §6) ── */
 @keyframes fade-up  { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
