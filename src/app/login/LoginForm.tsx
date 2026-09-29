@@ -93,7 +93,7 @@ export default function LoginForm({ next, denied, expired, signedInAs }: LoginFo
     <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 16, background: 'var(--skdw-bg)' }}>
       <div className="card" style={{ maxWidth: 400, width: '100%' }}>
         <div className="row" style={{ marginBottom: 8 }}>
-          <div aria-hidden style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--skdw-purple)', color: 'var(--skdw-gold)', display: 'grid', placeItems: 'center', fontWeight: 800, fontFamily: 'var(--font-en)' }}>S</div>
+          <div aria-hidden style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--grad-brand)', color: 'var(--skdw-gold)', boxShadow: '0 4px 14px rgba(91, 45, 142, 0.35)', display: 'grid', placeItems: 'center', fontWeight: 800, fontFamily: 'var(--font-en)' }}>S</div>
           <div>
             <div style={{ fontWeight: 700 }}>SchoolOS</div>
             <div className="muted" style={{ fontSize: 13 }}>ข้อมูลนักเรียนและครู</div>

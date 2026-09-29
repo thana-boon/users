@@ -107,14 +107,17 @@ export function MeShell({
 
       <style>{`
         .me-header {
-          height: 64px; background: var(--skdw-purple); color: #fff;
+          height: 64px; background: var(--grad-brand); color: #fff;
           display: flex; align-items: center; gap: 12px;
-          padding: 0 var(--space-6); box-shadow: var(--shadow-md);
+          padding: 0 var(--space-6); border-bottom: 3px solid var(--skdw-gold);
+          box-shadow: 0 6px 20px rgba(91, 45, 142, 0.28);
           position: sticky; top: 0; z-index: var(--z-sticky);
         }
         .me-logo {
           width: 34px; height: 34px; border-radius: 9px; flex: none;
-          background: var(--skdw-gold); color: var(--skdw-dark);
+          background: linear-gradient(135deg, #ffe066, var(--skdw-gold) 55%, var(--skdw-gold-dark));
+          color: var(--skdw-dark);
+          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.6);
           display: grid; place-items: center; font-weight: 800; font-family: var(--font-en);
         }
         .me-avatar {

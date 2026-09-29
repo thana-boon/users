@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { withBase } from '@/lib/client';
 import { confirmLeave } from '@/lib/useUnsavedChanges';
 import { allows, isAdminPerms } from '@/lib/permissions';
@@ -145,8 +145,23 @@ function UserMenu({ session, onLogout }: { session: SessionInfo; onLogout: () =>
   );
 }
 
-type Leaf = { href: string; label: string; Icon: typeof IconDashboard; exact?: boolean };
-type Group = { label: string; Icon: typeof IconDashboard; children: Leaf[] };
+/** The hue a page's icon wears in every menu — one of the --tone-* tokens. */
+type Tone =
+  | 'purple' | 'indigo' | 'blue' | 'sky' | 'cyan' | 'teal' | 'green' | 'lime'
+  | 'amber' | 'orange' | 'red' | 'rose' | 'pink' | 'fuchsia' | 'slate';
+type Leaf = { href: string; label: string; Icon: typeof IconDashboard; tone: Tone; exact?: boolean };
+type Group = { label: string; Icon: typeof IconDashboard; tone: Tone; children: Leaf[] };
+
+const toneStyle = (tone: Tone) => ({ '--tone': `var(--tone-${tone})` }) as CSSProperties;
+
+/** A menu icon on a tile of its page's hue. */
+function NavIcon({ Icon, tone, size = 18, small }: { Icon: typeof IconDashboard; tone: Tone; size?: number; small?: boolean }) {
+  return (
+    <span className={small ? 'ico-tile ico-tile-sm nav-ico' : 'ico-tile nav-ico'} style={toneStyle(tone)}>
+      <Icon width={size} height={size} />
+    </span>
+  );
+}
 type NavNode = Leaf | Group;
 
 const isGroup = (n: NavNode): n is Group => 'children' in n;
@@ -155,45 +170,47 @@ const isGroup = (n: NavNode): n is Group => 'children' in n;
 const MAX_BAR = 5;
 
 const NAV: NavNode[] = [
-  { href: '/users', label: 'ภาพรวม', Icon: IconDashboard, exact: true },
+  { href: '/users', label: 'ภาพรวม', Icon: IconDashboard, tone: 'indigo', exact: true },
   {
     label: 'นักเรียน',
     Icon: IconStudents,
+    tone: 'blue',
     children: [
-      { href: '/users/students', label: 'ทะเบียนนักเรียน', Icon: IconStudents },
-      { href: '/users/placements', label: 'จัดเข้าห้อง', Icon: IconEnroll },
-      { href: '/users/promotions', label: 'เลื่อนชั้น', Icon: IconPromote },
-      { href: '/users/class-numbers', label: 'จัดเลขที่', Icon: IconHash },
-      { href: '/users/graduations', label: 'จบการศึกษา', Icon: IconGraduate },
-      { href: '/users/leaves', label: 'พักการเรียน', Icon: IconPause },
-      { href: '/users/withdrawals', label: 'จำหน่าย/ลาออก', Icon: IconExit },
-      { href: '/users/former-students', label: 'นักเรียนเก่า', Icon: IconHistory },
+      { href: '/users/students', label: 'ทะเบียนนักเรียน', Icon: IconStudents, tone: 'blue' },
+      { href: '/users/placements', label: 'จัดเข้าห้อง', Icon: IconEnroll, tone: 'teal' },
+      { href: '/users/promotions', label: 'เลื่อนชั้น', Icon: IconPromote, tone: 'green' },
+      { href: '/users/class-numbers', label: 'จัดเลขที่', Icon: IconHash, tone: 'sky' },
+      { href: '/users/graduations', label: 'จบการศึกษา', Icon: IconGraduate, tone: 'amber' },
+      { href: '/users/leaves', label: 'พักการเรียน', Icon: IconPause, tone: 'orange' },
+      { href: '/users/withdrawals', label: 'จำหน่าย/ลาออก', Icon: IconExit, tone: 'rose' },
+      { href: '/users/former-students', label: 'นักเรียนเก่า', Icon: IconHistory, tone: 'slate' },
     ],
   },
   {
     label: 'บุคลากร',
     Icon: IconTeachers,
+    tone: 'purple',
     children: [
-      { href: '/users/teachers', label: 'ครู', Icon: IconTeachers },
-      { href: '/users/homerooms', label: 'ครูประจำชั้น', Icon: IconHomeroom },
-      { href: '/users/special-teachers', label: 'อาจารย์พิเศษ', Icon: IconSpecialTeacher },
-      { href: '/users/workers', label: 'คนงาน', Icon: IconWorker },
-      { href: '/users/subject-groups', label: 'กลุ่มสาระ', Icon: IconSubjectGroup },
+      { href: '/users/teachers', label: 'ครู', Icon: IconTeachers, tone: 'purple' },
+      { href: '/users/homerooms', label: 'ครูประจำชั้น', Icon: IconHomeroom, tone: 'fuchsia' },
+      { href: '/users/special-teachers', label: 'อาจารย์พิเศษ', Icon: IconSpecialTeacher, tone: 'pink' },
+      { href: '/users/workers', label: 'คนงาน', Icon: IconWorker, tone: 'orange' },
+      { href: '/users/subject-groups', label: 'กลุ่มสาระ', Icon: IconSubjectGroup, tone: 'teal' },
     ],
   },
-  { href: '/users/academic-years', label: 'ปีการศึกษา', Icon: IconCalendar },
-  { href: '/users/archive', label: 'ถังขยะ', Icon: IconTrash },
-  { href: '/users/settings', label: 'ตั้งค่าระบบ', Icon: IconSettings },
-  { href: '/users/permissions', label: 'จัดการสิทธิ์', Icon: IconShield },
-  { href: '/users/api-manager', label: 'API Manager', Icon: IconKey },
-  { href: '/users/backups', label: 'สำรอง/กู้คืนข้อมูล', Icon: IconDatabase },
-  { href: '/users/audit', label: 'บันทึกการใช้งาน', Icon: IconAudit },
+  { href: '/users/academic-years', label: 'ปีการศึกษา', Icon: IconCalendar, tone: 'cyan' },
+  { href: '/users/archive', label: 'ถังขยะ', Icon: IconTrash, tone: 'red' },
+  { href: '/users/settings', label: 'ตั้งค่าระบบ', Icon: IconSettings, tone: 'slate' },
+  { href: '/users/permissions', label: 'จัดการสิทธิ์', Icon: IconShield, tone: 'green' },
+  { href: '/users/api-manager', label: 'API Manager', Icon: IconKey, tone: 'amber' },
+  { href: '/users/backups', label: 'สำรอง/กู้คืนข้อมูล', Icon: IconDatabase, tone: 'sky' },
+  { href: '/users/audit', label: 'บันทึกการใช้งาน', Icon: IconAudit, tone: 'indigo' },
 ];
 
 // Flat list of every leaf (for the mobile bottom nav — the group collapses to
 // its first child there so the bar stays compact).
 const MOBILE_NAV: Leaf[] = NAV.map((n) =>
-  isGroup(n) ? { ...n.children[0], label: n.label, Icon: n.Icon } : n,
+  isGroup(n) ? { ...n.children[0], label: n.label, Icon: n.Icon, tone: n.tone } : n,
 );
 
 // A moderator sees only the pages their grants open (same rule table as
@@ -236,7 +253,7 @@ export function AppShell({
   const nav: NavNode[] = isAdmin ? NAV : navFor(perms);
   const mobileNav: Leaf[] = isAdmin
     ? MOBILE_NAV
-    : nav.map((n) => (isGroup(n) ? { ...n.children[0], label: n.label, Icon: n.Icon } : n));
+    : nav.map((n) => (isGroup(n) ? { ...n.children[0], label: n.label, Icon: n.Icon, tone: n.tone } : n));
 
   async function logout() {
     // Asked BEFORE the session is killed — staying must still leave a way to save.
@@ -268,7 +285,8 @@ export function AppShell({
             aria-hidden
             style={{
               width: 34, height: 34, borderRadius: 9,
-              background: 'var(--skdw-gold)', color: 'var(--skdw-dark)',
+              background: 'linear-gradient(135deg, #ffe066, var(--skdw-gold) 55%, var(--skdw-gold-dark))',
+              color: 'var(--skdw-dark)', boxShadow: '0 3px 10px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.6)',
               display: 'grid', placeItems: 'center', fontWeight: 800,
               fontFamily: 'var(--font-en)',
             }}
@@ -320,7 +338,7 @@ export function AppShell({
                 aria-current={isActive(pathname, node.href, node.exact) ? 'page' : undefined}
                 data-active={isActive(pathname, node.href, node.exact)}
               >
-                <node.Icon width={20} height={20} />
+                <NavIcon Icon={node.Icon} tone={node.tone} />
                 <span>{node.label}</span>
               </Link>
             ),
@@ -335,11 +353,11 @@ export function AppShell({
 
       {/* Bottom nav (mobile) */}
       <nav className="bottom-nav" aria-label="เมนูหลัก (มือถือ)">
-        {barItems.map(({ href, label, Icon, exact }) => {
+        {barItems.map(({ href, label, Icon, tone, exact }) => {
           const active = isActive(pathname, href, exact);
           return (
             <Link key={href} href={href} className="bottom-item" data-active={active} aria-current={active ? 'page' : undefined}>
-              <Icon width={22} height={22} />
+              <NavIcon Icon={Icon} tone={tone} size={19} />
               <span>{label}</span>
             </Link>
           );
@@ -353,7 +371,7 @@ export function AppShell({
             aria-expanded={moreOpen}
             onClick={() => setMoreOpen(true)}
           >
-            <IconMore width={22} height={22} />
+            <NavIcon Icon={IconMore} tone="slate" size={19} />
             <span>เพิ่มเติม</span>
           </button>
         )}
@@ -363,41 +381,51 @@ export function AppShell({
 
       <style>{`
         .app-header {
-          height: 64px; background: var(--skdw-purple); color: #fff;
+          height: 64px; background: var(--grad-brand); color: #fff;
           display: flex; align-items: center; padding: 0 var(--space-6);
-          box-shadow: var(--shadow-md); position: sticky; top: 0; z-index: var(--z-sticky);
+          border-bottom: 3px solid var(--skdw-gold);
+          box-shadow: 0 6px 20px rgba(91, 45, 142, 0.28); position: sticky; top: 0; z-index: var(--z-sticky);
         }
+        /* Pale gold on the purple bar is unreadable — the header's badge is solid. */
+        .app-header .badge-gold { background: var(--skdw-gold); color: var(--skdw-dark); border-color: rgba(255, 255, 255, 0.5); }
         .app-main { flex: 1; min-width: 0; padding: var(--space-8); padding-bottom: 88px; }
         .app-main:focus { outline: none; }
         .sidebar-desktop {
-          width: 240px; background: #fff; border-right: 0.5px solid var(--skdw-border);
+          width: 240px; background: linear-gradient(180deg, #fff 0%, #fbf8ff 100%);
+          border-right: 1px solid var(--skdw-border); box-shadow: 2px 0 12px rgba(91, 45, 142, 0.05);
           padding: var(--space-4) var(--space-3); display: flex; flex-direction: column; gap: 4px;
-          position: sticky; top: 64px; height: calc(100dvh - 64px); overflow-y: auto;
+          position: sticky; top: 67px; height: calc(100dvh - 67px); overflow-y: auto;
         }
         .side-item {
-          display: flex; align-items: center; gap: var(--space-3); padding: 10px 14px;
+          display: flex; align-items: center; gap: var(--space-3); padding: 6px 10px;
           border-radius: var(--radius-sm); font-size: var(--text-md); color: var(--skdw-dark);
           transition: background var(--transition-fast);
         }
-        .side-item:hover { background: var(--skdw-bg); }
-        .side-item[data-active="true"] { background: var(--skdw-purple-pale); color: var(--skdw-purple); font-weight: 600; }
+        .side-item:hover, .side-group-btn:hover, .side-subitem:hover { background: var(--skdw-purple-pale); }
+        .side-item[data-active="true"], .side-subitem[data-active="true"] {
+          background: linear-gradient(90deg, var(--skdw-purple-pale), rgba(241, 237, 247, 0.4));
+          color: var(--skdw-purple); font-weight: 600;
+          box-shadow: inset 0 0 0 1px rgba(91, 45, 142, 0.14);
+        }
+        /* The current page's tile fills with its own hue. */
+        [data-active="true"] > .nav-ico {
+          background: var(--tone); color: #fff;
+          box-shadow: 0 3px 10px color-mix(in srgb, var(--tone) 40%, transparent);
+        }
         .side-group-btn {
-          display: flex; align-items: center; gap: var(--space-3); padding: 10px 14px; width: 100%;
+          display: flex; align-items: center; gap: var(--space-3); padding: 6px 10px; width: 100%;
           border: none; background: none; cursor: pointer; text-align: left;
           border-radius: var(--radius-sm); font-size: var(--text-md); color: var(--skdw-dark);
           font-family: inherit; transition: background var(--transition-fast);
         }
-        .side-group-btn:hover { background: var(--skdw-bg); }
         .side-group-btn[data-active="true"] { color: var(--skdw-purple); font-weight: 600; }
         .side-group-chevron { margin-left: auto; transition: transform var(--transition-fast); }
         .side-group-chevron[data-open="false"] { transform: rotate(-90deg); }
         .side-subitem {
-          display: flex; align-items: center; gap: var(--space-3); padding: 8px 14px 8px 40px;
+          display: flex; align-items: center; gap: var(--space-3); padding: 5px 10px 5px 26px;
           border-radius: var(--radius-sm); font-size: var(--text-md); color: var(--skdw-muted);
           transition: background var(--transition-fast);
         }
-        .side-subitem:hover { background: var(--skdw-bg); }
-        .side-subitem[data-active="true"] { background: var(--skdw-purple-pale); color: var(--skdw-purple); font-weight: 600; }
         .user-btn {
           display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px;
           border: 1px solid transparent; border-radius: 999px; cursor: pointer;
@@ -411,8 +439,8 @@ export function AppShell({
         .user-btn-chevron[data-open="false"] { transform: rotate(-90deg); }
         .user-menu {
           position: absolute; top: calc(100% + 8px); right: 0; min-width: 208px;
-          background: #fff; color: var(--skdw-dark); border: 0.5px solid var(--skdw-border);
-          border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+          background: #fff; color: var(--skdw-dark); border: 1px solid var(--skdw-border);
+          border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
           padding: 6px; z-index: 300;
         }
         .user-menu-head {
@@ -455,6 +483,7 @@ export function AppShell({
             display: flex; position: fixed; bottom: 0; left: 0; right: 0;
             height: calc(64px + env(safe-area-inset-bottom));
             background: var(--card); border-top: 1px solid var(--skdw-border); z-index: var(--z-sticky);
+            box-shadow: 0 -4px 18px rgba(91, 45, 142, 0.1);
             padding-bottom: env(safe-area-inset-bottom);
           }
           .bottom-item {
@@ -465,6 +494,7 @@ export function AppShell({
           .bottom-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .bottom-item[data-active="true"] { color: var(--skdw-purple); font-weight: 600; }
           .bottom-item:active { background: var(--skdw-purple-pale); }
+          .bottom-item .nav-ico { width: 38px; height: 28px; border-radius: 999px; }
         }
         .more-sheet-list { display: flex; flex-direction: column; gap: 2px; padding: 0 var(--space-2) var(--space-4); }
         .more-sheet-group {
@@ -472,7 +502,7 @@ export function AppShell({
           color: var(--skdw-muted); letter-spacing: 0.02em;
         }
         .more-sheet-list .side-item, .more-sheet-list .side-subitem { min-height: 48px; }
-        .more-sheet-list .side-subitem { padding-left: 14px; color: var(--skdw-dark); }
+        .more-sheet-list .side-subitem { padding-left: 10px; color: var(--skdw-dark); }
       `}</style>
     </div>
   );
@@ -496,7 +526,7 @@ function NavGroup({ group, pathname }: { group: Group; pathname: string }) {
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <group.Icon width={20} height={20} />
+        <NavIcon Icon={group.Icon} tone={group.tone} />
         <span>{group.label}</span>
         <IconChevron width={16} height={16} className="side-group-chevron" data-open={open} />
       </button>
@@ -511,7 +541,7 @@ function NavGroup({ group, pathname }: { group: Group; pathname: string }) {
               aria-current={a ? 'page' : undefined}
               data-active={a}
             >
-              <c.Icon width={16} height={16} />
+              <NavIcon Icon={c.Icon} tone={c.tone} size={15} small />
               <span>{c.label}</span>
             </Link>
           );
@@ -561,7 +591,7 @@ function MoreSheet({
         data-active={a}
         onClick={onClose}
       >
-        <l.Icon width={20} height={20} />
+        <NavIcon Icon={l.Icon} tone={l.tone} small={sub} size={sub ? 15 : 18} />
         <span>{l.label}</span>
       </Link>
     );

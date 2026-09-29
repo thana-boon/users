@@ -4,6 +4,16 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/client';
 import { formatThaiDate } from '@/lib/thai';
+import { IconPause, IconStudents, IconTeachers } from '@/components/Icons';
+
+/** One hue per subject-group bar, cycled — a chart of eight purple bars read as one. */
+const BAR_TONES = ['purple', 'blue', 'teal', 'green', 'amber', 'orange', 'rose', 'fuchsia', 'sky', 'indigo'];
+
+/** A stat's hue for a gender row; anything else stays brand purple. */
+const genderTone = (g: string): CSSProperties | undefined =>
+  g === 'ชาย' ? ({ '--tone': 'var(--gender-male)' } as CSSProperties)
+  : g === 'หญิง' ? ({ '--tone': 'var(--gender-female)' } as CSSProperties)
+  : undefined;
 
 interface GenderBucket { male: number; female: number; other: number; count: number }
 interface RoomBucket extends GenderBucket { classroom: string }
@@ -24,13 +34,18 @@ interface Dashboard {
   teachersBySubject: { subjectGroup: string; count: number }[];
 }
 
-function BarRow({ label, count, max }: { label: string; count: number; max: number }) {
+function BarRow({ label, count, max, tone }: { label: string; count: number; max: number; tone: string }) {
   const pct = max ? Math.round((count / max) * 100) : 0;
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 44px', alignItems: 'center', gap: 10 }}>
       <span style={{ fontSize: 13 }}>{label}</span>
-      <div style={{ background: 'var(--skdw-bg)', borderRadius: 999, height: 10, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: 'var(--skdw-purple)', borderRadius: 999, transition: 'width .3s ease' }} />
+      <div style={{ background: 'var(--skdw-purple-pale)', borderRadius: 999, height: 10, overflow: 'hidden' }}>
+        <div
+          style={{
+            width: `${pct}%`, height: '100%', borderRadius: 999, transition: 'width .3s ease',
+            background: `linear-gradient(90deg, color-mix(in srgb, var(--tone-${tone}) 60%, #fff), var(--tone-${tone}))`,
+          }}
+        />
       </div>
       <span className="mono" style={{ fontSize: 13, textAlign: 'right' }}>{count.toLocaleString('th-TH')}</span>
     </div>
@@ -47,7 +62,7 @@ function GenderBar({ b, max, height = 12 }: { b: GenderBucket; max: number; heig
   };
   return (
     <div
-      style={{ display: 'flex', width: '100%', height, borderRadius: 999, overflow: 'hidden', background: 'var(--skdw-bg)' }}
+      style={{ display: 'flex', width: '100%', height, borderRadius: 999, overflow: 'hidden', background: 'var(--skdw-purple-pale)' }}
       title={`ชาย ${b.male} · หญิง ${b.female}${b.other ? ` · อื่น ๆ ${b.other}` : ''}`}
     >
       <div style={{ ...seg, width: pct(b.male), background: 'var(--gender-male)' }}>{b.male > 0 ? b.male : ''}</div>
@@ -152,27 +167,39 @@ export default function DashboardPage() {
 
       {/* Stat cards */}
       <div className="grid-4">
-        <div className="stat">
-          <span className="stat-label">นักเรียนทั้งหมด</span>
+        <div className="stat tone-blue">
+          <div className="stat-head">
+            <span className="stat-label">นักเรียนทั้งหมด</span>
+            <span className="stat-ico"><IconStudents /></span>
+          </div>
           <span className="stat-value">{data.totalStudents.toLocaleString('th-TH')}</span>
           <span className="stat-sub">คน (ปีปัจจุบัน)</span>
         </div>
-        <div className="stat">
-          <span className="stat-label">ครูทั้งหมด</span>
+        <div className="stat tone-purple">
+          <div className="stat-head">
+            <span className="stat-label">ครูทั้งหมด</span>
+            <span className="stat-ico"><IconTeachers /></span>
+          </div>
           <span className="stat-value">{data.totalTeachers.toLocaleString('th-TH')}</span>
           <span className="stat-sub">คน</span>
         </div>
         {/* Only when it applies — the usual case keeps the row at four tiles. */}
         {data.studentsOnLeave > 0 && (
-          <Link href="/users/leaves" className="stat">
-            <span className="stat-label">พักการเรียน</span>
+          <Link href="/users/leaves" className="stat tone-orange">
+            <div className="stat-head">
+              <span className="stat-label">พักการเรียน</span>
+              <span className="stat-ico"><IconPause /></span>
+            </div>
             <span className="stat-value">{data.studentsOnLeave.toLocaleString('th-TH')}</span>
             <span className="stat-sub">คน (นับรวมในยอดนักเรียนแล้ว)</span>
           </Link>
         )}
         {data.byGender.map((g) => (
-          <div className="stat" key={g.gender}>
-            <span className="stat-label">เพศ{g.gender}</span>
+          <div className="stat" key={g.gender} style={genderTone(g.gender)}>
+            <div className="stat-head">
+              <span className="stat-label">เพศ{g.gender}</span>
+              <span className="stat-ico"><IconStudents /></span>
+            </div>
             <span className="stat-value">{g.count.toLocaleString('th-TH')}</span>
             <span className="stat-sub">{Math.round((g.count / totalGender) * 100)}% ของนักเรียน</span>
           </div>
@@ -191,8 +218,14 @@ export default function DashboardPage() {
         <div className="card">
           <h2 className="section-title">ครูตามกลุ่มสาระ</h2>
           <div className="stack" style={{ gap: 10 }}>
-            {data.teachersBySubject.slice(0, 8).map((s) => (
-              <BarRow key={s.subjectGroup} label={s.subjectGroup.replace('กลุ่มสาระการเรียนรู้', '')} count={s.count} max={maxSubject} />
+            {data.teachersBySubject.slice(0, 8).map((s, i) => (
+              <BarRow
+                key={s.subjectGroup}
+                label={s.subjectGroup.replace('กลุ่มสาระการเรียนรู้', '')}
+                count={s.count}
+                max={maxSubject}
+                tone={BAR_TONES[i % BAR_TONES.length]}
+              />
             ))}
             {data.teachersBySubject.length === 0 && <p className="muted">ยังไม่มีข้อมูล</p>}
           </div>
