@@ -192,17 +192,6 @@ function Registry() {
       </div>
 
       <section className="reg-filter" aria-label="เลือกชั้นและห้อง">
-        <div className="reg-search">
-          <IconSearch width={18} height={18} aria-hidden />
-          <input
-            className="form-input"
-            placeholder="ค้นหารหัส / ชื่อ / นามสกุล / ชื่อเล่น"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            aria-label="ค้นหานักเรียน"
-          />
-        </div>
-
         <div className="reg-grades" role="group" aria-label="ชั้น">
           <button type="button" className="reg-grade" aria-pressed={!grade} onClick={() => pickGrade('')}>
             ทุกชั้น <span className="reg-grade-n">{rosterTotal.toLocaleString('th-TH')}</span>
@@ -214,26 +203,38 @@ function Registry() {
           ))}
         </div>
 
-        {grade && roomTiles.length > 0 && (
-          <div className="reg-rooms" role="group" aria-label={`ห้องของ ${grade}`}>
-            <button type="button" className="reg-room reg-room-all" aria-pressed={!classroom} onClick={() => pickRoom('')}>
-              ทุกห้อง
-            </button>
-            {roomTiles.map((r) => (
-              <button
-                key={r.classroom}
-                type="button"
-                className="reg-room"
-                aria-pressed={classroom === r.classroom}
-                aria-label={`ห้อง ${r.classroom} ${r.count} คน`}
-                onClick={() => pickRoom(r.classroom)}
-              >
-                <span className="reg-room-no">{r.classroom}</span>
-                <span className="reg-room-n">{r.count} คน</span>
+        <div className="reg-toolbar">
+          {grade && roomTiles.length > 0 && (
+            <div className="reg-rooms" role="group" aria-label={`ห้องของ ${grade}`}>
+              <button type="button" className="reg-room reg-room-all" aria-pressed={!classroom} onClick={() => pickRoom('')}>
+                ทุกห้อง
               </button>
-            ))}
+              {roomTiles.map((r) => (
+                <button
+                  key={r.classroom}
+                  type="button"
+                  className="reg-room"
+                  aria-pressed={classroom === r.classroom}
+                  aria-label={`ห้อง ${r.classroom} ${r.count} คน`}
+                  onClick={() => pickRoom(r.classroom)}
+                >
+                  <span className="reg-room-no">ห้อง {r.classroom}</span>
+                  <span className="reg-room-n">{r.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="reg-search">
+            <IconSearch width={16} height={16} aria-hidden />
+            <input
+              className="form-input"
+              placeholder="ค้นหารหัส / ชื่อ / นามสกุล / ชื่อเล่น"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              aria-label="ค้นหานักเรียน"
+            />
           </div>
-        )}
+        </div>
       </section>
 
       {/* The roll */}
@@ -275,7 +276,7 @@ function Registry() {
               {rows.map((r) => (
                 <tr key={r.id} id={`stu-${r.id}`} className={r.id === lastId ? 'reg-row-last' : undefined}>
                   {inRoom && <td className="reg-no mono">{r.classNumber ?? '–'}</td>}
-                  <td style={{ paddingTop: 6, paddingBottom: 6 }}>
+                  <td>
                     <PhotoThumb
                       src={r.hasPhoto ? `/api/users/students/${r.id}/photo?thumb=1` : null}
                       initials={(r.firstName[0] ?? '') + (r.lastName[0] ?? '')}
@@ -297,13 +298,13 @@ function Registry() {
                     )}
                   </td>
                   <td>{r.nickname ?? <span className="muted">–</span>}</td>
-                  <td>{r.gender ?? <span className="muted">–</span>}</td>
+                  <td>{r.gender ? <span className="reg-gender" data-g={r.gender}>{r.gender}</span> : <span className="muted">–</span>}</td>
                   <td className="mono muted">{r.studentCode}</td>
                   {!inRoom && <>
                     <td>{r.gradeLevel ? `${r.gradeLevel}${r.classroom ? `/${r.classroom}` : ''}` : <span className="muted">–</span>}</td>
                     <td className="reg-no mono">{r.classNumber ?? '–'}</td>
                   </>}
-                  <td style={{ textAlign: 'right' }}><Link href={`/users/students/${r.id}`} className="chip">ดู/แก้ไข</Link></td>
+                  <td style={{ textAlign: 'right' }}><Link href={`/users/students/${r.id}`} className="reg-open">ดู/แก้ไข</Link></td>
                 </tr>
               ))}
             </tbody>
