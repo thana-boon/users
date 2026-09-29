@@ -424,7 +424,7 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 .reg-table .reg-c-gender { width: 76px; }
 .reg-table .reg-c-code { width: 96px; }
 .reg-table .reg-c-room { width: 88px; }
-.reg-table .reg-c-open { width: 72px; }
+.reg-table .reg-c-open { width: 96px; }
 /* The previous rows stay put, dimmed, while the next set loads — no collapse. */
 .reg-table tbody { transition: opacity var(--transition-fast); }
 .reg-table[data-stale] tbody { opacity: 0.55; }
@@ -441,7 +441,7 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 .reg-gender[data-g='หญิง']::before { background: var(--gender-female); }
 /* The open link only shows on the row being pointed at (always on touch). */
 .reg-open {
-  display: inline-flex; padding: 3px 10px; border-radius: var(--radius-full);
+  display: inline-flex; padding: 3px 10px; border-radius: var(--radius-full); white-space: nowrap;
   font-size: var(--text-xs); font-weight: 500; color: var(--skdw-purple);
   opacity: 0; transition: opacity var(--transition-fast), background var(--transition-fast);
 }
