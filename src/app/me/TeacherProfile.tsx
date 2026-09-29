@@ -5,7 +5,6 @@ import { api } from '@/lib/client';
 import { sameValues, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { useNotice } from '@/components/Notice';
 import { PhoneInput } from '@/components/PhoneInput';
-import { PhotoCard } from '@/components/PhotoCard';
 import { Combo } from '@/components/Combo';
 import { DateField } from '@/components/DateField';
 import {
@@ -90,7 +89,6 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
     scoutQualifications: me.scoutQualifications ?? [],
     trainings: me.trainings ?? [],
   });
-  const [hasPhoto, setHasPhoto] = useState(me.hasPhoto);
   // `undefined` until the teacher unlocks and types — see CitizenIdField. The
   // key stays out of the payload, which is how the server reads "no change".
   const [citizenId, setCitizenId] = useState<string | null | undefined>(undefined);
@@ -151,17 +149,8 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
     <div className="stack" style={{ gap: 20 }}>
       <div className="card">
         <div className="me-hero">
-          {ro ? (
-            <ReadOnlyPhoto hasPhoto={hasPhoto} initials={initials} />
-          ) : (
-            <PhotoCard
-              baseEndpoint="/api/users/me/photo"
-              hasPhoto={hasPhoto}
-              initials={initials}
-              alt="รูปของฉัน"
-              onChange={setHasPhoto}
-            />
-          )}
+          {/* Never editable here, window open or not: only an admin changes a photo. */}
+          <ReadOnlyPhoto hasPhoto={me.hasPhoto} initials={initials} />
           <div className="me-hero-body">
             <h1 className="page-title">{me.prefix}{me.firstName} {me.lastName}</h1>
             <p className="muted mono" style={{ margin: '4px 0 0' }}>{me.teacherCode}</p>
@@ -269,7 +258,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
   );
 }
 
-/** The photo without its อัปโหลด/ลบ buttons, for a closed window. */
+/** The photo, view-only — the photo is changed by an admin, never by the teacher. */
 function ReadOnlyPhoto({ hasPhoto, initials }: { hasPhoto: boolean; initials: string }) {
   return (
     <div className="me-photo">

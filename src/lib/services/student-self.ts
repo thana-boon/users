@@ -38,8 +38,8 @@ import { normalizePhone, normalizePhoneFields } from '@/lib/phone';
  *  - ผู้ปกครอง — a record ABOUT someone else, and the one the school acts on in
  *    an emergency. The emergency contact in ที่อยู่ปัจจุบัน covers the "our
  *    number changed" case without letting a child rewrite their guardians.
- *  - รูปติดบัตร — an official photo, unlike a teacher's staff-directory one.
- *    Taken by the school, replaced by the school.
+ *  - รูปติดบัตร — an official photo, taken and replaced by the school. Same
+ *    rule for teachers: api/users/me/photo is read-only for both.
  */
 
 const nstr = z.string().nullable().optional();
