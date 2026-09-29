@@ -119,18 +119,22 @@ export function SaveBar({
   onSave,
   label = 'บันทึกข้อมูลของฉัน',
   hint,
+  dirty = false,
 }: {
   busy: boolean;
   onSave: () => void;
   label?: string;
   hint?: string;
+  /** Edits on the page nobody has saved yet — says so next to the button. */
+  dirty?: boolean;
 }) {
   return (
     <div className="card" style={{ position: 'sticky', bottom: 16, zIndex: 50 }}>
-      <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+      <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <button className="btn btn-primary" onClick={onSave} disabled={busy}>
           {busy ? 'กำลังบันทึก…' : label}
         </button>
+        {dirty && !busy && <span className="badge badge-warning">ยังไม่ได้บันทึก</span>}
         {hint && <span className="muted" style={{ fontSize: 12 }}>{hint}</span>}
       </div>
     </div>

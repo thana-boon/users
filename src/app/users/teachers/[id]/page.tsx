@@ -64,8 +64,8 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
   const [form, setForm] = useState<Partial<Detail> & { password?: string; citizenId?: string }>({});
   const [busy, setBusy] = useState(false);
   const [showResign, setShowResign] = useState(false);
-  // The three repeatable lists, held apart from `form` because they are arrays
-  // the RepeatList editor replaces wholesale rather than fields it sets.
+  // The three repeatable lists, held apart from `form` because each row saves
+  // on its own บันทึก (saveList) instead of riding the page save.
   const [lists, setLists] = useState<QualificationLists>(EMPTY_LISTS);
   const [address, setAddress] = useState<HouseholdAddressForm>({});
   // เลขบัตร / รหัสผ่าน start locked on every visit — see SensitiveLock.
@@ -116,7 +116,6 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
         emergencyRelationship: form.emergencyRelationship,
         workStart: form.workStart,
         householdAddress: address,
-        ...lists,
       };
       // Locked means the encrypted fields never reach the payload, not merely
       // that the inputs were greyed out.
@@ -133,6 +132,18 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
       });
     } catch (e) { notice({ kind: 'error', message: (e as Error).message }); }
     finally { setBusy(false); }
+  }
+
+  /** One วุฒิ/อบรม list, saved on its row's own บันทึก. */
+  async function saveList(patch: Partial<QualificationLists>) {
+    try {
+      await api(`/api/users/teachers/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      setLists((s) => ({ ...s, ...patch }));
+      notice({ message: 'บันทึกรายการแล้ว' });
+    } catch (e) {
+      notice({ kind: 'error', message: (e as Error).message });
+      throw e;
+    }
   }
 
   async function reinstate() {
@@ -310,9 +321,9 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
       </div>}
 
       {/* วุฒิการศึกษา / วุฒิลูกเสือ / การอบรม — the same editor the teacher gets
-          on /users/me. Saved by the same “บันทึก” as the fields above, so the
-          button is repeated at the bottom rather than the page having two. */}
-      <QualificationSections lists={lists} onChange={setLists} />
+          on /users/me. Each row saves on its own บันทึก; the button below is
+          the page save for the fields above, repeated so it is within reach. */}
+      <QualificationSections lists={lists} onChange={saveList} />
 
       <div className="row" style={{ gap: 8 }}>
         <button className="btn btn-primary btn-sm" onClick={save} disabled={busy}>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/client';
+import { sameValues, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { useNotice } from '@/components/Notice';
 import { PhoneInput } from '@/components/PhoneInput';
 import { PhotoCard } from '@/components/PhotoCard';
@@ -94,6 +95,12 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
   // key stays out of the payload, which is how the server reads "no change".
   const [citizenId, setCitizenId] = useState<string | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  // What was last saved, to tell an edit from a page someone only looked at.
+  // The วุฒิ lists are not in it: each row saves itself and guards its own draft.
+  const [saved, setSaved] = useState(() => ({ form, address }));
+  const [savedCount, setSavedCount] = useState(0);
+  const dirty = !sameValues({ form, address }, saved) || citizenId !== undefined;
+  useUnsavedChanges(dirty);
 
   const ro = !me.canEdit;
   const setV = (k: keyof typeof form) => (v: string) => setForm((s) => ({ ...s, [k]: v }));
@@ -110,16 +117,31 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
         body: JSON.stringify({
           ...form,
           householdAddress: address,
-          ...lists,
           ...(citizenId === undefined ? {} : { citizenId }),
         }),
       });
+      setSaved({ form, address });
+      // Re-mount the id field locked again, so a saved number is not "unsaved".
+      setCitizenId(undefined);
+      setSavedCount((n) => n + 1);
       reload();
       notice({ message: 'ข้อมูลของคุณถูกบันทึกแล้ว' });
     } catch (e) {
       notice({ kind: 'error', message: (e as Error).message });
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** One วุฒิ/อบรม list, saved on its row's own บันทึก. */
+  async function saveList(patch: Partial<QualificationLists>) {
+    try {
+      await api('/api/users/me', { method: 'PATCH', body: JSON.stringify(patch) });
+      setLists((s) => ({ ...s, ...patch }));
+      notice({ message: 'บันทึกรายการแล้ว' });
+    } catch (e) {
+      notice({ kind: 'error', message: (e as Error).message });
+      throw e;
     }
   }
 
@@ -215,6 +237,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
         <Locked label="ชื่อ" value={me.firstName} />
         <Locked label="นามสกุล" value={me.lastName} />
         <CitizenIdField
+          key={savedCount}
           masked={me.citizenIdMasked}
           canEdit={me.canEditSensitive}
           closedReason={me.sensitiveClosedReason}
@@ -224,12 +247,18 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
         <TeachingClasses url="/api/users/me/teaching" stored={me.gradeTaught} style={{ gridColumn: '1 / -1' }} />
       </Section>
 
-      {/* The three lists — the same editor an admin gets on the teacher page. */}
-      <QualificationSections lists={lists} onChange={setLists} readOnly={ro} />
-
       {!ro && (
-        <SaveBar busy={busy} onSave={save} hint="บันทึกทุกส่วนในหน้านี้พร้อมกัน" />
+        <SaveBar
+          busy={busy}
+          onSave={save}
+          dirty={dirty}
+          hint="บันทึกข้อมูลส่วนตัว ผู้ติดต่อฉุกเฉิน ที่อยู่ และเลขบัตรประชาชน"
+        />
       )}
+
+      {/* The three lists — the same editor an admin gets on the teacher page.
+          Below the save bar because they do not need it: each row has its own. */}
+      <QualificationSections lists={lists} onChange={saveList} readOnly={ro} />
 
       {/* No เปลี่ยนรหัสผ่าน card: staff passwords are set by an admin only
           (api/users/me/password refuses teachers). */}

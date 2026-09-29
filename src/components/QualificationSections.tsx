@@ -103,7 +103,7 @@ export function EducationList({
   readOnly = false,
 }: {
   rows: EducationRow[];
-  onChange: (rows: EducationRow[]) => void;
+  onChange: (rows: EducationRow[]) => void | Promise<unknown>;
   readOnly?: boolean;
 }) {
   return (
@@ -187,7 +187,7 @@ export function ScoutList({
   readOnly = false,
 }: {
   rows: ScoutRow[];
-  onChange: (rows: ScoutRow[]) => void;
+  onChange: (rows: ScoutRow[]) => void | Promise<unknown>;
   readOnly?: boolean;
 }) {
   return (
@@ -253,16 +253,17 @@ export function ScoutList({
  * combo three times. Each warrant stays its own row because each is its own
  * certificate, with its own number and date.
  *
- * Ticking only ADDS. An already-listed warrant shows ticked and greyed; taking
- * it off is the row's own ลบ, so a tick box can never throw away a certificate
- * number someone typed.
+ * Ticking only ADDS, and saves at once like any other row — the new card then
+ * has its own แก้ไข for the number and date. An already-listed warrant shows
+ * ticked and greyed; taking it off is the row's own ลบ, so a tick box can never
+ * throw away a certificate number someone typed.
  */
 function ScoutQuickPick({
   rows,
   onChange,
 }: {
   rows: ScoutRow[];
-  onChange: (rows: ScoutRow[]) => void;
+  onChange: (rows: ScoutRow[]) => void | Promise<unknown>;
 }) {
   const have = new Set(rows.map((r) => r.qualification?.trim()).filter(Boolean));
   return (
@@ -284,7 +285,10 @@ function ScoutQuickPick({
                 type="checkbox"
                 checked={on}
                 disabled={on}
-                onChange={() => onChange([...rows, { qualification: q }])}
+                onChange={() => {
+                  // A failed save has already been reported by the parent.
+                  Promise.resolve(onChange([...rows, { qualification: q }])).catch(() => {});
+                }}
               />
               {q}
             </label>
@@ -301,7 +305,7 @@ export function TrainingList({
   readOnly = false,
 }: {
   rows: TrainingRow[];
-  onChange: (rows: TrainingRow[]) => void;
+  onChange: (rows: TrainingRow[]) => void | Promise<unknown>;
   readOnly?: boolean;
 }) {
   return (
@@ -364,31 +368,38 @@ export function TrainingList({
   );
 }
 
-/** All three, in the order they appear on both pages. */
+/**
+ * All three, in the order they appear on both pages.
+ *
+ * Each row saves on its own บันทึก (see RepeatList), so `onChange` gets just
+ * the one list that changed and is expected to persist it — a list-only PATCH,
+ * which both the self and the admin endpoints accept. Reject to keep the row's
+ * editor open.
+ */
 export function QualificationSections({
   lists,
   onChange,
   readOnly = false,
 }: {
   lists: QualificationLists;
-  onChange: (lists: QualificationLists) => void;
+  onChange: (patch: Partial<QualificationLists>) => void | Promise<unknown>;
   readOnly?: boolean;
 }) {
   return (
     <>
       <EducationList
         rows={lists.educations}
-        onChange={(educations) => onChange({ ...lists, educations })}
+        onChange={(educations) => onChange({ educations })}
         readOnly={readOnly}
       />
       <ScoutList
         rows={lists.scoutQualifications}
-        onChange={(scoutQualifications) => onChange({ ...lists, scoutQualifications })}
+        onChange={(scoutQualifications) => onChange({ scoutQualifications })}
         readOnly={readOnly}
       />
       <TrainingList
         rows={lists.trainings}
-        onChange={(trainings) => onChange({ ...lists, trainings })}
+        onChange={(trainings) => onChange({ trainings })}
         readOnly={readOnly}
       />
     </>

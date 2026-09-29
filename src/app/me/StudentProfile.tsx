@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/client';
+import { sameValues, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { useNotice } from '@/components/Notice';
 import { PhoneInput } from '@/components/PhoneInput';
 import { CitizenIdField, ClosedNotice, Field, Locked, SaveBar, Section } from './parts';
@@ -104,6 +105,11 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
   // out of the payload entirely, which is what the server reads as "no change".
   const [citizenId, setCitizenId] = useState<string | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  // What was last saved, to tell an edit from a page someone only looked at.
+  const [saved, setSaved] = useState(() => ({ contact, health, address }));
+  const [savedCount, setSavedCount] = useState(0);
+  const dirty = !sameValues({ contact, health, address }, saved) || citizenId !== undefined;
+  useUnsavedChanges(dirty);
 
   const ro = !me.canEdit;
   const setC = (k: keyof typeof contact) => (v: string) => setContact((s) => ({ ...s, [k]: v }));
@@ -127,6 +133,10 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
           currentAddress: pick(address, ADDRESS_KEYS),
         }),
       });
+      setSaved({ contact, health, address });
+      // Re-mount the id field locked again, so a saved number is not "unsaved".
+      setCitizenId(undefined);
+      setSavedCount((n) => n + 1);
       reload();
       notice({ message: 'ข้อมูลติดต่อ สุขภาพ และที่อยู่ปัจจุบันของคุณถูกบันทึกแล้ว' });
     } catch (e) {
@@ -248,6 +258,7 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
         <Locked label="นามสกุล (อังกฤษ)" value={me.lastNameEn} />
         <Locked label="วันเดือนปีเกิด" value={me.birthDate} />
         <CitizenIdField
+          key={savedCount}
           masked={me.citizenIdMasked}
           canEdit={me.canEditSensitive}
           closedReason={me.sensitiveClosedReason}
@@ -260,7 +271,7 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
       </Section>
 
       {!ro && (
-        <SaveBar busy={busy} onSave={save} hint="บันทึกข้อมูลติดต่อ สุขภาพ และที่อยู่ปัจจุบันพร้อมกัน" />
+        <SaveBar busy={busy} onSave={save} dirty={dirty} hint="บันทึกข้อมูลติดต่อ สุขภาพ และที่อยู่ปัจจุบันพร้อมกัน" />
       )}
 
       <PasswordCard hasPassword={me.hasPassword} />
