@@ -6,6 +6,7 @@ import { sameValues, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { useNotice } from '@/components/Notice';
 import { PhoneInput } from '@/components/PhoneInput';
 import { Combo } from '@/components/Combo';
+import { ChoiceChips } from '@/components/ChoiceChips';
 import { DateField } from '@/components/DateField';
 import {
   EmergencyContactFields,
@@ -183,7 +184,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
         ) : (
           <>
             <DateField label="วันเดือนปีเกิด" value={form.birthDate} onChange={setV('birthDate')} />
-            <Combo label="เพศ" value={form.gender} onChange={setV('gender')} options={GENDER_OPTIONS} />
+            <ChoiceChips label="เพศ" value={form.gender} onChange={setV('gender')} options={GENDER_OPTIONS} allowOther={false} style={{ gridColumn: 'auto' }} />
             <Combo label="ศาสนา" value={form.religion} onChange={setV('religion')} options={RELIGION_OPTIONS} />
             <Combo label="สัญชาติ" value={form.nationality} onChange={setV('nationality')} options={NATIONALITY_OPTIONS} />
             <Combo label="เชื้อชาติ" value={form.ethnicity} onChange={setV('ethnicity')} options={ETHNICITY_OPTIONS} />

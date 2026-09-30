@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { normalizeChoice } from '@/lib/options';
-import { IconChevron } from './Icons';
+import { IconCheck, IconChevron, IconSearch } from './Icons';
 
 /**
  * Searchable single-value picker (combobox) for fields that have a short list of
@@ -23,6 +23,15 @@ import { IconChevron } from './Icons';
  * its options cut off by the dialog's own edge. Fixed + portal escapes every
  * such clip; the trade is that the position must be re-measured whenever
  * anything scrolls or resizes.
+ *
+ * On a touch screen the field opens {@link ComboSheet} instead — a bottom sheet
+ * with its own search box and a list the thumb can scroll. The dropdown did not
+ * survive a finger: an option picked on touch-DOWN meant a swipe to scroll the
+ * list chose whatever it started on, and the list vanishing before the finger
+ * lifted let the rest of the tap land on the field underneath, which focused
+ * the NEXT combo and opened its list too. The sheet picks on a finished tap,
+ * never touches the keyboard unless the search box is tapped, and hands focus
+ * back to this field — not the next one — when it closes.
  */
 export function Combo({
   label,
@@ -33,6 +42,7 @@ export function Combo({
   normalize = true,
   required = false,
   hint,
+  error,
   style,
   inputStyle,
 }: {
@@ -44,6 +54,8 @@ export function Combo({
   normalize?: boolean;
   required?: boolean;
   hint?: string;
+  /** Shown under the field, which is drawn red — e.g. a required field left blank. */
+  error?: string;
   style?: React.CSSProperties;
   inputStyle?: React.CSSProperties;
 }) {
@@ -60,6 +72,12 @@ export function Combo({
   const listRef = useRef<HTMLDivElement>(null);
 
   const text = value ?? '';
+  const coarse = useCoarsePointer();
+  const [sheet, setSheet] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const proxyRef = useRef<HTMLInputElement>(null);
+  // A list this long is searched, not scrolled: open it with the keyboard up.
+  const searchFirst = options.length > SEARCH_FIRST_OVER;
 
   const filtered = useMemo(() => {
     const q = text.trim().toLowerCase();
@@ -140,13 +158,65 @@ export function Combo({
     }
   }
 
+  if (coarse) {
+    return (
+      <div style={style}>
+        {label && <label className={`form-label${required ? ' required' : ''}`}>{label}</label>}
+        <div style={{ position: 'relative' }}>
+          <button
+            ref={triggerRef}
+            type="button"
+            className={`form-input combo-trigger${error ? ' error' : ''}`}
+            style={{ paddingRight: 40, ...inputStyle }}
+            aria-haspopup="listbox"
+            aria-expanded={sheet}
+            aria-invalid={error ? true : undefined}
+            aria-label={label ? `${label}: ${text || 'ยังไม่ได้เลือก'}` : undefined}
+            onClick={() => {
+              // iOS raises the keyboard only for a focus() made inside the tap
+              // itself; the sheet's search box does not exist yet, so focus a
+              // stand-in now and let the sheet move focus across once mounted —
+              // the keyboard stays up through the hand-over.
+              if (searchFirst) proxyRef.current?.focus({ preventScroll: true });
+              setSheet(true);
+            }}
+          >
+            {text ? <span className="combo-trigger-text">{text}</span> : <span className="combo-trigger-text muted">{placeholder}</span>}
+          </button>
+          <span aria-hidden className="combo-trigger-icon"><IconChevron width={16} height={16} /></span>
+          {searchFirst && (
+            <input ref={proxyRef} aria-hidden tabIndex={-1} className="combo-proxy" autoComplete="off" />
+          )}
+        </div>
+        {error && <p className="form-error">{error}</p>}
+        {hint && <p className="form-hint">{hint}</p>}
+        {sheet && (
+          <ComboSheet
+            searchFirst={searchFirst}
+            title={label ?? placeholder}
+            value={text}
+            options={options}
+            onPick={(v) => onChange(normalize ? (normalizeChoice(v, options) ?? '') : v.trim())}
+            onClose={() => {
+              setSheet(false);
+              // Back to THIS field (a button: no keyboard, no list) so the page
+              // does not jump and nothing else opens.
+              triggerRef.current?.focus({ preventScroll: true });
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={style}>
       {label && <label className={`form-label${required ? ' required' : ''}`}>{label}</label>}
       <div ref={wrapRef} style={{ position: 'relative' }}>
         <input
-          className="form-input"
+          className={`form-input${error ? ' error' : ''}`}
           style={{ paddingRight: 40, ...inputStyle }}
+          aria-invalid={error ? true : undefined}
           role="combobox"
           aria-expanded={open}
           aria-autocomplete="list"
@@ -201,7 +271,10 @@ export function Combo({
                   role="option"
                   aria-selected={selected}
                   onMouseEnter={() => setActive(i)}
-                  onPointerDown={(e) => { e.preventDefault(); commit(o); }}
+                  // Keep focus in the input; choose on the finished click, not
+                  // on the press — a press that becomes a scroll must not pick.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => commit(o)}
                   className="combo-opt"
                   style={{
                     cursor: 'pointer',
@@ -217,7 +290,217 @@ export function Combo({
           document.body,
         )}
       </div>
+      {error && <p className="form-error">{error}</p>}
       {hint && <p className="form-hint">{hint}</p>}
     </div>
+  );
+}
+
+/** Lists longer than this open with the search box focused (มหาวิทยาลัย, จังหวัด, วิชาเอก). */
+const SEARCH_FIRST_OVER = 20;
+
+/**
+ * True on a finger-first device (phone, tablet). Read after mount, so the
+ * server render and the first client render agree on the desktop field.
+ */
+function useCoarsePointer(): boolean {
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(pointer: coarse)');
+    const sync = () => setCoarse(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  return coarse;
+}
+
+/**
+ * The phone picker: a bottom sheet with a search box on top and the options
+ * below, each a full-width 48px row.
+ *
+ * - A row is chosen on click, which the browser only fires for a tap — a swipe
+ *   scrolls the list and chooses nothing.
+ * - The search box is NOT focused on open, so the keyboard stays down and the
+ *   whole list is in view; tapping it brings the keyboard for a long list
+ *   (มหาวิทยาลัย). While the keyboard is up the sheet sits on top of it,
+ *   measured from `visualViewport`, since iOS does not shrink the layout
+ *   viewport and a plain `bottom: 0` would slide under the keys.
+ * - Anything typed that is not on the list is offered as its own row, so a
+ *   free-text answer is still one tap.
+ */
+function ComboSheet({
+  searchFirst = false,
+  title,
+  value,
+  options,
+  onPick,
+  onClose,
+}: {
+  searchFirst?: boolean;
+  title: string;
+  value: string;
+  options: readonly string[];
+  onPick: (v: string) => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState('');
+  const [kb, setKb] = useState({ bottom: 0, height: 0 });
+  const listRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const drag = useRef<{ y: number; dy: number } | null>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const current = value.trim();
+
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const list = needle ? options.filter((o) => o.toLowerCase().includes(needle)) : [...options];
+    // A saved answer that is not one of the options still shows, ticked, on top.
+    if (!needle && current && !options.includes(current)) list.unshift(current);
+    return list;
+  }, [options, q, current]);
+  const typed = q.trim();
+  const offerTyped = typed !== '' && !shown.some((o) => o.toLowerCase() === typed.toLowerCase());
+
+  // Sit on top of the on-screen keyboard, and never taller than what is left.
+  useLayoutEffect(() => {
+    const vv = window.visualViewport;
+    const sync = () => {
+      if (!vv) return setKb({ bottom: 0, height: window.innerHeight });
+      setKb({
+        bottom: Math.max(0, window.innerHeight - vv.height - vv.offsetTop),
+        height: vv.height,
+      });
+    };
+    sync();
+    vv?.addEventListener('resize', sync);
+    vv?.addEventListener('scroll', sync);
+    return () => {
+      vv?.removeEventListener('resize', sync);
+      vv?.removeEventListener('scroll', sync);
+    };
+  }, []);
+
+  // The page behind must not scroll while the sheet is up.
+  useEffect(() => {
+    const html = document.documentElement;
+    const prev = [html.style.overflow, document.body.style.overflow];
+    html.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      html.style.overflow = prev[0];
+      document.body.style.overflow = prev[1];
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
+  // Open with the current answer in view rather than at the top of a long list,
+  // or — for a list meant to be searched — with the search box taking the
+  // keyboard over from the stand-in the trigger focused.
+  useLayoutEffect(() => {
+    if (searchFirst) searchRef.current?.focus({ preventScroll: true });
+    else listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'center' });
+  }, [searchFirst]);
+
+  // Pull the sheet down by its handle/header to close it, as on any phone sheet.
+  const onTouchStart = (e: React.TouchEvent) => { drag.current = { y: e.touches[0].clientY, dy: 0 }; };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!drag.current || !panelRef.current) return;
+    const dy = Math.max(0, e.touches[0].clientY - drag.current.y);
+    drag.current.dy = dy;
+    panelRef.current.style.transition = 'none';
+    panelRef.current.style.transform = `translateY(${dy}px)`;
+  };
+  const onTouchEnd = () => {
+    const el = panelRef.current;
+    const dy = drag.current?.dy ?? 0;
+    drag.current = null;
+    if (!el) return;
+    if (dy > 80) { onClose(); return; }
+    el.style.transition = 'transform 0.2s ease-out';
+    el.style.transform = '';
+  };
+
+  function pick(v: string) {
+    onPick(v);
+    onClose();
+  }
+
+  return createPortal(
+    <div className="combo-sheet-scrim" onClick={onClose}>
+      <div
+        ref={panelRef}
+        className="combo-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+        style={{ bottom: kb.bottom, maxHeight: Math.max(240, Math.min(kb.height - 24, kb.height * 0.85)) }}
+      >
+        <div className="combo-sheet-drag" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+        <div className="combo-sheet-grip" aria-hidden />
+        <div className="combo-sheet-head">
+          <div className="combo-sheet-title">{title}</div>
+          {current && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => pick('')}>ล้างค่า</button>
+          )}
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>ปิด</button>
+        </div>
+        </div>
+        <div className="combo-sheet-search">
+          <IconSearch width={18} height={18} aria-hidden />
+          <input
+            ref={searchRef}
+            className="form-input"
+            type="search"
+            enterKeyHint="done"
+            autoComplete="off"
+            placeholder="ค้นหา หรือพิมพ์เอง"
+            aria-label={`ค้นหา${title}`}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              e.preventDefault();
+              if (offerTyped) pick(typed);
+              else if (shown.length === 1) pick(shown[0]);
+              else (e.target as HTMLInputElement).blur();
+            }}
+          />
+        </div>
+        <div ref={listRef} className="combo-sheet-list" role="listbox" aria-label={title}>
+          {shown.map((o) => {
+            const selected = o === current;
+            return (
+              <button
+                key={o}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={`combo-sheet-opt${selected ? ' is-selected' : ''}`}
+                onClick={() => pick(o)}
+              >
+                <span>{o}</span>
+                {selected && <IconCheck width={18} height={18} />}
+              </button>
+            );
+          })}
+          {/* After the matches, so a list answer is always the first thing offered. */}
+          {offerTyped && (
+            <button type="button" role="option" aria-selected={false} className="combo-sheet-opt" onClick={() => pick(typed)}>
+              <span>ใช้ “<strong>{typed}</strong>”</span>
+            </button>
+          )}
+          {shown.length === 0 && !offerTyped && (
+            <p className="muted" style={{ padding: '16px', margin: 0, fontSize: 14 }}>ไม่พบรายการ</p>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

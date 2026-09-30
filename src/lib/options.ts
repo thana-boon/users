@@ -192,6 +192,56 @@ export const DEGREE_NAME_OPTIONS = [
   'ปร.ด. (ปรัชญาดุษฎีบัณฑิต)',
 ] as const;
 
+/**
+ * Which DEGREE_NAME_OPTIONS belong to which ระดับการศึกษา, so the ชื่อปริญญา list
+ * narrows to the level just picked. Read off the grouping comments above; a
+ * level with no entry (ปวส., ม.ปลาย …) has no suggestions and is typed.
+ */
+export const DEGREE_NAMES_BY_LEVEL: Partial<Record<(typeof DEGREE_LEVEL_OPTIONS)[number], readonly string[]>> = {
+  'ปริญญาตรี': DEGREE_NAME_OPTIONS.filter((d) => /\.บ\. /.test(d)),
+  'ประกาศนียบัตรบัณฑิต': DEGREE_NAME_OPTIONS.filter((d) => d.startsWith('ป.บัณฑิต')),
+  'ปริญญาโท': DEGREE_NAME_OPTIONS.filter((d) => /\.ม\. /.test(d)),
+  'ปริญญาเอก': DEGREE_NAME_OPTIONS.filter((d) => /\.ด\. /.test(d)),
+};
+
+/** The levels whose rows name a degree, major and faculty (not ปวช./ม.ปลาย). */
+export const DEGREE_LEVELS_WITH_NAME: readonly string[] = [
+  'ปริญญาเอก', 'ปริญญาโท', 'ประกาศนียบัตรบัณฑิต', 'ปริญญาตรี',
+];
+
+/**
+ * The คณะ a degree is usually awarded by, keyed on its abbreviation — filled in
+ * only while คณะ is still blank, and the teacher can change it. Degrees awarded
+ * by more than one kind of faculty (ศศ.บ., ปร.ด., the master's degrees that
+ * come from บัณฑิตวิทยาลัย at some universities) are left out on purpose.
+ */
+export const FACULTY_BY_DEGREE: Record<string, (typeof FACULTY_OPTIONS)[number]> = {
+  'ค.บ.': 'ครุศาสตร์',
+  'ค.ม.': 'ครุศาสตร์',
+  'ค.ด.': 'ครุศาสตร์',
+  'ศษ.บ.': 'ศึกษาศาสตร์',
+  'ศษ.ม.': 'ศึกษาศาสตร์',
+  'ศษ.ด.': 'ศึกษาศาสตร์',
+  'กศ.บ.': 'ศึกษาศาสตร์',
+  'วท.บ.': 'วิทยาศาสตร์',
+  'อ.บ.': 'อักษรศาสตร์',
+  'ศป.บ.': 'ศิลปกรรมศาสตร์',
+  'คศ.บ.': 'เทคโนโลยีคหกรรมศาสตร์',
+  'บธ.บ.': 'บริหารธุรกิจ',
+  'วศ.บ.': 'วิศวกรรมศาสตร์',
+  'ทล.บ.': 'เทคโนโลยีอุตสาหกรรม',
+  'นศ.บ.': 'นิเทศศาสตร์',
+  'ร.บ.': 'รัฐศาสตร์',
+  'น.บ.': 'นิติศาสตร์',
+  'พย.บ.': 'พยาบาลศาสตร์',
+};
+
+/** "ค.บ. (ครุศาสตรบัณฑิต)" → the คณะ for ค.บ., or undefined. */
+export function facultyForDegree(degreeName: string | null | undefined): string | undefined {
+  const abbr = (degreeName ?? '').trim().split(/\s|\(/)[0];
+  return FACULTY_BY_DEGREE[abbr];
+}
+
 export const FACULTY_OPTIONS = [
   'ครุศาสตร์',
   'ศึกษาศาสตร์',

@@ -601,6 +601,112 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 /* Combo's list (rendered in a portal, so styled here). */
 .combo-opt { padding: 8px 12px; font-size: var(--text-md); }
 
+/* Combo on a touch screen: a button that looks like the input, opening a
+   bottom sheet (see ComboSheet). Above .modal (300) and toasts (400). */
+.combo-trigger {
+  display: flex; align-items: center; width: 100%; text-align: left;
+  cursor: pointer; font-family: inherit; color: var(--skdw-dark);
+  -webkit-tap-highlight-color: transparent;
+}
+.combo-trigger-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.combo-trigger-icon {
+  position: absolute; right: 0; top: 0; bottom: 0; width: 40px;
+  display: grid; place-items: center; color: var(--skdw-muted); pointer-events: none;
+}
+.combo-sheet-scrim {
+  position: fixed; inset: 0; z-index: 450;
+  background: rgba(38, 18, 66, 0.5);
+}
+.combo-sheet {
+  position: fixed; left: 0; right: 0; margin: 0 auto; max-width: 560px;
+  display: flex; flex-direction: column;
+  background: var(--card); box-shadow: var(--shadow-xl);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: sheet-up 0.28s var(--ease-ci);
+}
+.combo-proxy {
+  position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0;
+  font-size: 16px; border: 0; padding: 0; pointer-events: none;
+}
+.combo-sheet-drag { flex-shrink: 0; touch-action: none; }
+.combo-sheet-grip { width: 40px; height: 4px; border-radius: 2px; background: var(--skdw-border); margin: 8px auto 0; flex-shrink: 0; }
+.combo-sheet-head { display: flex; align-items: center; gap: 8px; padding: 8px 16px; flex-shrink: 0; }
+.combo-sheet-title { flex: 1; min-width: 0; font-weight: 600; font-size: var(--text-lg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo-sheet-search { position: relative; padding: 0 16px 8px; flex-shrink: 0; }
+.combo-sheet-search svg { position: absolute; left: 28px; top: 13px; color: var(--skdw-muted); pointer-events: none; }
+.combo-sheet-search .form-input { padding-left: 40px; font-size: 16px; height: 44px; }
+.combo-sheet-list {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch; border-top: 1px solid var(--skdw-border);
+  padding: 4px 0 8px;
+}
+.combo-sheet-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 48px; padding: 12px 16px;
+  border: none; background: none; text-align: left;
+  font-family: inherit; font-size: 16px; color: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.combo-sheet-opt:active { background: var(--skdw-purple-pale); }
+.combo-sheet-opt.is-selected { color: var(--skdw-purple); font-weight: 600; background: var(--skdw-purple-pale); }
+.combo-sheet-opt + .combo-sheet-opt { border-top: 0.5px solid var(--skdw-border); }
+
+/* RepeatList's row editor on a phone: full screen, บันทึก pinned at the bottom. */
+.rl-sheet {
+  position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 290;
+  display: flex; flex-direction: column; background: var(--skdw-bg);
+  animation: sheet-up 0.28s var(--ease-ci);
+}
+.rl-sheet-head {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+  background: var(--card); border-bottom: 1px solid var(--skdw-border);
+}
+.rl-sheet-title { flex: 1; min-width: 0; text-align: center; font-weight: 600; font-size: var(--text-md); }
+.rl-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px; }
+.rl-sheet-foot {
+  flex-shrink: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: var(--card); border-top: 1px solid var(--skdw-border);
+}
+.rl-sheet-foot .btn { min-height: 48px; font-weight: 600; }
+
+/* ChoiceChips: a few answers as tap targets. */
+.choice-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice-chip {
+  min-height: 40px; padding: 8px 14px; border-radius: var(--radius-full);
+  border: 1px solid var(--skdw-border); background: var(--card); color: var(--skdw-dark);
+  font-family: inherit; font-size: var(--text-md); line-height: 1.3; cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.choice-chip:hover { border-color: var(--skdw-purple-light); }
+.choice-chip[aria-checked="true"] { background: var(--skdw-purple); border-color: var(--skdw-purple); color: #fff; font-weight: 600; }
+.choice-chips.error .choice-chip[aria-checked="false"] { border-color: var(--color-error); }
+@media (pointer: coarse) { .choice-chip { min-height: 44px; padding: 10px 16px; } }
+
+/* AddressAreaFields: ตำบล matches for a postal code / name, inline in the form. */
+.addr-choices {
+  margin-top: 8px; border: 1px solid var(--skdw-purple-light, var(--skdw-border));
+  border-radius: var(--radius-sm); background: var(--card); overflow: hidden;
+}
+.addr-choices-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 12px; font-size: var(--text-xs); color: var(--skdw-muted);
+  background: var(--skdw-purple-pale);
+}
+.addr-choice {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  width: 100%; min-height: 48px; padding: 10px 12px;
+  border: none; border-top: 0.5px solid var(--skdw-border); background: none;
+  text-align: left; font-family: inherit; color: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.addr-choice:hover, .addr-choice:active { background: var(--skdw-purple-pale); }
+.addr-choice-main { font-size: var(--text-md); font-weight: 600; }
+.addr-choice-sub { font-size: var(--text-sm); color: var(--skdw-muted); }
+.addr-choice-more { align-items: center; color: var(--skdw-purple); font-weight: 500; }
+
 /* ── Touch & phone sizing ──
    Two different questions, two queries:
    · (pointer: coarse) — a finger, at any width (an iPad too). Everything
@@ -618,6 +724,9 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
   .reg-search .form-input { height: 44px; }
   .chip { padding: 6px 12px; }
   .combo-opt { padding: 12px 14px; min-height: 44px; }
+  /* iOS zooms into any focused field under 16px — on every touch device,
+     not only a narrow one (a phone held sideways is wider than 640px). */
+  .form-input, .form-select, .form-textarea { font-size: 16px; }
 }
 @media (max-width: 640px) {
   .form-input, .form-select, .form-textarea { font-size: 16px; }

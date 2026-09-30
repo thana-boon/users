@@ -2,8 +2,9 @@
 
 import { useEffect, useId, useState } from 'react';
 import { Combo } from './Combo';
+import { AddressAreaFields } from './AddressAreaFields';
 import { PhoneInput } from './PhoneInput';
-import { EMERGENCY_RELATIONSHIP_OPTIONS, PROVINCE_OPTIONS } from '@/lib/options';
+import { EMERGENCY_RELATIONSHIP_OPTIONS } from '@/lib/options';
 import { TH_MONTHS_FULL } from '@/lib/thai';
 
 /**
@@ -79,21 +80,8 @@ export function HouseholdAddressFields({
       <Text label="หมู่ที่" value={value.moo} onChange={set('moo')} disabled={disabled} />
       <Text label="ซอย" value={value.soi} onChange={set('soi')} disabled={disabled} />
       <Text label="ถนน" value={value.road} onChange={set('road')} disabled={disabled} />
-      <Text label="ตำบล / แขวง" value={value.subDistrict} onChange={set('subDistrict')} disabled={disabled} />
-      <Text label="อำเภอ / เขต" value={value.district} onChange={set('district')} disabled={disabled} />
-      {disabled ? (
-        <Text label="จังหวัด" value={value.province} onChange={set('province')} disabled />
-      ) : (
-        <Combo label="จังหวัด" value={value.province} onChange={set('province')} options={PROVINCE_OPTIONS} />
-      )}
-      <Text
-        label="รหัสไปรษณีย์"
-        value={value.postalCode}
-        onChange={set('postalCode')}
-        inputMode="numeric"
-        maxLength={5}
-        disabled={disabled}
-      />
+      {/* รหัสไปรษณีย์ first: it fills ตำบล/อำเภอ/จังหวัด (see AddressAreaFields). */}
+      <AddressAreaFields value={value} onChange={(patch) => onChange({ ...value, ...patch })} disabled={disabled} />
       <Text
         label="รหัสประจำบ้าน (ถ้ามี)"
         value={value.houseRegCode}

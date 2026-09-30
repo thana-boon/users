@@ -19,6 +19,7 @@ import { ReinstateDialog } from '@/components/ReinstateDialog';
 import { Combo } from '@/components/Combo';
 import { DateField } from '@/components/DateField';
 import { PhoneInput, isPhoneKey } from '@/components/PhoneInput';
+import { AddressAreaFields } from '@/components/AddressAreaFields';
 import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
   STUDENT_PREFIX_OPTIONS,
@@ -68,6 +69,8 @@ const ADDR_FIELDS: { k: string; label: string }[] = [
   { k: 'province', label: 'จังหวัด' }, { k: 'postalCode', label: 'รหัสไปรษณีย์' }, { k: 'phone', label: 'โทรศัพท์' },
   { k: 'houseRegCode', label: 'รหัสประจำบ้าน' },
 ];
+/** ADDR_FIELDS keys that AddressAreaFields draws as one block. */
+const AREA_KEYS = new Set(['subDistrict', 'district', 'province', 'postalCode']);
 const ADDR_EXTRA: Record<string, { k: string; label: string }[]> = {
   birth_place: [{ k: 'hospitalName', label: 'สถานที่เกิด / โรงพยาบาล' }],
   current: [
@@ -695,6 +698,17 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                 ) : (
                   <div className="grid-2" style={{ gap: 8 }}>
                     {fields.map((f) =>
+                      // รหัสไปรษณีย์ is drawn once, in AddressAreaFields at
+                      // ตำบล's slot, together with ตำบล/อำเภอ/จังหวัด.
+                      AREA_KEYS.has(f.k) ? (
+                        f.k === 'subDistrict' ? (
+                          <AddressAreaFields
+                            key="area"
+                            value={addrs[t] ?? {}}
+                            onChange={(patch) => setAddrs((s) => ({ ...s, [t]: { ...s[t], ...patch } }))}
+                          />
+                        ) : null
+                      ) :
                       // Same treatment for the phone columns buried in the
                       // address/guardian field maps — an input that refuses a
                       // dash is worth nothing if only two of the nine do.

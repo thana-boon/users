@@ -2,12 +2,16 @@
 
 import { useId } from 'react';
 import { Combo } from './Combo';
+import { ChoiceChips } from './ChoiceChips';
 import { DateField } from './DateField';
 import { RepeatList } from './RepeatList';
 import {
   DEGREE_LEVEL_OPTIONS,
+  DEGREE_LEVELS_WITH_NAME,
   DEGREE_NAME_OPTIONS,
+  DEGREE_NAMES_BY_LEVEL,
   FACULTY_OPTIONS,
+  facultyForDegree,
   MAJOR_OPTIONS,
   SCOUT_QUALIFICATION_OPTIONS,
   SCOUT_TYPE_OPTIONS,
@@ -74,6 +78,10 @@ function Field({
   placeholder,
   wide = false,
   inputMode,
+  required = false,
+  error,
+  note,
+  maxLength,
 }: {
   label: string;
   value: string | null | undefined;
@@ -81,22 +89,59 @@ function Field({
   placeholder?: string;
   wide?: boolean;
   inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  required?: boolean;
+  /** Blocks nothing by itself — RepeatList decides; this only draws it. */
+  error?: string;
+  /** A warning under the box (not an error): e.g. a year that looks like ค.ศ. */
+  note?: React.ReactNode;
+  maxLength?: number;
 }) {
   const id = useId();
   return (
     <div style={wide ? { gridColumn: '1 / -1' } : undefined}>
-      <label className="form-label" htmlFor={id}>{label}</label>
+      <label className={`form-label${required ? ' required' : ''}`} htmlFor={id}>{label}</label>
       <input
         id={id}
         autoComplete="off"
         inputMode={inputMode}
-        className="form-input"
+        maxLength={maxLength}
+        className={`form-input${error ? ' error' : ''}`}
+        aria-invalid={error ? true : undefined}
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
       />
+      {error && <p className="form-error">{error}</p>}
+      {note}
     </div>
   );
+}
+
+/**
+ * ปีที่จบ is พ.ศ.; a Gregorian year is the usual slip. Say so, and offer the
+ * converted year as one tap — but never block the save on it.
+ */
+function GraduationYearNote({ value, onFix }: { value: string | null | undefined; onFix: (v: string) => void }) {
+  const v = (value ?? '').trim();
+  if (!v) return null;
+  const warn = (children: React.ReactNode) => (
+    <p className="form-hint" style={{ color: 'var(--color-warning)' }}>{children}</p>
+  );
+  if (!/^\d{4}$/.test(v)) return warn('ใส่เป็นปี พ.ศ. 4 หลัก เช่น 2560');
+  const n = Number(v);
+  const thisYearBE = new Date().getFullYear() + 543;
+  if (n < 2400) {
+    return warn(
+      <>
+        ดูเหมือนเป็นปี ค.ศ. —{' '}
+        <button type="button" className="btn btn-ghost btn-sm" style={{ padding: '2px 8px', minHeight: 0 }} onClick={() => onFix(String(n + 543))}>
+          ใช้ พ.ศ. {n + 543}
+        </button>
+      </>,
+    );
+  }
+  if (n > thisYearBE + 1) return warn(`ปี ${n} ยังมาไม่ถึง — ตรวจตัวเลขอีกครั้ง`);
+  return null;
 }
 
 /** "ค.บ. (ภาษาไทย) — มหาวิทยาลัยราชภัฏ…" and friends, for the read-only view. */
@@ -123,6 +168,16 @@ export function EducationList({
       addLabel="เพิ่มวุฒิ"
       emptyLabel="ยังไม่ได้บันทึกวุฒิการศึกษา"
       readOnly={readOnly}
+      // A degree names its ปริญญา and วิชาเอก; a ปวช. or ม.ปลาย row may not
+      // have either, so only the level and the institution are asked of it.
+      required={(r) => (isDegree(r.degreeLevel)
+        ? {
+            degreeLevel: 'ระดับการศึกษา',
+            degreeName: 'ชื่อปริญญา / วุฒิ',
+            major: 'วิชาเอก / สาขาวิชา',
+            institution: 'มหาวิทยาลัย / สถาบัน',
+          }
+        : { degreeLevel: 'ระดับการศึกษา', institution: 'สถาบัน' })}
       renderSummary={(r) => (
         <>
           <div style={{ fontWeight: 600 }}>
@@ -134,59 +189,93 @@ export function EducationList({
           </div>
         </>
       )}
-      renderRow={(r, set) => (
-        <>
-          <Combo
-            label="ระดับการศึกษา"
-            value={r.degreeLevel}
-            onChange={set('degreeLevel')}
-            options={DEGREE_LEVEL_OPTIONS}
-          />
-          {/* Suggestions, not a closed list — see DEGREE_NAME_OPTIONS. Raw text
-              is kept (normalize off): the certificate's own spelling wins. */}
-          <Combo
-            label="ชื่อปริญญา / วุฒิ"
-            value={r.degreeName}
-            onChange={set('degreeName')}
-            options={DEGREE_NAME_OPTIONS}
-            normalize={false}
-            placeholder="เลือกหรือพิมพ์ เช่น ค.บ."
-          />
-          <Combo
-            label="วิชาเอก / สาขาวิชา"
-            value={r.major}
-            onChange={set('major')}
-            options={MAJOR_OPTIONS}
-            normalize={false}
-            placeholder="เลือกหรือพิมพ์ เช่น ภาษาไทย"
-          />
-          <Combo
-            label="คณะ"
-            value={r.faculty}
-            onChange={set('faculty')}
-            options={FACULTY_OPTIONS}
-            normalize={false}
-            placeholder="เลือกหรือพิมพ์ เช่น ครุศาสตร์"
-          />
-          <Combo
-            label="มหาวิทยาลัย / สถาบัน"
-            value={r.institution}
-            onChange={set('institution')}
-            options={UNIVERSITY_OPTIONS}
-            normalize={false}
-            placeholder="พิมพ์ชื่อมหาวิทยาลัยหรือสถาบันเพื่อค้นหา"
-          />
-          <Field
-            label="ปีที่สำเร็จการศึกษา (พ.ศ.) — ไม่บังคับ"
-            value={r.graduationYear}
-            onChange={set('graduationYear')}
-            placeholder="เว้นว่างได้ เช่น 2560"
-            inputMode="numeric"
-          />
-        </>
-      )}
+      renderRow={(r, set, err) => {
+        const degree = isDegree(r.degreeLevel);
+        const names = r.degreeLevel
+          ? (DEGREE_NAMES_BY_LEVEL[r.degreeLevel as keyof typeof DEGREE_NAMES_BY_LEVEL] ?? [])
+          : DEGREE_NAME_OPTIONS;
+        return (
+          <>
+            {/* Eight levels: tap one, no list to open. */}
+            <ChoiceChips
+              label="ระดับการศึกษา"
+              required
+              value={r.degreeLevel}
+              onChange={set('degreeLevel')}
+              options={DEGREE_LEVEL_OPTIONS}
+              otherPlaceholder="เช่น ป.กศ.สูง"
+              error={err('degreeLevel')}
+            />
+            {/* Suggestions narrowed to the level just picked, not a closed list —
+                see DEGREE_NAME_OPTIONS. Raw text is kept (normalize off): the
+                certificate's own spelling wins. */}
+            <Combo
+              label={degree ? 'ชื่อปริญญา / วุฒิ' : 'ชื่อวุฒิ'}
+              required={degree}
+              value={r.degreeName}
+              onChange={(v) => {
+                set('degreeName')(v);
+                // ค.บ. is awarded by ครุศาสตร์, and so on — fill คณะ while it is
+                // still blank, never over what someone typed.
+                const f = facultyForDegree(v);
+                if (f && !(r.faculty ?? '').trim()) set('faculty')(f);
+              }}
+              options={names}
+              normalize={false}
+              placeholder={names.length ? 'เลือกหรือพิมพ์ เช่น ค.บ.' : 'พิมพ์ชื่อวุฒิ เช่น ปวส. ช่างไฟฟ้า'}
+              error={err('degreeName')}
+            />
+            <Combo
+              label={degree ? 'วิชาเอก / สาขาวิชา' : 'สาขา / แผนการเรียน'}
+              required={degree}
+              value={r.major}
+              onChange={set('major')}
+              options={MAJOR_OPTIONS}
+              normalize={false}
+              placeholder="เลือกหรือพิมพ์ เช่น ภาษาไทย"
+              error={err('major')}
+            />
+            {/* Kept on screen while it holds something, so nothing saved is hidden. */}
+            {(degree || (r.faculty ?? '').trim() !== '') && (
+              <Combo
+                label="คณะ"
+                value={r.faculty}
+                onChange={set('faculty')}
+                options={FACULTY_OPTIONS}
+                normalize={false}
+                placeholder="เลือกหรือพิมพ์ เช่น ครุศาสตร์"
+              />
+            )}
+            <Combo
+              label={degree ? 'มหาวิทยาลัย / สถาบัน' : 'สถาบัน'}
+              required
+              value={r.institution}
+              onChange={set('institution')}
+              options={UNIVERSITY_OPTIONS}
+              normalize={false}
+              placeholder="พิมพ์ชื่อมหาวิทยาลัยหรือสถาบันเพื่อค้นหา"
+              error={err('institution')}
+            />
+            <Field
+              label="ปีที่สำเร็จการศึกษา (พ.ศ.)"
+              value={r.graduationYear}
+              onChange={set('graduationYear')}
+              placeholder="เว้นว่างได้ เช่น 2560"
+              inputMode="numeric"
+              maxLength={4}
+              note={<GraduationYearNote value={r.graduationYear} onFix={set('graduationYear')} />}
+            />
+          </>
+        );
+      }}
     />
   );
+}
+
+/** Blank counts as a degree: the stricter set of fields until a level says otherwise. */
+function isDegree(level: string | null | undefined): boolean {
+  const l = (level ?? '').trim();
+  return !l || DEGREE_LEVELS_WITH_NAME.includes(l);
 }
 
 export function ScoutList({
@@ -209,6 +298,7 @@ export function ScoutList({
       toolbar={<ScoutQuickPick rows={rows} onChange={onChange} />}
       emptyLabel="ยังไม่ได้บันทึกวุฒิทางลูกเสือ"
       readOnly={readOnly}
+      required={{ qualification: 'วุฒิ / ขั้นการฝึกอบรม' }}
       renderSummary={(r) => (
         <>
           <div style={{ fontWeight: 600 }}>{r.qualification?.trim() || '—'}</div>
@@ -218,10 +308,12 @@ export function ScoutList({
           </div>
         </>
       )}
-      renderRow={(r, set) => (
+      renderRow={(r, set, err) => (
         <>
           <Combo
             label="วุฒิ / ขั้นการฝึกอบรม"
+            required
+            error={err('qualification')}
             value={r.qualification}
             onChange={set('qualification')}
             options={SCOUT_QUALIFICATION_OPTIONS}
@@ -230,12 +322,11 @@ export function ScoutList({
             normalize={false}
             style={{ gridColumn: '1 / -1' }}
           />
-          <Combo
+          <ChoiceChips
             label="ประเภทลูกเสือ"
             value={r.scoutType}
             onChange={set('scoutType')}
             options={SCOUT_TYPE_OPTIONS}
-            normalize={false}
           />
           <Field
             label="หน่วย / ค่ายที่จัดอบรม"
@@ -326,6 +417,7 @@ export function TrainingList({
       addLabel="เพิ่มการอบรม"
       emptyLabel="ยังไม่ได้บันทึกประวัติการอบรม"
       readOnly={readOnly}
+      required={{ title: 'ชื่อการอบรม', organizer: 'หน่วยงานที่จัดอบรม' }}
       renderSummary={(r) => (
         <>
           <div style={{ fontWeight: 600 }}>{r.title?.trim() || '—'}</div>
@@ -336,10 +428,12 @@ export function TrainingList({
           </div>
         </>
       )}
-      renderRow={(r, set) => (
+      renderRow={(r, set, err) => (
         <>
           <Field
             label="ชื่อการอบรม"
+            required
+            error={err('title')}
             value={r.title}
             onChange={set('title')}
             placeholder="เช่น การจัดการเรียนรู้เชิงรุก (Active Learning)"
@@ -347,6 +441,8 @@ export function TrainingList({
           />
           <Field
             label="หน่วยงานที่จัดอบรม"
+            required
+            error={err('organizer')}
             value={r.organizer}
             onChange={set('organizer')}
             placeholder="เช่น สพฐ., สพป.เชียงใหม่ เขต 1"

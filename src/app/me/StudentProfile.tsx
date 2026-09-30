@@ -5,6 +5,7 @@ import { api } from '@/lib/client';
 import { sameValues, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { useNotice } from '@/components/Notice';
 import { PhoneInput } from '@/components/PhoneInput';
+import { AddressAreaFields } from '@/components/AddressAreaFields';
 import { CitizenIdField, ClosedNotice, Field, Locked, SaveBar, Section } from './parts';
 import { PasswordCard } from './PasswordCard';
 
@@ -222,10 +223,8 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
         <Field label="หมู่" value={address.moo} onChange={setA('moo')} disabled={ro} />
         <Field label="ซอย" value={address.soi} onChange={setA('soi')} disabled={ro} />
         <Field label="ถนน" value={address.road} onChange={setA('road')} disabled={ro} />
-        <Field label="ตำบล/แขวง" value={address.subDistrict} onChange={setA('subDistrict')} disabled={ro} />
-        <Field label="อำเภอ/เขต" value={address.district} onChange={setA('district')} autoComplete="address-level2" disabled={ro} />
-        <Field label="จังหวัด" value={address.province} onChange={setA('province')} autoComplete="address-level1" disabled={ro} />
-        <Field label="รหัสไปรษณีย์" value={address.postalCode} onChange={setA('postalCode')} inputMode="numeric" autoComplete="postal-code" maxLength={5} disabled={ro} />
+        {/* รหัสไปรษณีย์ first: it fills ตำบล/อำเภอ/จังหวัด. */}
+        <AddressAreaFields value={address} onChange={(patch) => setAddress((s) => ({ ...s, ...patch }))} disabled={ro} />
         <PhoneInput label="เบอร์โทรศัพท์บ้าน" value={address.phone} onChange={setA('phone')} disabled={ro} />
         <Field label="ลักษณะบ้าน" value={address.houseType} onChange={setA('houseType')} placeholder="เช่น บ้านตนเอง, บ้านเช่า" disabled={ro} />
         <Field label="ปัจจุบันอาศัยอยู่กับ (ชื่อ)" value={address.livingWith} onChange={setA('livingWith')} disabled={ro} />
