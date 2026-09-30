@@ -515,6 +515,7 @@ export const SELF_EDITABLE = [
   'emergencyRelationship',
   'householdAddress',
   'workStart',
+  'teachingLicenseSource',
 ] as const;
 
 export type SelfEditableField = (typeof SELF_EDITABLE)[number];
@@ -527,9 +528,17 @@ export type SelfEditableField = (typeof SELF_EDITABLE)[number];
  */
 export const SENSITIVE_EDITABLE = ['citizenId'] as const;
 
+/**
+ * ใบประกอบวิชาชีพครู ได้มาจาก. Written by the teacher and the admin forms only —
+ * deliberately not in teacherProfileFieldsSchema, so the public API's write
+ * surface does not grow with it. '' clears it.
+ */
+export const teachingLicenseField = z.string().trim().max(128).nullable().optional();
+
 /** The scalar half of a self-service PATCH — nothing outside SELF_EDITABLE. */
 export const selfPatchSchema = teacherProfileFieldsSchema
   .extend({
+    teachingLicenseSource: teachingLicenseField,
     // Accepted only when the sensitive switch is on; api/users/me refuses the
     // whole request before it reaches here if it is not. '' clears the field.
     citizenId: z

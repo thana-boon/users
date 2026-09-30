@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Combo } from './Combo';
 import { ChoiceChips } from './ChoiceChips';
 import { DateField } from './DateField';
@@ -15,6 +15,8 @@ import {
   MAJOR_OPTIONS,
   SCOUT_QUALIFICATION_OPTIONS,
   SCOUT_TYPE_OPTIONS,
+  TEACHING_LICENSE_OPTIONS,
+  scoutRank,
   UNIVERSITY_OPTIONS,
 } from '@/lib/options';
 
@@ -279,14 +281,20 @@ function isDegree(level: string | null | undefined): boolean {
 }
 
 export function ScoutList({
-  rows,
-  onChange,
+  rows: unsorted,
+  onChange: persist,
   readOnly = false,
 }: {
   rows: ScoutRow[];
   onChange: (rows: ScoutRow[]) => void | Promise<unknown>;
   readOnly?: boolean;
 }) {
+  // Always B.T.C. → A.T.C. → W.B. → A.L.T.C. → A.L.T. → L.T.C. → L.T., top to
+  // bottom — shown that way, and saved that way on the next บันทึก. The editor
+  // indexes into this sorted list, and every save sorts again, so an index
+  // never points at the wrong row.
+  const rows = sortScout(unsorted);
+  const onChange = (next: ScoutRow[]) => persist(sortScout(next));
   return (
     <RepeatList<ScoutRow>
       title="วุฒิทางลูกเสือ"
@@ -368,18 +376,12 @@ function ScoutQuickPick({
   return (
     <div style={{ marginTop: 10 }}>
       <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>เลือกวุฒิที่ได้รับ (เลือกได้หลายวุฒิ)</div>
-      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+      <div className="scout-pick">
         {SCOUT_QUALIFICATION_OPTIONS.map((q) => {
           const on = have.has(q);
+          const [name, code] = splitScout(q);
           return (
-            <label
-              key={q}
-              className="chip"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                cursor: on ? 'default' : 'pointer', opacity: on ? 0.7 : 1,
-              }}
-            >
+            <label key={q} className={`scout-pick-row${on ? ' is-on' : ''}`}>
               <input
                 type="checkbox"
                 checked={on}
@@ -389,13 +391,28 @@ function ScoutQuickPick({
                   Promise.resolve(onChange([...rows, { qualification: q }])).catch(() => {});
                 }}
               />
-              {q}
+              <span className="scout-pick-name">{name}</span>
+              {code && <span className="scout-pick-code">{code}</span>}
             </label>
           );
         })}
       </div>
     </div>
   );
+}
+
+/** "วูดแบดจ์ 2 ท่อน (W.B.)" → ["วูดแบดจ์ 2 ท่อน", "W.B."]. */
+function splitScout(q: string): [string, string] {
+  const m = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(q);
+  return m ? [m[1], m[2]] : [q, ''];
+}
+
+/** Stable sort by scoutRank: equal ranks (two hand-typed rows) keep their order. */
+function sortScout(rows: ScoutRow[]): ScoutRow[] {
+  return rows
+    .map((r, i) => ({ r, i, k: scoutRank(r.qualification) }))
+    .sort((a, b) => a.k - b.k || a.i - b.i)
+    .map((x) => x.r);
 }
 
 export function TrainingList({
@@ -474,6 +491,74 @@ export function TrainingList({
 }
 
 /**
+ * ใบประกอบวิชาชีพครู ได้มาจาก — one answer, saved the moment it is tapped (like
+ * a วุฒิ row, it does not wait for the page's save bar). Beside the degrees
+ * because that is where the question comes from: a teacher without ค.บ./ศษ.บ.
+ * still holds a licence, through ป.บัณฑิต or the คุรุสภา test.
+ */
+function TeachingLicenseCard({
+  value,
+  onSave,
+  readOnly,
+}: {
+  value: string | null | undefined;
+  onSave: (v: string) => Promise<unknown>;
+  readOnly: boolean;
+}) {
+  const [draft, setDraft] = useState(value ?? '');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setDraft(value ?? ''), [value]);
+  const saved = (value ?? '').trim();
+  const pending = draft.trim() !== saved;
+
+  async function save(v: string) {
+    setBusy(true);
+    try { await onSave(v.trim()); } catch { setDraft(value ?? ''); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card">
+      <div className="row-between" style={{ alignItems: 'flex-start', marginBottom: 8 }}>
+        <div>
+          <h2 className="section-title" style={{ marginBottom: 2 }}>ใบประกอบวิชาชีพครู</h2>
+          <p className="muted" style={{ fontSize: 12, margin: 0 }}>ได้ใบประกอบวิชาชีพครูมาจากทางใด — แตะเลือกแล้วบันทึกทันที</p>
+        </div>
+        {saved && !pending && <span className="badge badge-success">บันทึกแล้ว</span>}
+      </div>
+      {readOnly ? (
+        <p style={{ margin: 0 }}>{saved || <span className="muted">ยังไม่ได้ระบุ</span>}</p>
+      ) : (
+        <div className={saved && !pending ? 'rl-saved' : undefined} style={saved && !pending ? undefined : { padding: 0 }}>
+          <ChoiceChips
+            label="ได้มาจาก"
+            value={draft}
+            onChange={(v) => {
+              setDraft(v);
+              // A chip is the whole answer: save it now. Free text ("อื่น ๆ")
+              // waits for its own บันทึก so every keystroke is not a request.
+              if ((TEACHING_LICENSE_OPTIONS as readonly string[]).includes(v)) void save(v);
+            }}
+            options={TEACHING_LICENSE_OPTIONS}
+            otherPlaceholder="เช่น หนังสืออนุญาตให้ประกอบวิชาชีพชั่วคราว"
+          />
+          {/* Free text, or a chip tapped off: nothing is saved until this is pressed. */}
+          {pending && !(TEACHING_LICENSE_OPTIONS as readonly string[]).includes(draft) && (
+            <div className="row" style={{ gap: 8, marginTop: 8 }}>
+              <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => save(draft)}>
+                {busy ? 'กำลังบันทึก…' : draft.trim() ? 'บันทึก' : 'บันทึก (ไม่ระบุ)'}
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setDraft(value ?? '')}>
+                ยกเลิก
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * All three, in the order they appear on both pages.
  *
  * Each row saves on its own บันทึก (see RepeatList), so `onChange` gets just
@@ -485,10 +570,13 @@ export function QualificationSections({
   lists,
   onChange,
   readOnly = false,
+  license,
 }: {
   lists: QualificationLists;
   onChange: (patch: Partial<QualificationLists>) => void | Promise<unknown>;
   readOnly?: boolean;
+  /** ใบประกอบวิชาชีพครู — shown under วุฒิการศึกษา when given; saves on tap. */
+  license?: { value: string | null | undefined; onSave: (v: string) => Promise<unknown> };
 }) {
   return (
     <>
@@ -497,6 +585,7 @@ export function QualificationSections({
         onChange={(educations) => onChange({ educations })}
         readOnly={readOnly}
       />
+      {license && <TeachingLicenseCard {...license} readOnly={readOnly} />}
       <ScoutList
         rows={lists.scoutQualifications}
         onChange={(scoutQualifications) => onChange({ scoutQualifications })}

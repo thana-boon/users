@@ -652,6 +652,33 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 .combo-sheet-opt.is-selected { color: var(--skdw-purple); font-weight: 600; background: var(--skdw-purple-pale); }
 .combo-sheet-opt + .combo-sheet-opt { border-top: 0.5px solid var(--skdw-border); }
 
+/* RepeatList: a saved row. Text takes the width; the buttons sit beside it
+   while there is room and drop below it (right-aligned) when there is not,
+   rather than squeezing a long วุฒิ name into a sliver. */
+.rl-saved {
+  border: 1px solid color-mix(in srgb, var(--color-success) 35%, transparent);
+  background: var(--color-success-bg);
+  border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
+}
+.rl-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; }
+.rl-row-body { flex: 1 1 140px; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.rl-row-actions { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
+
+/* ScoutQuickPick: one full-width row per วุฒิ, long names wrap inside it. */
+.scout-pick { display: flex; flex-direction: column; gap: 6px; }
+.scout-pick-row {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px;
+  border: 1px solid var(--skdw-border); border-radius: var(--radius-sm);
+  background: var(--card); cursor: pointer; font-size: var(--text-md); line-height: 1.35;
+}
+.scout-pick-row input { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--skdw-purple); }
+.scout-pick-row .scout-pick-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.scout-pick-row .scout-pick-code { flex-shrink: 0; font-size: var(--text-xs); color: var(--skdw-muted); font-variant-numeric: tabular-nums; }
+.scout-pick-row.is-on {
+  cursor: default; border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
+  background: var(--color-success-bg);
+}
+
 /* RepeatList's row editor on a phone: full screen, บันทึก pinned at the bottom. */
 .rl-sheet {
   position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 290;

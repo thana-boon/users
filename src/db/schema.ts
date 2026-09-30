@@ -443,6 +443,12 @@ export const teachers = pgTable(
     // made-up day would read as a fact on every document that prints it.
     workStart: varchar('work_start', { length: 7 }),
 
+    // ใบประกอบวิชาชีพครู ได้มาจาก — วุฒิครู / ป.บัณฑิต / ทดสอบมาตรฐานของคุรุสภา
+    // (TEACHING_LICENSE_OPTIONS), or free text. Recorded because a teacher
+    // without a teaching degree still holds a licence by another route, and the
+    // school's reports have to tell the routes apart. Nullable, added 2026-09.
+    teachingLicenseSource: varchar('teaching_license_source', { length: 128 }),
+
     // Employment lifecycle (ยังทำงานอยู่ / ลาออก). Exit fields recorded on resign.
     employmentStatus: employmentStatusEnum('employment_status').notNull().default('active'),
     exitDate: varchar('exit_date', { length: 20 }), // raw Thai dd/mm/BBBB

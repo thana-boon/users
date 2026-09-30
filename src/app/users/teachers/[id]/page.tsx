@@ -49,6 +49,7 @@ interface Detail {
   emergencyRelationship: string | null;
   householdAddress: HouseholdAddressForm | null;
   workStart: string | null;
+  teachingLicenseSource?: string | null;
 }
 
 type DetailWithLists = Detail & Partial<QualificationLists>;
@@ -68,6 +69,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
   // on its own บันทึก (saveList) instead of riding the page save.
   const [lists, setLists] = useState<QualificationLists>(EMPTY_LISTS);
   const [address, setAddress] = useState<HouseholdAddressForm>({});
+  const [license, setLicense] = useState('');
   // เลขบัตร / รหัสผ่าน start locked on every visit — see SensitiveLock.
   const [unlocked, setUnlocked] = useState(false);
   // A moderator with staff.records edits the record; citizen ids need
@@ -82,6 +84,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
         setD(x);
         setForm(x);
         setAddress(x.householdAddress ?? {});
+        setLicense(x.teachingLicenseSource ?? '');
         setLists({
           educations: x.educations ?? [],
           scoutQualifications: x.scoutQualifications ?? [],
@@ -140,6 +143,18 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
       await api(`/api/users/teachers/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
       setLists((s) => ({ ...s, ...patch }));
       notice({ message: 'บันทึกรายการแล้ว' });
+    } catch (e) {
+      notice({ kind: 'error', message: (e as Error).message });
+      throw e;
+    }
+  }
+
+  /** ใบประกอบวิชาชีพครู, saved on tap like a วุฒิ row. */
+  async function saveLicense(v: string) {
+    try {
+      await api(`/api/users/teachers/${id}`, { method: 'PATCH', body: JSON.stringify({ teachingLicenseSource: v }) });
+      setLicense(v);
+      notice({ message: 'บันทึกใบประกอบวิชาชีพครูแล้ว' });
     } catch (e) {
       notice({ kind: 'error', message: (e as Error).message });
       throw e;
@@ -270,7 +285,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div className="card">
-        <h2 className="section-title">ที่อยู่ตามทะเบียนบ้าน</h2>
+        <h2 className="section-title">ที่อยู่ปัจจุบัน</h2>
         <div className="grid-2" style={{ gap: 12 }}>
           <HouseholdAddressFields value={address} onChange={setAddress} />
         </div>
@@ -323,7 +338,11 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
       {/* วุฒิการศึกษา / วุฒิลูกเสือ / การอบรม — the same editor the teacher gets
           on /users/me. Each row saves on its own บันทึก; the button below is
           the page save for the fields above, repeated so it is within reach. */}
-      <QualificationSections lists={lists} onChange={saveList} />
+      <QualificationSections
+        lists={lists}
+        onChange={saveList}
+        license={{ value: license, onSave: saveLicense }}
+      />
 
       <div className="row" style={{ gap: 8 }}>
         <button className="btn btn-primary btn-sm" onClick={save} disabled={busy}>

@@ -243,11 +243,12 @@ export function RepeatList<T extends object>({
           editing?.at === i ? (
             <div key={i}>{editor(`แก้ไขรายการที่ ${i + 1}`)}</div>
           ) : (
-            <div key={i} style={boxStyle}>
-              <div className="row-between" style={{ alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ fontSize: 14, minWidth: 0 }}>{renderSummary?.(row) ?? null}</div>
+            // A saved row wears a faint green frame: on file, nothing pending.
+            <div key={i} className="rl-saved">
+              <div className="rl-row">
+                <div className="rl-row-body">{renderSummary?.(row) ?? null}</div>
                 {!readOnly && (
-                  <div className="row" style={{ gap: 4, flexShrink: 0 }}>
+                  <div className="rl-row-actions">
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"

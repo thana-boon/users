@@ -175,7 +175,7 @@ async function patchTeacher(id: number, raw: unknown): Promise<string[]> {
   await replaceTeacherLists(id, lists);
   const named = new Set(
     Object.keys(scalars).map((k) =>
-      k === 'citizenIdEncrypted' ? 'เลขบัตรประชาชน' : k.startsWith('addr') ? 'ที่อยู่ตามทะเบียนบ้าน' : k,
+      k === 'citizenIdEncrypted' ? 'เลขบัตรประชาชน' : k.startsWith('addr') ? 'ที่อยู่ปัจจุบัน' : k === 'teachingLicenseSource' ? 'ใบประกอบวิชาชีพครู' : k,
     ),
   );
   return [...named, ...describeLists(lists)];

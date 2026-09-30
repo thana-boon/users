@@ -63,7 +63,10 @@ function Text({
   );
 }
 
-/** ที่อยู่ตามทะเบียนบ้าน — the same field set a student address has. */
+/**
+ * ที่อยู่ปัจจุบัน of a teacher (the addr_* columns — named "household" from when
+ * they held the ทะเบียนบ้าน address; asked as the current address since 2026-09).
+ */
 export function HouseholdAddressFields({
   value,
   onChange,
@@ -82,14 +85,8 @@ export function HouseholdAddressFields({
       <Text label="ถนน" value={value.road} onChange={set('road')} disabled={disabled} />
       {/* รหัสไปรษณีย์ first: it fills ตำบล/อำเภอ/จังหวัด (see AddressAreaFields). */}
       <AddressAreaFields value={value} onChange={(patch) => onChange({ ...value, ...patch })} disabled={disabled} />
-      <Text
-        label="รหัสประจำบ้าน (ถ้ามี)"
-        value={value.houseRegCode}
-        onChange={set('houseRegCode')}
-        placeholder="11 หลัก ตามหน้าทะเบียนบ้าน"
-        inputMode="numeric"
-        disabled={disabled}
-      />
+      {/* No รหัสประจำบ้าน: this is asked as ที่อยู่ปัจจุบัน now. A code already on
+          file stays in `value` and is sent back untouched on save. */}
     </>
   );
 }

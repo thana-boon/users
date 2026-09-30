@@ -55,7 +55,7 @@
  * fields it touched.
  *
  * `teachers:contact` is the teacher twin of `students:contact`: ผู้ติดต่อฉุกเฉิน
- * and ที่อยู่ตามทะเบียนบ้าน — a home address and a third person's number, which
+ * and ที่อยู่ปัจจุบัน (the householdAddress object) — a home address and a third person's number, which
  * the plain staff roster has no business shipping to everyone.
  *
  * `auth:handoff` is the odd one out: it tests no password at all. It lets a
@@ -117,7 +117,7 @@ export const SCOPE_LABEL_TH: Record<ApiScope, string> = {
   'teachers:read': 'อ่านรายชื่อครู',
   'teachers:pii': 'อ่านเลขบัตร ปชช. ครู',
   'teachers:photo': 'ดึงรูปครู',
-  'teachers:contact': 'อ่านผู้ติดต่อฉุกเฉินและที่อยู่ตามทะเบียนบ้านของครู',
+  'teachers:contact': 'อ่านผู้ติดต่อฉุกเฉินและที่อยู่ปัจจุบันของครู',
   'teachers:write': 'แก้ไขข้อมูลครู (ประวัติ ติดต่อ ที่อยู่ วุฒิ/อบรม) — ยกเว้นรหัส/role/รหัสผ่าน/อีเมล/เลขบัตร/สถานะ',
   'workers:read': 'อ่านรายชื่อคนงาน',
   'workers:pii': 'อ่านเลขบัตร ปชช. คนงาน',

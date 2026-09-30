@@ -445,11 +445,41 @@ export const SCOUT_QUALIFICATION_OPTIONS = [
   'ขั้นความรู้เบื้องต้น (B.T.C.)',
   'ขั้นความรู้ชั้นสูง (A.T.C.)',
   'วูดแบดจ์ 2 ท่อน (W.B.)',
-  'ผู้ช่วยผู้ให้การฝึกอบรม 3 ท่อน (A.L.T.)',
-  'ผู้ให้การฝึกอบรม 4 ท่อน (L.T.)',
-  'ผู้ตรวจการลูกเสือ',
   'ขั้นผู้ช่วยหัวหน้าผู้ให้การฝึกอบรม (A.L.T.C.)',
+  'ผู้ช่วยผู้ให้การฝึกอบรม 3 ท่อน (A.L.T.)',
   'ขั้นหัวหน้าผู้ให้การฝึกอบรม (L.T.C.)',
+  'ผู้ให้การฝึกอบรม 4 ท่อน (L.T.)',
+] as const;
+
+/** The codes of SCOUT_QUALIFICATION_OPTIONS, in the same (school-set) order. */
+const SCOUT_RANK = ['BTC', 'ATC', 'WB', 'ALTC', 'ALT', 'LTC', 'LT'];
+
+/**
+ * Where a วุฒิลูกเสือ sits in B.T.C. → A.T.C. → W.B. → A.L.T.C. → A.L.T. →
+ * L.T.C. → L.T. Read from the Latin code in the text ("(A.L.T.C.)",
+ * "ALT", "a.t.c"), so a row typed by hand sorts too; anything without a known
+ * code sorts after all of them.
+ */
+export function scoutRank(qualification: string | null | undefined): number {
+  const q = (qualification ?? '').trim();
+  const exact = (SCOUT_QUALIFICATION_OPTIONS as readonly string[]).indexOf(q);
+  if (exact >= 0) return exact;
+  const inParens = /\(([^)]*)\)/.exec(q)?.[1] ?? q;
+  const code = inParens.toUpperCase().replace(/[^A-Z]/g, '');
+  const i = SCOUT_RANK.indexOf(code);
+  return i >= 0 ? i : SCOUT_RANK.length;
+}
+
+/**
+ * ใบประกอบวิชาชีพครู ได้มาจากทางไหน. A teacher without a teaching degree
+ * (ค.บ./ศษ.บ./กศ.บ.) holds the licence through ป.บัณฑิต or the คุรุสภา
+ * standards test, and year-end reports need to tell them apart.
+ */
+export const TEACHING_LICENSE_OPTIONS = [
+  'วุฒิครู (ค.บ. / ศษ.บ. / กศ.บ.)',
+  'ป.บัณฑิต วิชาชีพครู',
+  'ทดสอบมาตรฐานวิชาชีพครู (คุรุสภา)',
+  'ยังไม่มีใบประกอบวิชาชีพครู',
 ] as const;
 
 /** ประเภทลูกเสือที่วุฒินั้นครอบคลุม. */

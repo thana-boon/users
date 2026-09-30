@@ -64,6 +64,7 @@ export interface TeacherMe {
   emergencyRelationship: string | null;
   householdAddress: HouseholdAddressForm | null;
   workStart: string | null;
+  teachingLicenseSource?: string | null;
   educations?: QualificationLists['educations'];
   scoutQualifications?: QualificationLists['scoutQualifications'];
   trainings?: QualificationLists['trainings'];
@@ -85,6 +86,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
     workStart: me.workStart,
   });
   const [address, setAddress] = useState<HouseholdAddressForm>(me.householdAddress ?? {});
+  const [license, setLicense] = useState(me.teachingLicenseSource ?? '');
   const [lists, setLists] = useState<QualificationLists>({
     educations: me.educations ?? [],
     scoutQualifications: me.scoutQualifications ?? [],
@@ -138,6 +140,18 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
       await api('/api/users/me', { method: 'PATCH', body: JSON.stringify(patch) });
       setLists((s) => ({ ...s, ...patch }));
       notice({ message: 'บันทึกรายการแล้ว' });
+    } catch (e) {
+      notice({ kind: 'error', message: (e as Error).message });
+      throw e;
+    }
+  }
+
+  /** ใบประกอบวิชาชีพครู — saved on tap, like a วุฒิ row. */
+  async function saveLicense(v: string) {
+    try {
+      await api('/api/users/me', { method: 'PATCH', body: JSON.stringify({ teachingLicenseSource: v }) });
+      setLicense(v);
+      notice({ message: 'บันทึกใบประกอบวิชาชีพครูแล้ว' });
     } catch (e) {
       notice({ kind: 'error', message: (e as Error).message });
       throw e;
@@ -209,7 +223,9 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
         />
       </Section>
 
-      <Section title="ที่อยู่ตามทะเบียนบ้าน" hint={ro ? undefined : 'กรอกตามสำเนาทะเบียนบ้าน'}>
+      {/* The addr_* columns, asked as ที่อยู่ปัจจุบัน since 2026-09 (the school
+          wants where a teacher can be reached, not the ทะเบียนบ้าน). */}
+      <Section title="ที่อยู่ปัจจุบัน" hint={ro ? undefined : 'ที่อยู่ที่พักอาศัยจริงในตอนนี้ — เริ่มจากรหัสไปรษณีย์'}>
         <HouseholdAddressFields value={address} onChange={setAddress} disabled={ro} />
       </Section>
 
@@ -248,7 +264,12 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
 
       {/* The three lists — the same editor an admin gets on the teacher page.
           Below the save bar because they do not need it: each row has its own. */}
-      <QualificationSections lists={lists} onChange={saveList} readOnly={ro} />
+      <QualificationSections
+        lists={lists}
+        onChange={saveList}
+        readOnly={ro}
+        license={{ value: license, onSave: saveLicense }}
+      />
 
       {/* No เปลี่ยนรหัสผ่าน card: staff passwords are set by an admin only
           (api/users/me/password refuses teachers). */}

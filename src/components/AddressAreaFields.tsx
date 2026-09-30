@@ -68,6 +68,7 @@ export function AddressAreaFields({
   const zipUnknown = zipTyped && data !== null && /^\d{5}$/.test(zip) && zipHits.length === 0;
 
   const bangkok = (value.province ?? '').includes('กรุงเทพ');
+  const hasArea = [value.postalCode, value.subDistrict, value.district, value.province].some((x) => (x ?? '').trim());
 
   function pick(r: AddressArea) {
     onChange({ ...r });
@@ -78,7 +79,23 @@ export function AddressAreaFields({
   return (
     <>
       <div style={{ gridColumn: '1 / -1' }}>
-        <label className="form-label" htmlFor={zipId}>รหัสไปรษณีย์</label>
+        <div className="row-between" style={{ alignItems: 'baseline', gap: 8 }}>
+          <label className="form-label" htmlFor={zipId}>รหัสไปรษณีย์</label>
+          {!disabled && hasArea && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ minHeight: 0, padding: '2px 8px' }}
+              onClick={() => {
+                onChange({ postalCode: '', subDistrict: '', district: '', province: '' });
+                setZipTyped(false);
+                setNameTyped(false);
+              }}
+            >
+              ล้างที่อยู่
+            </button>
+          )}
+        </div>
         <input
           id={zipId}
           className="form-input"
@@ -91,17 +108,25 @@ export function AddressAreaFields({
           disabled={disabled}
           onChange={(e) => {
             const v = e.target.value.replace(/\D/g, '').slice(0, 5);
-            onChange({ postalCode: v });
             setZipTyped(true);
-            // A code with exactly one ตำบล and a blank area: nothing to choose.
-            if (data && v.length === 5 && !value.subDistrict && !value.district) {
-              const hits = byPostalCode(data, v);
-              if (hits.length === 1) pick(hits[0]);
-            }
+            const hits = data && v.length === 5 ? byPostalCode(data, v) : [];
+            if (!hits.length) { onChange({ postalCode: v }); return; }
+            // Fill straight away whatever the code settles: จังหวัด, อำเภอ when
+            // every ตำบล under it shares one, and ตำบล when there is only one.
+            // A ตำบล already typed that fits the code is kept.
+            const one = <K extends keyof AddressArea>(k: K) =>
+              new Set(hits.map((h) => h[k])).size === 1 ? hits[0][k] : '';
+            const keep = hits.find((h) => sameArea({ ...value, postalCode: v }, h));
+            onChange({
+              postalCode: v,
+              province: one('province'),
+              district: keep?.district ?? one('district'),
+              subDistrict: keep?.subDistrict ?? (hits.length === 1 ? hits[0].subDistrict : ''),
+            });
           }}
         />
         {!disabled && !showZip && !zipUnknown && (
-          <p className="form-hint">กรอกรหัสไปรษณีย์ แล้วเลือกตำบล — ระบบเติมอำเภอและจังหวัดให้</p>
+          <p className="form-hint">กรอกรหัสไปรษณีย์ ระบบเติมจังหวัด อำเภอ และตำบลให้ — ถ้าผิดกด “ล้างที่อยู่”</p>
         )}
         {zipUnknown && (
           <p className="form-hint" style={{ color: 'var(--color-warning)' }}>
@@ -110,7 +135,7 @@ export function AddressAreaFields({
         )}
         {showZip && (
           <AreaChoices
-            heading={`ตำบลที่ใช้รหัส ${zip} — แตะเพื่อเลือก`}
+            heading={`รหัส ${zip} มีหลายตำบล — แตะเลือกตำบลของคุณ`}
             rows={zipHits}
             onPick={pick}
             showZip={false}

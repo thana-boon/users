@@ -15,6 +15,7 @@ import {
   replaceTeacherLists,
   teacherListsSchema,
   teacherProfileFieldsSchema,
+  teachingLicenseField,
 } from '@/lib/services/teachers';
 
 export const runtime = 'nodejs';
@@ -41,6 +42,7 @@ const patchSchema = teacherListsSchema.merge(teacherProfileFieldsSchema).extend(
   email: z.string().nullable().optional(),
   subjectGroup: z.string().nullable().optional(),
   gradeTaught: z.string().nullable().optional(),
+  teachingLicenseSource: teachingLicenseField,
   // No `role`: roles change only on /users/permissions, which also keeps the
   // moderator grants and the last-admin rule straight. A `role` sent here (the
   // edit form used to) is stripped by zod and ignored.
