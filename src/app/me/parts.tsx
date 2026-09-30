@@ -74,10 +74,12 @@ export function Locked({
   label,
   value,
   wide = false,
+  note,
 }: {
   label: string;
   value: string | null | undefined;
   wide?: boolean;
+  note?: React.ReactNode;
 }) {
   const id = useId();
   // Read-only, not disabled: the value is real and should read (and copy) as
@@ -90,6 +92,7 @@ export function Locked({
         <span className="sr-only"> (แก้ไขเองไม่ได้)</span>
       </label>
       <input id={id} className="form-input" value={value?.trim() || '—'} readOnly aria-readonly />
+      {note}
     </div>
   );
 }

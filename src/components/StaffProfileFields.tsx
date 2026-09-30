@@ -148,12 +148,15 @@ export function MonthYearField({
   onChange,
   disabled = false,
   hint,
+  note,
 }: {
   label: string;
   value: string | null | undefined;
   onChange: (v: string) => void;
   disabled?: boolean;
   hint?: string;
+  /** Under the field — e.g. <CalcNote> with the อายุงาน. */
+  note?: React.ReactNode;
 }) {
   const parse = (v: string | null | undefined) => {
     // Either half may be missing while it is being filled in ("05/", "/2560").
@@ -201,6 +204,7 @@ export function MonthYearField({
         />
       </div>
       {hint && <p className="form-hint">{hint}</p>}
+      {note}
     </div>
   );
 }

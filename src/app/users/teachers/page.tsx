@@ -13,6 +13,8 @@ import { useAccess } from '@/components/Access';
 import { Combo } from '@/components/Combo';
 import { SubjectGroupSelect, SubjectGroupFilter } from '@/components/SubjectGroupSelect';
 import { DateField } from '@/components/DateField';
+import { CalcNote } from '@/components/CalcNote';
+import { ageTextFromThaiDate } from '@/lib/thai';
 import {
   GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
   STAFF_PREFIX_OPTIONS,
@@ -225,7 +227,12 @@ function NewTeacher({ onClose, onCreated }: { onClose: () => void; onCreated: ()
             <div><label className="form-label">เบอร์โทร</label><input className="form-input" value={f.phone} onChange={set('phone')} placeholder="เช่น 0812345678" /></div>
             <div><label className="form-label">ไอดีไลน์</label><input className="form-input" value={f.lineId} onChange={set('lineId')} /></div>
           </div>
-          <DateField label="วันเดือนปีเกิด" value={f.birthDate} onChange={setV('birthDate')} />
+          <DateField
+            label="วันเดือนปีเกิด"
+            value={f.birthDate}
+            onChange={setV('birthDate')}
+            note={<CalcNote text={ageTextFromThaiDate(f.birthDate)} />}
+          />
           <SubjectGroupSelect label="กลุ่มสาระที่สอน" value={f.subjectGroup} onChange={setV('subjectGroup')} />
           {/* No role here: a new account is a plain teacher; access is given
               on the จัดการสิทธิ์ page. */}

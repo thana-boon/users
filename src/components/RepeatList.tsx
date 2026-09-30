@@ -251,7 +251,7 @@ export function RepeatList<T extends object>({
                   <div className="rl-row-actions">
                     <button
                       type="button"
-                      className="btn btn-secondary btn-sm"
+                      className="btn btn-soft btn-sm"
                       onClick={() => open({ at: i, draft: { ...row } })}
                       disabled={busy || editing !== null}
                     >
@@ -259,7 +259,7 @@ export function RepeatList<T extends object>({
                     </button>
                     <button
                       type="button"
-                      className="btn btn-ghost btn-sm"
+                      className="btn btn-soft-danger btn-sm"
                       onClick={() => remove(i)}
                       disabled={busy || editing !== null}
                       aria-label={`ลบรายการที่ ${i + 1}`}

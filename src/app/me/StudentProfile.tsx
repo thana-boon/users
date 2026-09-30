@@ -6,6 +6,8 @@ import { sameValues, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { useNotice } from '@/components/Notice';
 import { PhoneInput } from '@/components/PhoneInput';
 import { AddressAreaFields } from '@/components/AddressAreaFields';
+import { CalcNote } from '@/components/CalcNote';
+import { ageTextFromThaiDate } from '@/lib/thai';
 import { CitizenIdField, ClosedNotice, Field, Locked, SaveBar, Section } from './parts';
 import { PasswordCard } from './PasswordCard';
 
@@ -254,7 +256,7 @@ export function StudentProfile({ me, reload }: { me: StudentMe; reload: () => vo
         <Locked label="นามสกุล" value={me.lastName} />
         <Locked label="ชื่อ (อังกฤษ)" value={me.firstNameEn} />
         <Locked label="นามสกุล (อังกฤษ)" value={me.lastNameEn} />
-        <Locked label="วันเดือนปีเกิด" value={me.birthDate} />
+        <Locked label="วันเดือนปีเกิด" value={me.birthDate} note={<CalcNote text={ageTextFromThaiDate(me.birthDate)} />} />
         <CitizenIdField
           key={savedCount}
           masked={me.citizenIdMasked}

@@ -137,6 +137,43 @@ export function ageFromThaiDate(raw: string | null | undefined): number | null {
   return age >= 0 && age < 130 ? age : null;
 }
 
+/**
+ * Whole years and months from a (year, month, day) to today — "38 ปี 4 เดือน".
+ * Counted against the viewer's clock at render time, so it is always current.
+ */
+function spanToToday(yearCE: number, month: number, day: number): { years: number; months: number } | null {
+  const now = new Date();
+  let months = (now.getFullYear() - yearCE) * 12 + (now.getMonth() + 1 - month);
+  if (now.getDate() < day) months--;
+  if (months < 0) return null;
+  return { years: Math.floor(months / 12), months: months % 12 };
+}
+
+function spanText(s: { years: number; months: number }): string {
+  if (s.years === 0 && s.months === 0) return 'ไม่ถึง 1 เดือน';
+  return [s.years ? `${s.years} ปี` : '', s.months ? `${s.months} เดือน` : ''].filter(Boolean).join(' ');
+}
+
+/** วันเกิด "dd/mm/BBBB" → "อายุ 38 ปี 4 เดือน", or null when it is not a real past date. */
+export function ageTextFromThaiDate(raw: string | null | undefined): string | null {
+  const p = thaiDateParts(raw);
+  if (!p) return null;
+  const s = spanToToday(p.yearBE - 543, p.month, p.day);
+  if (!s || s.years >= 130) return null;
+  return `อายุ ${spanText(s)}`;
+}
+
+/** เดือน/ปีที่เข้าทำงาน "mm/BBBB" → "อายุงาน 5 ปี 3 เดือน" (counted from the 1st of that month). */
+export function tenureTextFromWorkStart(raw: string | null | undefined): string | null {
+  const m = /^(0?[1-9]|1[0-2])\/(\d{4})$/.exec(raw?.trim() ?? '');
+  if (!m) return null;
+  const yearBE = Number(m[2]);
+  if (yearBE < 2400) return null;
+  const s = spanToToday(yearBE - 543, Number(m[1]), 1);
+  if (!s) return 'ยังไม่ถึงเดือนที่เริ่มงาน';
+  return `อายุงาน ${spanText(s)}`;
+}
+
 /** Validate a Thai national ID (13 digits + checksum). Blank passes (optional). */
 export function isValidCitizenId(raw: string | null | undefined): boolean {
   if (raw === null || raw === undefined || String(raw).trim() === '') return true;

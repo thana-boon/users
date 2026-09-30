@@ -7,6 +7,8 @@ import { useNotice } from '@/components/Notice';
 import { PhoneInput } from '@/components/PhoneInput';
 import { Combo } from '@/components/Combo';
 import { ChoiceChips } from '@/components/ChoiceChips';
+import { CalcNote } from '@/components/CalcNote';
+import { ageTextFromThaiDate, tenureTextFromWorkStart } from '@/lib/thai';
 import { DateField } from '@/components/DateField';
 import {
   EmergencyContactFields,
@@ -189,7 +191,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
         <Field label="ไอดีไลน์" value={form.lineId} onChange={setV('lineId')} placeholder="เช่น teacher.somchai" autoComplete="off" disabled={ro} />
         {ro ? (
           <>
-            <Locked label="วันเดือนปีเกิด" value={form.birthDate} />
+            <Locked label="วันเดือนปีเกิด" value={form.birthDate} note={<CalcNote text={ageTextFromThaiDate(form.birthDate)} />} />
             <Locked label="เพศ" value={form.gender} />
             <Locked label="ศาสนา" value={form.religion} />
             <Locked label="สัญชาติ" value={form.nationality} />
@@ -197,7 +199,12 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
           </>
         ) : (
           <>
-            <DateField label="วันเดือนปีเกิด" value={form.birthDate} onChange={setV('birthDate')} />
+            <DateField
+              label="วันเดือนปีเกิด"
+              value={form.birthDate}
+              onChange={setV('birthDate')}
+              note={<CalcNote text={ageTextFromThaiDate(form.birthDate)} />}
+            />
             <ChoiceChips label="เพศ" value={form.gender} onChange={setV('gender')} options={GENDER_OPTIONS} allowOther={false} style={{ gridColumn: 'auto' }} />
             <Combo label="ศาสนา" value={form.religion} onChange={setV('religion')} options={RELIGION_OPTIONS} />
             <Combo label="สัญชาติ" value={form.nationality} onChange={setV('nationality')} options={NATIONALITY_OPTIONS} />
@@ -210,6 +217,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
           onChange={setV('workStart')}
           disabled={ro}
           hint="เดือนและปีที่เริ่มทำงานที่โรงเรียนนี้ เช่น พฤษภาคม 2560"
+          note={<CalcNote text={tenureTextFromWorkStart(form.workStart)} />}
         />
       </Section>
 
@@ -225,7 +233,10 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
 
       {/* The addr_* columns, asked as ที่อยู่ปัจจุบัน since 2026-09 (the school
           wants where a teacher can be reached, not the ทะเบียนบ้าน). */}
-      <Section title="ที่อยู่ปัจจุบัน" hint={ro ? undefined : 'ที่อยู่ที่พักอาศัยจริงในตอนนี้ — เริ่มจากรหัสไปรษณีย์'}>
+      <Section
+        title="ที่อยู่ปัจจุบัน"
+        hint={ro ? undefined : 'ที่อยู่ที่พักอาศัยจริงในตอนนี้ (อยู่หอพัก ให้กรอกที่อยู่หอพัก) — เริ่มจากรหัสไปรษณีย์'}
+      >
         <HouseholdAddressFields value={address} onChange={setAddress} disabled={ro} />
       </Section>
 

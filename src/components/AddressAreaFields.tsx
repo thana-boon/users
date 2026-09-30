@@ -84,8 +84,8 @@ export function AddressAreaFields({
           {!disabled && hasArea && (
             <button
               type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ minHeight: 0, padding: '2px 8px' }}
+              className="btn btn-soft-danger btn-sm"
+              style={{ minHeight: 0, padding: '2px 10px' }}
               onClick={() => {
                 onChange({ postalCode: '', subDistrict: '', district: '', province: '' });
                 setZipTyped(false);

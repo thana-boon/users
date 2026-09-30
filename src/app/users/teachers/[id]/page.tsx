@@ -18,6 +18,8 @@ import { Combo } from '@/components/Combo';
 import { SubjectGroupSelect } from '@/components/SubjectGroupSelect';
 import { TeachingClasses } from '@/components/TeachingClasses';
 import { DateField } from '@/components/DateField';
+import { CalcNote } from '@/components/CalcNote';
+import { ageTextFromThaiDate, tenureTextFromWorkStart } from '@/lib/thai';
 import {
   EmergencyContactFields,
   HouseholdAddressFields,
@@ -238,7 +240,12 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
           <div><label className="form-label">นามสกุล</label><input className="form-input" value={form.lastName ?? ''} onChange={set('lastName')} /></div>
           <PhoneInput label="เบอร์โทร" value={form.phone} onChange={setV('phone')} />
           <div><label className="form-label">ไอดีไลน์</label><input className="form-input" value={form.lineId ?? ''} onChange={set('lineId')} placeholder="เช่น teacher.somchai" /></div>
-          <DateField label="วันเดือนปีเกิด" value={form.birthDate} onChange={setV('birthDate')} />
+          <DateField
+            label="วันเดือนปีเกิด"
+            value={form.birthDate}
+            onChange={setV('birthDate')}
+            note={<CalcNote text={ageTextFromThaiDate(form.birthDate)} />}
+          />
           <Combo label="เพศ" value={form.gender} onChange={setV('gender')} options={GENDER_OPTIONS} />
           <Combo label="ศาสนา" value={form.religion} onChange={setV('religion')} options={RELIGION_OPTIONS} />
           <Combo label="สัญชาติ" value={form.nationality} onChange={setV('nationality')} options={NATIONALITY_OPTIONS} />
@@ -255,7 +262,12 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
             stored={d.gradeTaught}
             style={{ gridColumn: '1 / -1' }}
           />
-          <MonthYearField label="เดือน / ปีที่เข้าทำงาน (พ.ศ.)" value={form.workStart} onChange={setV('workStart')} />
+          <MonthYearField
+            label="เดือน / ปีที่เข้าทำงาน (พ.ศ.)"
+            value={form.workStart}
+            onChange={setV('workStart')}
+            note={<CalcNote text={tenureTextFromWorkStart(form.workStart)} />}
+          />
           {isAdmin && (
             <div>
               <span className="form-label">สิทธิ์ในระบบ</span>
@@ -286,6 +298,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
 
       <div className="card">
         <h2 className="section-title">ที่อยู่ปัจจุบัน</h2>
+        <p className="muted" style={{ fontSize: 12, margin: '-8px 0 12px' }}>ที่พักอาศัยจริงในตอนนี้ — อยู่หอพัก ให้กรอกที่อยู่หอพัก</p>
         <div className="grid-2" style={{ gap: 12 }}>
           <HouseholdAddressFields value={address} onChange={setAddress} />
         </div>

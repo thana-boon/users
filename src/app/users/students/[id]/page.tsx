@@ -13,11 +13,12 @@ import { RevealButton } from '@/components/RevealButton';
 import { useAccess } from '@/components/Access';
 import { studentListHref, rememberLastStudent } from '@/lib/student-list-nav';
 import { IconBack, IconEdit, IconTrash } from '@/components/Icons';
-import { formatThaiDate, ageFromThaiDate } from '@/lib/thai';
+import { formatThaiDate, ageFromThaiDate, ageTextFromThaiDate } from '@/lib/thai';
 import { StatusDialog } from '@/components/StatusDialog';
 import { ReinstateDialog } from '@/components/ReinstateDialog';
 import { Combo } from '@/components/Combo';
 import { DateField } from '@/components/DateField';
+import { CalcNote } from '@/components/CalcNote';
 import { PhoneInput, isPhoneKey } from '@/components/PhoneInput';
 import { AddressAreaFields } from '@/components/AddressAreaFields';
 import {
@@ -465,7 +466,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
                 <TInput label="นามสกุล (EN)" value={core.lastNameEn} onChange={setC('lastNameEn')} />
                 <TInput label="ชื่อเล่น (EN)" value={core.nicknameEn} onChange={setC('nicknameEn')} />
                 <Combo label="เพศ" value={core.gender} onChange={setC('gender')} options={GENDER_OPTIONS} />
-                <DateField label="วันเกิด" value={core.birthDate} onChange={setC('birthDate')} />
+                <DateField label="วันเกิด" value={core.birthDate} onChange={setC('birthDate')} note={<CalcNote text={ageTextFromThaiDate(core.birthDate)} />} />
                 <Combo label="ศาสนา" value={core.religion} onChange={setC('religion')} options={RELIGION_OPTIONS} />
                 <Combo label="สัญชาติ" value={core.nationality} onChange={setC('nationality')} options={NATIONALITY_OPTIONS} />
                 <Combo label="เชื้อชาติ" value={core.ethnicity} onChange={setC('ethnicity')} options={ETHNICITY_OPTIONS} />

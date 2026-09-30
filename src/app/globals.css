@@ -10,6 +10,7 @@
   --skdw-purple: #5b2d8e;        /* --primary */
   --skdw-purple-light: #7a3fc0;  /* soft purple (hover / gradient) */
   --skdw-purple-pale: #f1edf7;   /* --secondary / --muted */
+  --input-border: #d6c8ec;       /* a typeable box: firmer than --skdw-border */
   --skdw-gold: #f5c518;          /* --accent */
   --skdw-gold-dark: #c79b00;     /* gold hover / active */
   --skdw-gold-text: #8a6a00;     /* accessible gold text on light (≥4.5:1) */
@@ -213,6 +214,19 @@ a, button, input, select, textarea, label, summary, [role='button'] {
 .btn-ghost:hover:not(:disabled) { background: var(--skdw-bg); }
 .btn-danger { background: var(--color-error); color: #fff; box-shadow: 0 3px 10px rgba(220, 38, 38, 0.25); }
 .btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
+/* Tinted buttons for actions inside a form or a row: colour says what they do
+   without the weight of a filled button. Soft = edit/secondary, soft-danger =
+   delete/clear. */
+.btn-soft {
+  background: var(--skdw-purple-pale); color: var(--skdw-purple);
+  border: 1.5px solid color-mix(in srgb, var(--skdw-purple) 28%, transparent);
+}
+.btn-soft:hover:not(:disabled) { background: color-mix(in srgb, var(--skdw-purple) 14%, var(--card)); }
+.btn-soft-danger {
+  background: var(--color-error-bg); color: var(--color-error);
+  border: 1.5px solid color-mix(in srgb, var(--color-error) 30%, transparent);
+}
+.btn-soft-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--color-error) 16%, var(--card)); }
 
 /* ── Forms ── */
 .form-input, .form-select, .form-textarea {
@@ -224,9 +238,15 @@ a, button, input, select, textarea, label, summary, [role='button'] {
   font-family: var(--font-th);
   font-size: var(--text-md);
   color: var(--skdw-dark);
-  background: #fff;
-  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  background: var(--card);
+  /* A box you can type in should look like one: a firmer lavender edge and a
+     hairline of depth, so it stands off the white card it sits on. */
+  border: 1.5px solid var(--input-border);
+  box-shadow: 0 1px 2px rgba(91, 45, 142, 0.06);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base),
+    background var(--transition-base);
 }
+.form-input::placeholder, .form-textarea::placeholder { color: var(--skdw-muted); opacity: 0.75; }
 .form-textarea { height: auto; padding: 10px 12px; min-height: 80px; resize: vertical; }
 .form-input:hover, .form-select:hover { border-color: var(--skdw-purple-light); }
 .form-input:focus, .form-select:focus, .form-textarea:focus {
@@ -245,8 +265,23 @@ a, button, input, select, textarea, label, summary, [role='button'] {
   background: var(--skdw-bg); color: var(--skdw-dark); border-style: dashed;
 }
 .form-input[readonly]:not(:disabled):hover { border-color: var(--skdw-border); }
-.form-input.error { border-color: var(--color-error); }
-.form-label { display: block; font-size: var(--text-sm); font-weight: 500; margin-bottom: 6px; }
+.form-input[readonly], .form-input:disabled, .form-select:disabled, .form-textarea:disabled {
+  border-color: var(--skdw-border); box-shadow: none;
+}
+.form-input.error { border-color: var(--color-error); background: color-mix(in srgb, var(--color-error-bg) 55%, var(--card)); }
+.form-label {
+  display: block; font-size: var(--text-sm); font-weight: 600; margin-bottom: 6px;
+  color: color-mix(in srgb, var(--skdw-purple) 45%, var(--skdw-dark));
+  transition: color var(--transition-fast);
+}
+/* The label of the field being typed in lights up with it. */
+div:focus-within > .form-label, div:focus-within > .row-between > .form-label { color: var(--skdw-purple); }
+/* Worked out from the field above it (อายุ, อายุงาน). */
+.calc-note {
+  display: inline-flex; align-items: center; margin: 6px 0 0; padding: 3px 10px;
+  border-radius: var(--radius-full); background: var(--skdw-purple-pale); color: var(--skdw-purple);
+  font-size: var(--text-sm); font-weight: 600; line-height: 1.5;
+}
 .form-label .form-label-icon { vertical-align: -2px; margin-left: 4px; color: var(--skdw-purple-light); }
 .form-hint { font-size: var(--text-xs); line-height: 1.5; color: var(--skdw-muted); margin: 4px 0 0; }
 .form-error { font-size: var(--text-xs); line-height: 1.5; color: var(--color-error); margin: 4px 0 0; }
@@ -702,7 +737,7 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 .choice-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .choice-chip {
   min-height: 40px; padding: 8px 14px; border-radius: var(--radius-full);
-  border: 1px solid var(--skdw-border); background: var(--card); color: var(--skdw-dark);
+  border: 1.5px solid var(--input-border); background: var(--card); color: var(--skdw-dark);
   font-family: inherit; font-size: var(--text-md); line-height: 1.3; cursor: pointer;
   transition: background var(--transition-fast), border-color var(--transition-fast);
   -webkit-tap-highlight-color: transparent;
@@ -799,6 +834,7 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 /* ── Dark theme (prepared per CI §3 — add data-theme="dark"/`.dark` on <html> to enable).
    Note: full dark mode also needs any hardcoded #fff backgrounds swapped for var(--card). ── */
 .dark, :root[data-theme="dark"] {
+  --input-border: rgba(255, 255, 255, 0.18);
   --skdw-purple: #b892e8;
   --skdw-purple-light: #7a3fc0;
   --skdw-purple-pale: #2a2140;

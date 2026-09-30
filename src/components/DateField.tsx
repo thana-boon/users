@@ -28,6 +28,7 @@ export function DateField({
   required = false,
   hint,
   today = false,
+  note,
   style,
   inputStyle,
 }: {
@@ -39,6 +40,8 @@ export function DateField({
   hint?: string;
   /** Show a "วันนี้" shortcut beside the field. */
   today?: boolean;
+  /** Under the field, after the hints — e.g. <CalcNote> with the อายุ. */
+  note?: React.ReactNode;
   style?: React.CSSProperties;
   inputStyle?: React.CSSProperties;
 }) {
@@ -103,6 +106,7 @@ export function DateField({
         <p className="form-hint">{raw ? formatThaiDate(raw) : 'พิมพ์ หรือเลือกจากปฏิทิน (พ.ศ.)'}</p>
       )}
       {hint && <p className="form-hint">{hint}</p>}
+      {note}
     </div>
   );
 }
