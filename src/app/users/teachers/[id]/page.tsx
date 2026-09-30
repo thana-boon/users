@@ -32,7 +32,7 @@ import {
   type QualificationLists,
 } from '@/components/QualificationSections';
 import {
-  GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS,
+  GENDER_OPTIONS, RELIGION_OPTIONS, NATIONALITY_OPTIONS, ETHNICITY_OPTIONS, POSITION_OPTIONS,
   STAFF_PREFIX_OPTIONS,
 } from '@/lib/options';
 
@@ -41,6 +41,7 @@ interface Detail {
   firstName: string; lastName: string; email: string | null;
   phone: string | null; lineId: string | null; birthDate: string | null;
   subjectGroup: string | null; gradeTaught: string | null; role: string;
+  position?: string | null;
   gender: string | null; religion: string | null;
   nationality: string | null; ethnicity: string | null;
   citizenIdMasked: string | null; hasCitizenId: boolean; hasPassword: boolean;
@@ -113,7 +114,7 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
       const payload: Record<string, unknown> = {
         prefix: form.prefix, firstName: form.firstName, lastName: form.lastName,
         email: form.email, phone: form.phone, lineId: form.lineId, birthDate: form.birthDate,
-        subjectGroup: form.subjectGroup, gradeTaught: form.gradeTaught,
+        subjectGroup: form.subjectGroup, gradeTaught: form.gradeTaught, position: form.position,
         gender: form.gender, religion: form.religion,
         nationality: form.nationality, ethnicity: form.ethnicity,
         emergencyContactName: form.emergencyContactName,
@@ -250,6 +251,16 @@ export default function TeacherDetailPage({ params }: { params: Promise<{ id: st
           <Combo label="ศาสนา" value={form.religion} onChange={setV('religion')} options={RELIGION_OPTIONS} />
           <Combo label="สัญชาติ" value={form.nationality} onChange={setV('nationality')} options={NATIONALITY_OPTIONS} />
           <Combo label="เชื้อชาติ" value={form.ethnicity} onChange={setV('ethnicity')} options={ETHNICITY_OPTIONS} />
+          {/* ตำแหน่ง, not the system role: decides ผู้บริหาร/ครู in รายงานบุคลากร. */}
+          <Combo
+            label="ตำแหน่ง"
+            value={form.position}
+            onChange={setV('position')}
+            options={POSITION_OPTIONS}
+            normalize={false}
+            placeholder="เช่น ครู, ผู้อำนวยการ"
+            hint="ผู้บริหาร (ผู้รับใบอนุญาต ผู้จัดการ ผู้อำนวยการ รอง ผู้ช่วย) แยกนับในรายงานบุคลากร · เว้นว่าง = ครู"
+          />
           <SubjectGroupSelect
             label="กลุ่มสาระที่สอน"
             value={form.subjectGroup}

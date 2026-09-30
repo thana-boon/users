@@ -449,6 +449,13 @@ export const teachers = pgTable(
     // school's reports have to tell the routes apart. Nullable, added 2026-09.
     teachingLicenseSource: varchar('teaching_license_source', { length: 128 }),
 
+    // ตำแหน่ง — ผู้รับใบอนุญาต / ผู้จัดการ / ผู้อำนวยการ / รอง / ผู้ช่วย / ครู
+    // (POSITION_OPTIONS), set by the office. Separate from `role`, which is a
+    // login permission: a ผู้อำนวยการ need not administer this system, and the
+    // teacher-admin usually is not the ผู้อำนวยการ. Blank reads as ครู in the
+    // reports. Nullable, added 2026-09.
+    position: varchar('position', { length: 64 }),
+
     // Employment lifecycle (ยังทำงานอยู่ / ลาออก). Exit fields recorded on resign.
     employmentStatus: employmentStatusEnum('employment_status').notNull().default('active'),
     exitDate: varchar('exit_date', { length: 20 }), // raw Thai dd/mm/BBBB

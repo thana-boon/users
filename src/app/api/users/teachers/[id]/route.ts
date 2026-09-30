@@ -43,6 +43,7 @@ const patchSchema = teacherListsSchema.merge(teacherProfileFieldsSchema).extend(
   subjectGroup: z.string().nullable().optional(),
   gradeTaught: z.string().nullable().optional(),
   teachingLicenseSource: teachingLicenseField,
+  position: z.string().trim().max(64).nullable().optional(), // ตำแหน่ง — office-set, not self-editable
   // No `role`: roles change only on /users/permissions, which also keeps the
   // moderator grants and the last-admin rule straight. A `role` sent here (the
   // edit form used to) is stripped by zod and ignored.

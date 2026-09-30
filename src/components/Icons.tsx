@@ -131,3 +131,9 @@ export const IconEyeOff = (p: SVGProps<SVGSVGElement>) => (
 export const IconMore = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} aria-hidden><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" /></svg>
 );
+export const IconReport = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><path d="M3 3v18h18" /><rect x="7" y="12" width="3" height="6" rx="0.5" /><rect x="12" y="8" width="3" height="10" rx="0.5" /><rect x="17" y="5" width="3" height="13" rx="0.5" /></svg>
+);
+export const IconPrinter = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} aria-hidden><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
+);

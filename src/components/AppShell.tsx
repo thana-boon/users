@@ -32,6 +32,7 @@ import {
   IconSubjectGroup,
   IconSettings,
   IconMore,
+  IconReport,
 } from './Icons';
 
 interface SessionInfo {
@@ -196,6 +197,14 @@ const NAV: NavNode[] = [
       { href: '/users/special-teachers', label: 'อาจารย์พิเศษ', Icon: IconSpecialTeacher, tone: 'pink' },
       { href: '/users/workers', label: 'คนงาน', Icon: IconWorker, tone: 'orange' },
       { href: '/users/subject-groups', label: 'กลุ่มสาระ', Icon: IconSubjectGroup, tone: 'teal' },
+    ],
+  },
+  {
+    label: 'รายงาน',
+    Icon: IconReport,
+    tone: 'green',
+    children: [
+      { href: '/users/reports/staff', label: 'รายงานบุคลากร', Icon: IconTeachers, tone: 'green' },
     ],
   },
   { href: '/users/academic-years', label: 'ปีการศึกษา', Icon: IconCalendar, tone: 'cyan' },

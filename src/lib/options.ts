@@ -471,6 +471,27 @@ export function scoutRank(qualification: string | null | undefined): number {
 }
 
 /**
+ * ตำแหน่ง of a teacher. Everything above ครู counts as ผู้บริหาร in the staff
+ * report; a blank position is reported as ครู. Free text still passes (Combo)
+ * for a title the list does not have.
+ */
+export const POSITION_OPTIONS = [
+  'ผู้รับใบอนุญาต',
+  'ผู้จัดการ',
+  'ผู้อำนวยการ',
+  'รองผู้อำนวยการ',
+  'ผู้ช่วยผู้อำนวยการ',
+  'ครู',
+] as const;
+
+/** ผู้บริหาร = any ตำแหน่ง other than ครู (or blank, or one mentioning ครู). */
+export function isExecutive(position: string | null | undefined): boolean {
+  const p = (position ?? '').trim();
+  if (!p || p === 'ครู' || p.startsWith('ครู')) return false;
+  return true;
+}
+
+/**
  * ใบประกอบวิชาชีพครู ได้มาจากทางไหน. A teacher without a teaching degree
  * (ค.บ./ศษ.บ./กศ.บ.) holds the licence through ป.บัณฑิต or the คุรุสภา
  * standards test, and year-end reports need to tell them apart.

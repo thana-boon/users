@@ -51,6 +51,7 @@ export interface TeacherMe {
   lineId: string | null;
   birthDate: string | null;
   subjectGroup: string | null;
+  position?: string | null;
   gradeTaught: string | null;
   role: string;
   gender: string | null;
@@ -260,6 +261,7 @@ export function TeacherProfile({ me, reload }: { me: TeacherMe; reload: () => vo
           closedReason={me.sensitiveClosedReason}
           onChange={setCitizenId}
         />
+        <Locked label="ตำแหน่ง" value={me.position || 'ครู'} />
         <Locked label="กลุ่มสาระที่สอน" value={me.subjectGroup} />
         <TeachingClasses url="/api/users/me/teaching" stored={me.gradeTaught} style={{ gridColumn: '1 / -1' }} />
       </Section>

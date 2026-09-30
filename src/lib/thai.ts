@@ -154,6 +154,22 @@ function spanText(s: { years: number; months: number }): string {
   return [s.years ? `${s.years} ปี` : '', s.months ? `${s.months} เดือน` : ''].filter(Boolean).join(' ');
 }
 
+/** Completed years since a วันเกิด "dd/mm/BBBB", or null. For grouping in reports. */
+export function yearsSinceThaiDate(raw: string | null | undefined): number | null {
+  const p = thaiDateParts(raw);
+  if (!p) return null;
+  const s = spanToToday(p.yearBE - 543, p.month, p.day);
+  return s && s.years < 130 ? s.years : null;
+}
+
+/** Completed years since a เดือน/ปีที่เข้าทำงาน "mm/BBBB", or null. */
+export function yearsSinceWorkStart(raw: string | null | undefined): number | null {
+  const m = /^(0?[1-9]|1[0-2])\/(\d{4})$/.exec(raw?.trim() ?? '');
+  if (!m || Number(m[2]) < 2400) return null;
+  const s = spanToToday(Number(m[2]) - 543, Number(m[1]), 1);
+  return s ? s.years : null;
+}
+
 /** วันเกิด "dd/mm/BBBB" → "อายุ 38 ปี 4 เดือน", or null when it is not a real past date. */
 export function ageTextFromThaiDate(raw: string | null | undefined): string | null {
   const p = thaiDateParts(raw);
