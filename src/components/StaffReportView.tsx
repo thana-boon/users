@@ -1,9 +1,17 @@
 'use client';
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { IconChevron, IconPrinter, IconTeachers, IconShield, IconAlert } from '@/components/Icons';
 import type { ReportBucket, StaffReport } from '@/lib/services/staff-report';
+import { ALL_SECTION_KEYS } from '@/lib/report-sections';
+import { ExportDialog, ReportPaper, type ExportChoice } from '@/components/StaffReportExport';
+
+/** A4 printable area at 10 mm margins, in CSS px (96 dpi). */
+const PAGE_W = (190 / 25.4) * 96;
+const PAGE_H = (277 / 25.4) * 96;
+/** Shrink to one page only while it stays readable; past this, use a second page. */
+const MIN_ZOOM = 0.8;
 
 /**
  * รายงานบุคลากร — the teachers working now, counted every way the office asks:
@@ -11,9 +19,9 @@ import type { ReportBucket, StaffReport } from '@/lib/services/staff-report';
  * and who has not filled what in. Every count opens to the names behind it,
  * each a link to that teacher.
  *
- * Printing is the browser's own (พิมพ์ → บันทึกเป็น PDF): the print stylesheet
- * drops the menus and buttons, keeps the colours, and — if "พิมพ์รายชื่อด้วย"
- * is ticked — prints every name list open.
+ * ส่งออก opens a picker (StaffReportExport): the chosen sections go to Excel
+ * from the server, or to PDF through the browser's print of an A4 layout that
+ * is fitted to one page when it nearly fits.
  */
 
 type Tone = 'purple' | 'indigo' | 'blue' | 'sky' | 'teal' | 'green' | 'amber' | 'orange' | 'rose' | 'fuchsia';
@@ -32,11 +40,29 @@ const SECTIONS: { id: string; label: string }[] = [
 ];
 
 export function StaffReportView({ data }: { data: StaffReport }) {
-  const [printNames, setPrintNames] = useState(true);
+  const [choice, setChoice] = useState<ExportChoice>({ keys: ALL_SECTION_KEYS, names: false });
+  const [dialog, setDialog] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [printing, setPrinting] = useState(0);
+  const paperRef = useRef<HTMLDivElement>(null);
   const asOf = useMemo(
     () => new Date(data.asOf).toLocaleDateString('th-TH', { dateStyle: 'long' }),
     [data],
   );
+
+  // After the chosen sections have rendered into the paper: measure it at page
+  // width, shrink it onto one page if it is only a little over, then print.
+  useEffect(() => {
+    if (!printing || !paperRef.current) return;
+    const el = paperRef.current;
+    el.style.zoom = '1';
+    const h = el.scrollHeight;
+    const fit = h > PAGE_H && h * MIN_ZOOM <= PAGE_H ? PAGE_H / h - 0.005 : 1;
+    el.style.zoom = String(fit);
+    setZoom(fit);
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+    return () => cancelAnimationFrame(id);
+  }, [printing]);
 
   const n = data.total;
   const male = data.gender.find((g) => g.label === 'ชาย')?.people.length ?? 0;
@@ -44,12 +70,22 @@ export function StaffReportView({ data }: { data: StaffReport }) {
   const gapCount = data.completeness.reduce((s, b) => s + (b.people.length ? 1 : 0), 0);
 
   return (
-    <div className={`stack rpt${printNames ? ' rpt-print-names' : ''}`} style={{ gap: 20 }}>
-      {/* Paper only: whose report this is, and when it was printed. */}
-      <div className="rpt-print-head" aria-hidden>
-        <strong>โรงเรียนสุคนธรวิทย์ · ระบบข้อมูลบุคลากร SchoolOS</strong>
-        <span>พิมพ์เมื่อ {asOf}</span>
-      </div>
+    <>
+    <div style={{ '--paper-w': `${PAGE_W}px` } as CSSProperties}>
+      <ReportPaper ref={paperRef} data={data} choice={choice} zoom={zoom} />
+    </div>
+    {dialog && (
+      <ExportDialog
+        initial={choice}
+        onClose={() => setDialog(false)}
+        onPdf={(c) => {
+          setChoice(c);
+          setDialog(false);
+          setPrinting((x) => x + 1);
+        }}
+      />
+    )}
+    <div className="stack rpt rpt-screen" style={{ gap: 20 }}>
       <div className="rpt-head">
         <div>
           <h1 className="page-title">รายงานบุคลากร</h1>
@@ -58,12 +94,8 @@ export function StaffReportView({ data }: { data: StaffReport }) {
           </p>
         </div>
         <div className="rpt-actions no-print">
-          <label className="rpt-toggle">
-            <input type="checkbox" checked={printNames} onChange={(e) => setPrintNames(e.target.checked)} />
-            พิมพ์รายชื่อด้วย
-          </label>
-          <button type="button" className="btn btn-primary" onClick={() => window.print()}>
-            <IconPrinter width={18} height={18} /> พิมพ์ / บันทึก PDF
+          <button type="button" className="btn btn-primary" onClick={() => setDialog(true)}>
+            <IconPrinter width={18} height={18} /> ส่งออก PDF / Excel
           </button>
         </div>
       </div>
@@ -151,6 +183,7 @@ export function StaffReportView({ data }: { data: StaffReport }) {
         gaps
       />
     </div>
+    </>
   );
 }
 

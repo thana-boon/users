@@ -158,7 +158,7 @@ const RULES: Rule[] = [
   { re: /^\/api\/users\/(teachers|special-teachers|workers|subject-groups)(\/.*)?$/, read: [T_REC] },
   { re: /^\/api\/users\/homerooms$/, read: [T_HOME] },
   // รายงานบุคลากร: read-only, the same names the teacher pages show.
-  { re: /^\/api\/users\/reports\/staff$/, read: [T_REC], write: 'admin' },
+  { re: /^\/api\/users\/reports\/staff(\/export)?$/, read: [T_REC], write: 'admin' },
 
   // -- API: other
   { re: /^\/api\/users\/academic-years(\/.*)?$/, read: ['years'] },

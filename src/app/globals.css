@@ -873,11 +873,8 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 }
 
 /* ── รายงาน (reports) ── */
-.rpt-print-head { display: none; }
 .rpt-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px; }
 .rpt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.rpt-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: var(--text-sm); cursor: pointer; }
-.rpt-toggle input { width: 18px; height: 18px; accent-color: var(--skdw-purple); }
 .rpt-jump { display: flex; flex-wrap: wrap; gap: 8px; }
 .rpt-jump .chip { text-decoration: none; }
 .rpt-jump .chip:hover { background: color-mix(in srgb, var(--skdw-purple) 16%, var(--card)); }
@@ -926,30 +923,81 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
   .rpt-card-head { flex-direction: column; }
 }
 
-/* ── Print (พิมพ์ / บันทึก PDF) ── */
+/* ── Export dialog ── */
+.exp-list { display: flex; flex-direction: column; gap: 6px; max-height: 46dvh; overflow-y: auto; }
+.exp-item {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px;
+  border: 1.5px solid var(--input-border); border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--card); font-size: var(--text-md);
+}
+.exp-item input { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--skdw-purple); }
+.exp-item.is-on { border-color: color-mix(in srgb, var(--skdw-purple) 45%, transparent); background: var(--skdw-purple-pale); }
+.exp-names { background: var(--skdw-bg); }
+.exp-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.btn.is-disabled { opacity: 0.45; pointer-events: none; }
+@media (max-width: 640px) { .exp-actions .btn { flex: 1 1 0; } }
+
+/* ── ReportPaper: the A4 report. Laid out off-screen (so it can be measured),
+   shown only when printing. Sizes in pt/mm — this is for paper. ── */
+.paper {
+  position: absolute; left: -10000px; top: 0; width: 190mm; visibility: hidden;
+  background: #fff; color: #1a1625; font-size: 9pt; line-height: 1.35;
+}
+.paper-head {
+  display: flex; align-items: center; gap: 4mm; padding-bottom: 2.5mm;
+  border-bottom: 0.6mm solid #5b2d8e; box-shadow: 0 0.8mm 0 -0.4mm #f5c518;
+}
+.paper-logo { width: 16mm; height: 16mm; object-fit: contain; }
+.paper-school { flex: 1; min-width: 0; }
+.paper-school-th { font-size: 15pt; font-weight: 700; color: #5b2d8e; line-height: 1.2; }
+.paper-school-en { font-size: 8.5pt; color: #6b6478; letter-spacing: 0.02em; }
+.paper-title { text-align: right; }
+.paper-title-main { font-size: 13pt; font-weight: 700; }
+.paper-title-sub { font-size: 8pt; color: #6b6478; }
+.paper-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2.5mm; margin: 3.5mm 0 1mm; }
+.paper-kpi { border: 0.3mm solid #e2d8f1; border-radius: 2mm; padding: 1.8mm 2.5mm; background: #faf8fd; }
+.paper-kpi-v { font-size: 15pt; font-weight: 700; color: #5b2d8e; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.paper-kpi-l { font-size: 8pt; color: #6b6478; }
+.paper-cols { column-count: 2; column-gap: 6mm; margin-top: 3mm; }
+.paper-sec { break-inside: avoid; margin: 0 0 3.5mm; }
+.paper-sec h3 {
+  font-size: 10pt; font-weight: 700; color: #5b2d8e; margin: 0 0 0.6mm;
+  padding-bottom: 0.6mm; border-bottom: 0.3mm solid #e2d8f1;
+}
+.paper-hint { font-size: 7pt; color: #6b6478; margin: 0 0 0.8mm; }
+.paper table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.paper td { padding: 0.55mm 0; vertical-align: middle; }
+.paper td.pl { width: 56%; padding-right: 2mm; }
+.paper td.pb span {
+  display: block; height: 2mm; border-radius: 1mm;
+  background: linear-gradient(90deg, #b99ae0, #5b2d8e);
+}
+.paper td.pb span.warn { background: linear-gradient(90deg, #f3a5a5, #dc2626); }
+.paper td.pb { width: 20%; }
+.paper td.pn { width: 12%; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.paper td.pn.warn { color: #dc2626; }
+.paper td.pp { width: 12%; text-align: right; color: #6b6478; font-variant-numeric: tabular-nums; }
+.paper tr.is-missing td.pl { color: #6b6478; }
+.paper tr.pnames td { font-size: 7pt; color: #4a4458; padding: 0 0 1mm 2mm; }
+.paper tr.pnames span { display: inline-block; margin-right: 1.5mm; white-space: nowrap; }
+.paper tr.pnames td { overflow-wrap: anywhere; }
+.paper-foot {
+  display: flex; justify-content: space-between; margin-top: 2mm; padding-top: 1.5mm;
+  border-top: 0.3mm solid #e2d8f1; font-size: 7pt; color: #6b6478;
+}
+
+/* ── Print ── */
 @media print {
-  @page { size: A4; margin: 12mm; }
+  @page {
+    size: A4; margin: 10mm;
+    @bottom-right { content: "หน้า " counter(page) " / " counter(pages); font-size: 7pt; color: #6b6478; }
+  }
   html, body { background: #fff !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .app-header, .sidebar-desktop, .bottom-nav, .skdw-back-fab, .skip-link, .no-print { display: none !important; }
+  .app-header, .sidebar-desktop, .bottom-nav, .skdw-back-fab, .skip-link, .no-print, .rpt-screen { display: none !important; }
   .app-main { padding: 0 !important; }
-  .card, .stat { box-shadow: none !important; }
-  .rpt { gap: 12px !important; }
-  .rpt-card { break-inside: auto; padding: 12px 14px !important; }
-  .rpt-card-head, .rpt-row-btn { break-inside: avoid; }
-  .rpt-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
-  .rpt-row-btn { grid-template-columns: minmax(0, 1.4fr) minmax(60px, 2fr) 64px 44px 0 !important; min-height: 0; padding: 4px; }
-  .rpt-row-btn .rpt-bar { grid-column: auto !important; grid-row: auto !important; }
-  .rpt-names { display: none !important; }
-  .rpt-print-names .rpt-names { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .rpt-name { color: #000; white-space: nowrap; }
-  .rpt-names li { flex-wrap: wrap; column-gap: 6px; }
-  .rpt-names li .rpt-note { flex-basis: 100%; padding-left: 2.3em; }
-  .stat-ico, .section-title::before { display: none !important; }
-  .rpt-print-head {
-    display: flex !important; justify-content: space-between; align-items: baseline;
-    border-bottom: 2px solid var(--skdw-purple); padding-bottom: 6px; font-size: 12px; color: var(--skdw-muted);
-  }
-  .rpt-print-head strong { color: var(--skdw-purple); font-size: 14px; }
-  a[href^="#"] { text-decoration: none; }
+  /* The shell is min-height: 100dvh on screen — on paper that is a whole page,
+     and it pushed a blank one after a report that fitted on one. */
+  * { min-height: 0 !important; }
+  .paper { position: static; left: auto; visibility: visible; }
 }
