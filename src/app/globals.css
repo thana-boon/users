@@ -23,6 +23,11 @@
 
   /* Brand gradient — the header, primary buttons and bar charts share it. */
   --grad-brand: linear-gradient(135deg, #5b2d8e 0%, #7a3fc0 55%, #9b5de5 100%);
+  /* The top bar, in the deep purple every SchoolOS shell uses (CI --sidebar /
+     --sidebar-accent) — the same tone as Echo. The side menu stays light. */
+  --nav-bg: linear-gradient(100deg, #2a1446 0%, #341a54 48%, #4a2873 100%);
+  --nav-border: rgba(255, 255, 255, 0.08);
+  --nav-shadow: 0 4px 18px rgba(26, 12, 46, 0.35);
 
   /* Tones — each menu page and stat gets its own hue. A component sets
      --tone (via .tone-* or an inline style) and tints itself from it with

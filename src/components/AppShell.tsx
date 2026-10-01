@@ -381,10 +381,10 @@ export function AppShell({
 
       <style>{`
         .app-header {
-          height: 64px; background: var(--grad-brand); color: #fff;
+          height: 64px; background: var(--nav-bg); color: #fff;
           display: flex; align-items: center; padding: 0 var(--space-6);
-          border-bottom: 3px solid var(--skdw-gold);
-          box-shadow: 0 6px 20px rgba(91, 45, 142, 0.28); position: sticky; top: 0; z-index: var(--z-sticky);
+          border-bottom: 1px solid var(--nav-border);
+          box-shadow: var(--nav-shadow); position: sticky; top: 0; z-index: var(--z-sticky);
         }
         /* Pale gold on the purple bar is unreadable — the header's badge is solid. */
         .app-header .badge-gold { background: var(--skdw-gold); color: var(--skdw-dark); border-color: rgba(255, 255, 255, 0.5); }
@@ -400,7 +400,7 @@ export function AppShell({
           width: 240px; background: linear-gradient(180deg, #fff 0%, #fbf8ff 100%);
           border-right: 1px solid var(--skdw-border); box-shadow: 2px 0 12px rgba(91, 45, 142, 0.05);
           padding: var(--space-4) var(--space-3); display: flex; flex-direction: column; gap: 4px;
-          position: sticky; top: 67px; height: calc(100dvh - 67px); overflow-y: auto;
+          position: sticky; top: 65px; height: calc(100dvh - 65px); overflow-y: auto;
         }
         .side-item {
           display: flex; align-items: center; gap: var(--space-3); padding: 6px 10px;

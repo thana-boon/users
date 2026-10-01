@@ -108,10 +108,10 @@ export function MeShell({
 
       <style>{`
         .me-header {
-          height: 64px; background: var(--grad-brand); color: #fff;
+          height: 64px; background: var(--nav-bg); color: #fff;
           display: flex; align-items: center; gap: 12px;
-          padding: 0 var(--space-6); border-bottom: 3px solid var(--skdw-gold);
-          box-shadow: 0 6px 20px rgba(91, 45, 142, 0.28);
+          padding: 0 var(--space-6); border-bottom: 1px solid var(--nav-border);
+          box-shadow: var(--nav-shadow);
           position: sticky; top: 0; z-index: var(--z-sticky);
         }
         .me-logo {
