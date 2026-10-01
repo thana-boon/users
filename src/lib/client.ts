@@ -8,7 +8,7 @@
  *   PAGE routes      /users/login, /users/students — already live under /users
  *                    in src/app. Use them AS-IS (Link, router.push, redirect,
  *                    window.location). Prefixing one asks for /users/users/…
- *   API / assets /   /api/*, /mediapipe/*, /icon.png — live at the root, and the
+ *   API / assets /   /api/*, /mediapipe/*, /icon.png, /school-seal.png, /app-logo.png — at the root, and the
  *   public files     gateway delivers them prefixed. These need withBase(), and
  *                    next.config's beforeFiles rewrites strip it again on the
  *                    way in.

@@ -45,9 +45,10 @@ export async function buildStaffReportWorkbook(
 
   // The crest beside the heading; a missing file costs the image, not the export.
   try {
-    const logo = await readFile(path.join(process.cwd(), 'public', 'icon.png'));
+    const logo = await readFile(path.join(process.cwd(), 'public', 'school-seal.png'));
     const id = wb.addImage({ buffer: logo as unknown as ExcelJS.Buffer, extension: 'png' });
-    ws.addImage(id, { tl: { col: 0.1, row: 0.1 }, ext: { width: 64, height: 64 } });
+    // The seal is 607 × 774 — keep its proportions.
+    ws.addImage(id, { tl: { col: 0.1, row: 0.1 }, ext: { width: 52, height: 66 } });
   } catch { /* no crest */ }
 
   ws.getRow(1).height = 20;

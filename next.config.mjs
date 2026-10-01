@@ -42,6 +42,8 @@ const nextConfig = {
         { source: `${basePath}/_next/:path*`, destination: '/_next/:path*' },
         { source: `${basePath}/api/:path*`, destination: '/api/:path*' },
         { source: `${basePath}/icon.png`, destination: '/icon.png' },
+        { source: `${basePath}/school-seal.png`, destination: '/school-seal.png' },
+        { source: `${basePath}/app-logo.png`, destination: '/app-logo.png' },
         { source: `${basePath}/mediapipe/:path*`, destination: '/mediapipe/:path*' },
       ],
       afterFiles: aliases,

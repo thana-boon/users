@@ -947,7 +947,7 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
   display: flex; align-items: center; gap: 4mm; padding-bottom: 2.5mm;
   border-bottom: 0.6mm solid #5b2d8e; box-shadow: 0 0.8mm 0 -0.4mm #f5c518;
 }
-.paper-logo { width: 16mm; height: 16mm; object-fit: contain; }
+.paper-logo { height: 18mm; width: auto; object-fit: contain; }
 .paper-school { flex: 1; min-width: 0; }
 .paper-school-th { font-size: 15pt; font-weight: 700; color: #5b2d8e; line-height: 1.2; }
 .paper-school-en { font-size: 8.5pt; color: #6b6478; letter-spacing: 0.02em; }

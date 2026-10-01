@@ -49,7 +49,8 @@ export function MeShell({
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
       <a href="#me-main" className="skip-link">ข้ามไปยังเนื้อหา</a>
       <header className="me-header">
-        <div aria-hidden className="me-logo">S</div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={withBase('/app-logo.png')} alt="" aria-hidden className="me-logo" width={48} height={48} />
         <div style={{ lineHeight: 1.15, minWidth: 0 }}>
           <div style={{ fontWeight: 700 }}>SchoolOS</div>
           <div style={{ fontSize: 12, opacity: 0.85 }}>ข้อมูลของฉัน</div>
@@ -114,11 +115,10 @@ export function MeShell({
           position: sticky; top: 0; z-index: var(--z-sticky);
         }
         .me-logo {
-          width: 34px; height: 34px; border-radius: 9px; flex: none;
-          background: linear-gradient(135deg, #ffe066, var(--skdw-gold) 55%, var(--skdw-gold-dark));
-          color: var(--skdw-dark);
-          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-          display: grid; place-items: center; font-weight: 800; font-family: var(--font-en);
+          width: 48px; height: 48px; flex: none; object-fit: contain; margin: -4px 0;
+          /* A thin light rim, then depth: the crest's dark field would
+             otherwise melt into the purple bar. */
+          filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.55)) drop-shadow(0 3px 8px rgba(0, 0, 0, 0.35));
         }
         .me-avatar {
           width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
@@ -145,7 +145,7 @@ export function MeShell({
           .hide-mobile { display: none; }
           .only-mobile { display: inline; }
           .me-header { height: 56px; padding: 0 var(--space-3) 0 var(--space-4); gap: 10px; }
-          .me-logo { width: 30px; height: 30px; border-radius: 8px; }
+          .me-logo { width: 40px; height: 40px; }
           .me-main { padding: var(--space-4) var(--space-3) 120px; }
         }
       `}</style>

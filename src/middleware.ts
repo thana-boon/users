@@ -52,7 +52,9 @@ export async function middleware(req: NextRequest) {
     if (
       path.startsWith(`${base}/_next/`) ||
       path.startsWith(`${base}/mediapipe/`) ||
-      path === `${base}/icon.png`
+      path === `${base}/icon.png` ||
+      path === `${base}/school-seal.png` || // ตราโรงเรียน on printed reports
+      path === `${base}/app-logo.png` // the crest in the header — the login page shows it too
     ) {
       return NextResponse.next(); // public static assets
     }

@@ -122,7 +122,7 @@ export const ReportPaper = forwardRef<HTMLDivElement, { data: StaffReport; choic
       <div ref={ref} className="paper" style={{ zoom }} aria-hidden>
         <header className="paper-head">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={withBase('/icon.png')} alt="" className="paper-logo" />
+          <img src={withBase('/school-seal.png')} alt="" className="paper-logo" />
           <div className="paper-school">
             <div className="paper-school-th">{SCHOOL_NAME_TH}</div>
             <div className="paper-school-en">{SCHOOL_NAME_EN}</div>

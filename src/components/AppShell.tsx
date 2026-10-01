@@ -289,19 +289,10 @@ export function AppShell({
       <a href="#app-main" className="skip-link">ข้ามไปยังเนื้อหา</a>
       {/* Navbar */}
       <header className="app-header">
-        <div className="row" style={{ gap: 12 }}>
-          <div
-            aria-hidden
-            style={{
-              width: 34, height: 34, borderRadius: 9,
-              background: 'linear-gradient(135deg, #ffe066, var(--skdw-gold) 55%, var(--skdw-gold-dark))',
-              color: 'var(--skdw-dark)', boxShadow: '0 3px 10px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.6)',
-              display: 'grid', placeItems: 'center', fontWeight: 800,
-              fontFamily: 'var(--font-en)',
-            }}
-          >
-            S
-          </div>
+        <div className="row" style={{ gap: 10 }}>
+          {/* The school crest, straight on the purple bar — transparent PNG. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={withBase('/app-logo.png')} alt="" aria-hidden className="app-logo" width={48} height={48} />
           <div style={{ lineHeight: 1.1 }}>
             <div style={{ fontWeight: 700 }}>SchoolOS</div>
             <div style={{ fontSize: 12, opacity: 0.85 }} className="hide-mobile">ข้อมูลนักเรียนและครู</div>
@@ -397,6 +388,12 @@ export function AppShell({
         }
         /* Pale gold on the purple bar is unreadable — the header's badge is solid. */
         .app-header .badge-gold { background: var(--skdw-gold); color: var(--skdw-dark); border-color: rgba(255, 255, 255, 0.5); }
+        .app-logo {
+          width: 48px; height: 48px; flex: none; object-fit: contain; margin: -4px 0;
+          /* A thin light rim, then depth: the crest's dark field would
+             otherwise melt into the purple bar. */
+          filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.55)) drop-shadow(0 3px 8px rgba(0, 0, 0, 0.35));
+        }
         .app-main { flex: 1; min-width: 0; padding: var(--space-8); padding-bottom: 88px; }
         .app-main:focus { outline: none; }
         .sidebar-desktop {
@@ -487,6 +484,7 @@ export function AppShell({
           .hide-mobile { display: none; }
           .only-mobile { display: inline; }
           .app-header { height: 56px; padding: 0 var(--space-3) 0 var(--space-4); }
+          .app-logo { width: 40px; height: 40px; }
           .app-main { padding: var(--space-4) var(--space-3); padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
           .bottom-nav {
             display: flex; position: fixed; bottom: 0; left: 0; right: 0;
