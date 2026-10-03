@@ -11,7 +11,7 @@ import { checkBudget, rateLimit } from './rate-limit';
 import type { ApiKey } from '@/db/schema';
 
 /** Per-credential request budget for the public API (fixed window). */
-const API_RATE_LIMIT = 600;
+const API_RATE_LIMIT = 2000;
 const API_RATE_WINDOW_MS = 60_000;
 
 /**
