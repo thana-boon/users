@@ -288,8 +288,10 @@ function ReportCard({
                   {b.people.map((p, i) => (
                     <li key={p.id}>
                       <span className="rpt-no">{i + 1}.</span>
-                      <Link href={`/users/teachers/${p.id}`} className="rpt-name">{p.name}</Link>
-                      {p.note && <span className="rpt-note">{p.note}</span>}
+                      <span className="rpt-person">
+                        <Link href={`/users/teachers/${p.id}`} className="rpt-name">{p.name}</Link>
+                        {p.note && <span className="rpt-note">{p.note}</span>}
+                      </span>
                     </li>
                   ))}
                 </ul>

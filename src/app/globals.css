@@ -918,10 +918,13 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 }
 .rpt-names.is-open { display: grid; }
 .rpt-names li { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: var(--text-sm); padding: 3px 0; }
+.rpt-person { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; min-width: 0; }
 .rpt-no { color: var(--skdw-muted); font-variant-numeric: tabular-nums; min-width: 1.8em; text-align: right; }
-.rpt-name { color: var(--skdw-dark); font-weight: 500; text-decoration: none; }
+/* ชื่อ and นามสกุล stay on one line; the note (กลุ่มสาระ, วุฒิ…) wraps below
+   when there is no room beside them, instead of squeezing the name apart. */
+.rpt-name { color: var(--skdw-dark); font-weight: 500; text-decoration: none; white-space: nowrap; }
 .rpt-name:hover { color: var(--skdw-purple); text-decoration: underline; }
-.rpt-note { color: var(--skdw-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.rpt-note { flex: 1 1 140px; min-width: 0; color: var(--skdw-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
 @media (max-width: 640px) {
   .rpt-row-btn { grid-template-columns: minmax(0, 1fr) 56px 40px 18px; gap: 4px 10px; }
   .rpt-row-btn .rpt-bar { grid-column: 1 / -1; grid-row: 2; }
@@ -970,7 +973,7 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
 .cmp-person + .cmp-person { border-top: 0.5px solid var(--skdw-border); }
 .cmp-no { color: var(--skdw-muted); font-size: var(--text-sm); text-align: right; font-variant-numeric: tabular-nums; }
 .cmp-who { display: flex; flex-direction: column; min-width: 0; }
-.cmp-name { font-weight: 600; color: var(--skdw-dark); text-decoration: none; }
+.cmp-name { font-weight: 600; color: var(--skdw-dark); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cmp-name:hover { color: var(--skdw-purple); text-decoration: underline; }
 .cmp-sub { font-size: var(--text-xs); color: var(--skdw-muted); overflow-wrap: anywhere; }
 .cmp-progress { display: flex; align-items: center; gap: 8px; }
