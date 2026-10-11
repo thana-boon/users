@@ -205,6 +205,7 @@ const NAV: NavNode[] = [
     tone: 'green',
     children: [
       { href: '/users/reports/staff', label: 'รายงานบุคลากร', Icon: IconTeachers, tone: 'green' },
+      { href: '/users/reports/completion', label: 'ติดตามการกรอกข้อมูล', Icon: IconAudit, tone: 'rose' },
     ],
   },
   { href: '/users/academic-years', label: 'ปีการศึกษา', Icon: IconCalendar, tone: 'cyan' },
