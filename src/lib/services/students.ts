@@ -16,6 +16,7 @@ import { normalizePhone } from '@/lib/phone';
 import { keyStageOf } from '@/lib/grades';
 import type { ParsedStudent } from '@/lib/excel-map';
 import type { StudentStatus } from '@/db/schema';
+import { entryStamp, resolveExitTerm } from './terms';
 
 /**
  * Insert or update a full student aggregate (identity + enrollment for the
@@ -28,6 +29,7 @@ export async function upsertStudentFull(
   parsed: ParsedStudent,
   academicYearId: number,
 ): Promise<{ studentId: number; created: boolean }> {
+  const entry = await entryStamp();
   return db.transaction(async (tx) => {
     const c = parsed.core;
     const existing = await tx.query.students.findFirst({
@@ -72,7 +74,7 @@ export async function upsertStudentFull(
     } else {
       const [row] = await tx
         .insert(students)
-        .values(coreValues)
+        .values({ ...coreValues, ...entry })
         .returning({ id: students.id });
       studentId = row.id;
       created = true;
@@ -378,6 +380,8 @@ export interface SetStatusInput {
   exitDate?: string | null;
   /** Academic year the exit belongs to (anchors the history views). */
   academicYearId?: number | null;
+  /** ภาคเรียนที่ออก; defaults to the active term when the exit year is active. */
+  term?: number | null;
   /** Optionally record a จบช่วงชั้น milestone (e.g. on graduation). */
   completion?: {
     keyStage: 'kindergarten' | 'primary' | 'lower_secondary' | 'upper_secondary';
@@ -405,11 +409,12 @@ export interface SetStatusInput {
  * returning student lands back in a room.
  */
 export async function setStudentStatus(id: number, input: SetStatusInput): Promise<void> {
+  const exitTerm = input.status === 'studying' ? null : await resolveExitTerm(input.academicYearId, input.term);
   await db.transaction(async (tx) => {
     if (input.status === 'studying') {
       await tx
         .update(students)
-        .set({ status: 'studying', exitType: null, exitReason: null, exitDate: null, exitAcademicYearId: null })
+        .set({ status: 'studying', exitType: null, exitReason: null, exitDate: null, exitAcademicYearId: null, exitTerm: null })
         .where(eq(students.id, id));
 
       // Place the returning student back into a room for the chosen year.
@@ -437,6 +442,7 @@ export async function setStudentStatus(id: number, input: SetStatusInput): Promi
           exitReason: norm(input.exitReason),
           exitDate: norm(input.exitDate),
           exitAcademicYearId: input.academicYearId ?? null,
+          exitTerm,
         })
         .where(eq(students.id, id));
     }
@@ -465,6 +471,8 @@ export interface BulkStatusInput {
   exitDate?: string | null;
   /** The roster year the batch was run on — stored as the exit year. */
   academicYearId: number;
+  /** ภาคเรียนที่ออก; defaults to the active term when the exit year is active. */
+  term?: number | null;
   /**
    * On graduation, also record a จบช่วงชั้น milestone for each student, using
    * their grade in `academicYearId` to pick the key stage.
@@ -483,6 +491,7 @@ export async function bulkSetStudentStatus(
 ): Promise<{ updated: number; completionsRecorded: number }> {
   const ids = [...new Set(input.studentIds)].filter((n) => Number.isFinite(n));
   if (!ids.length) return { updated: 0, completionsRecorded: 0 };
+  const exitTerm = await resolveExitTerm(input.academicYearId, input.term);
 
   return db.transaction(async (tx) => {
     await tx
@@ -493,6 +502,7 @@ export async function bulkSetStudentStatus(
         exitReason: norm(input.exitReason),
         exitDate: norm(input.exitDate),
         exitAcademicYearId: input.academicYearId,
+        exitTerm,
       })
       .where(inArray(students.id, ids));
 
@@ -541,7 +551,7 @@ export async function bulkReinstateStudents(studentIds: number[]): Promise<numbe
   if (!ids.length) return 0;
   await db
     .update(students)
-    .set({ status: 'studying', exitType: null, exitReason: null, exitDate: null, exitAcademicYearId: null })
+    .set({ status: 'studying', exitType: null, exitReason: null, exitDate: null, exitAcademicYearId: null, exitTerm: null })
     .where(inArray(students.id, ids));
   return ids.length;
 }
@@ -557,6 +567,7 @@ export interface ExitHistoryRow {
   exitReason: string | null;
   exitDate: string | null;
   exitYear: number | null;
+  exitTerm: number | null;
   gradeLevel: string | null; // grade in the exit year
   classroom: string | null;
 }
@@ -581,6 +592,7 @@ export async function listExitHistory(status: StudentStatus): Promise<ExitHistor
       exitReason: students.exitReason,
       exitDate: students.exitDate,
       exitYear: exitYear.year,
+      exitTerm: students.exitTerm,
       gradeLevel: exitEnr.gradeLevel,
       classroom: exitEnr.classroom,
     })
@@ -611,6 +623,7 @@ export interface FormerStudentRow {
   exitReason: string | null;
   exitDate: string | null;
   exitYear: number | null;
+  exitTerm: number | null;
   gradeLevel: string | null; // grade in the exit year
   classroom: string | null;
 }
@@ -668,6 +681,7 @@ export async function listFormerStudents(opts: {
         exitReason: students.exitReason,
         exitDate: students.exitDate,
         exitYear: exitYear.year,
+        exitTerm: students.exitTerm,
         gradeLevel: exitEnr.gradeLevel,
         classroom: exitEnr.classroom,
       })

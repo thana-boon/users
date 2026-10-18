@@ -19,7 +19,7 @@ import { EXIT_TYPE_OPTIONS, EXIT_REASON_OPTIONS } from '@/lib/options';
  * student comes back.
  */
 
-interface YearOpt { id: number; year: number; isActive: boolean }
+interface YearOpt { id: number; year: number; isActive: boolean; activeTerm: number }
 interface Meta { years: YearOpt[] }
 interface SearchRow {
   id: number; studentCode: string; prefix: string | null;
@@ -33,7 +33,7 @@ interface Picked {
 interface HistoryRow {
   id: number; studentCode: string; prefix: string | null;
   firstName: string; lastName: string; gender: string | null;
-  exitType: string | null; exitReason: string | null; exitDate: string | null;
+  exitType: string | null; exitReason: string | null; exitDate: string | null; exitTerm: number | null;
   exitYear: number | null; gradeLevel: string | null; classroom: string | null;
 }
 
@@ -55,6 +55,7 @@ export function WithdrawTool() {
   const [years, setYears] = useState<YearOpt[]>([]);
   // Exit year to record for this batch (default = current active year).
   const [exitYearId, setExitYearId] = useState<number | null>(null);
+  const [exitTerm, setExitTerm] = useState(1);
 
   // -- search + selection --
   const [q, setQ] = useState('');
@@ -91,6 +92,7 @@ export function WithdrawTool() {
       const active = m.years.find((y) => y.isActive) ?? m.years[m.years.length - 1];
       if (active) {
         setExitYearId(active.id);
+        if (active.isActive) setExitTerm(active.activeTerm);
         setHistYear(active.year);
       }
     }).catch(() => {});
@@ -150,7 +152,7 @@ export function WithdrawTool() {
     const exitYearLabel = years.find((y) => y.id === exitYearId)?.year;
     if (!(await confirm({
       title: 'ยืนยันการบันทึก',
-      message: `บันทึก “${exitType}” (ปีการศึกษา ${exitYearLabel ?? '-'}) ให้ ${picked.length} คน?`,
+      message: `บันทึก “${exitType}” (ภาคเรียนที่ ${exitTerm}/${exitYearLabel ?? '-'}) ให้ ${picked.length} คน?`,
       confirmText: `บันทึก ${picked.length} คน`,
       danger: true,
     }))) return;
@@ -159,6 +161,7 @@ export function WithdrawTool() {
     try {
       const res = await api<{ updated: number }>('/api/users/withdrawals', jsonBody({
         academicYearId: exitYearId,
+        term: exitTerm,
         studentIds: picked.map((p) => p.id),
         exitType,
         exitDate,
@@ -287,6 +290,13 @@ export function WithdrawTool() {
                 {years.map((y) => <option key={y.id} value={y.id}>{y.year}{y.isActive ? ' (ปัจจุบัน)' : ''}</option>)}
               </select>
             </div>
+            <div>
+              <label className="form-label">ภาคเรียน</label>
+              <select className="form-select" style={{ width: 130 }} value={exitTerm} onChange={(e) => setExitTerm(Number(e.target.value))}>
+                <option value={1}>ภาคเรียนที่ 1</option>
+                <option value={2}>ภาคเรียนที่ 2</option>
+              </select>
+            </div>
             <Combo
               label="ประเภท"
               value={exitType}
@@ -363,7 +373,7 @@ export function WithdrawTool() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>รหัส</th><th>ชื่อ-นามสกุล</th><th>ปีที่ออก</th><th>ชั้น/ห้อง</th>
+                  <th>รหัส</th><th>ชื่อ-นามสกุล</th><th>ภาค/ปีที่ออก</th><th>ชั้น/ห้อง</th>
                   <th>ประเภท</th><th>วันที่</th><th>เหตุผล</th><th style={{ width: 120 }}></th>
                 </tr>
               </thead>
@@ -380,7 +390,7 @@ export function WithdrawTool() {
                       <a href={`/users/students/${h.id}`} style={{ color: 'var(--skdw-purple)' }}>{h.studentCode}</a>
                     </td>
                     <td>{fullName(h)}</td>
-                    <td>{h.exitYear ?? '-'}</td>
+                    <td>{h.exitYear == null ? '-' : h.exitTerm ? `${h.exitTerm}/${h.exitYear}` : h.exitYear}</td>
                     <td>{h.gradeLevel ?? '-'} / {h.classroom ?? '-'}</td>
                     <td><span className="badge badge-warning">{h.exitType ?? '-'}</span></td>
                     <td>{h.exitDate ?? '-'}</td>

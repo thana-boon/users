@@ -2,6 +2,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { enrollments, students, completions } from '@/db/schema';
 import { isKeyStageBoundary, keyStageOf } from '@/lib/grades';
+import { entryStamp } from './terms';
 
 /**
  * Promotion + class-number assignment services.
@@ -242,6 +243,7 @@ export async function placeStudents(input: PlaceInput): Promise<PlaceResult> {
   const { yearId, grade, renumber, items } = input;
   if (!items.length) return { placed: 0, created: 0 };
 
+  const entry = await entryStamp();
   return db.transaction(async (tx) => {
     let created = 0;
 
@@ -261,6 +263,7 @@ export async function placeStudents(input: PlaceInput): Promise<PlaceResult> {
             lastName: ns.lastName,
             gender: ns.gender ?? null,
             status: 'studying',
+            ...entry,
           })
           .returning({ id: students.id });
         studentId = row.id;

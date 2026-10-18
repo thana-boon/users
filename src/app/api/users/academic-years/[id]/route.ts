@@ -13,7 +13,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * PATCH /api/users/academic-years/[id]
- * Set active (exclusive), update dates, or soft-archive. NO hard delete —
+ * Set active (exclusive), set the ภาคเรียนปัจจุบัน, update dates, or soft-archive. NO hard delete —
  * archiving preserves enrollment_id references used by downstream systems.
  */
 const schema = z.object({
@@ -24,6 +24,7 @@ const schema = z.object({
   term2Start: z.string().nullable().optional(),
   term2End: z.string().nullable().optional(),
   setActive: z.boolean().optional(),
+  activeTerm: z.union([z.literal(1), z.literal(2)]).optional(),
   isArchived: z.boolean().optional(),
 });
 
@@ -47,6 +48,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     if (body.term2Start !== undefined) set.term2Start = body.term2Start;
     if (body.term2End !== undefined) set.term2End = body.term2End;
     if (body.setActive !== undefined) set.isActive = body.setActive;
+    if (body.activeTerm !== undefined) set.activeTerm = body.activeTerm;
     if (body.isArchived !== undefined) set.isArchived = body.isArchived;
 
     await db.update(academicYears).set(set).where(eq(academicYears.id, id));
@@ -56,6 +58,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       targetType: 'academic_year',
       targetId: id,
       targetLabel: String(y.year),
+      detail: body.activeTerm !== undefined ? `ตั้งภาคเรียนปัจจุบัน: ${body.activeTerm}/${y.year}` : undefined,
       req,
     });
     return ok({ ok: true });

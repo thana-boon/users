@@ -8,6 +8,7 @@ import { requireAccess } from '@/lib/rbac';
 import { ok, created, badRequest, handleError } from '@/lib/http';
 import { encrypt } from '@/lib/crypto';
 import { recordAudit } from '@/lib/audit';
+import { entryStamp } from '@/lib/services/terms';
 
 export const runtime = 'nodejs';
 
@@ -128,6 +129,7 @@ export async function POST(req: NextRequest) {
         role: 'teacher',
         citizenIdEncrypted: encrypt(body.citizenId ?? null),
         passwordEncrypted: encrypt(body.password ?? null),
+        ...(await entryStamp()),
       })
       .returning({ id: teachers.id });
 

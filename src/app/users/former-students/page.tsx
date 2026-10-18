@@ -11,7 +11,7 @@ interface Row {
   firstName: string; lastName: string; nickname: string | null;
   gender: string | null; status: string;
   exitType: string | null; exitReason: string | null; exitDate: string | null;
-  exitYear: number | null; gradeLevel: string | null; classroom: string | null;
+  exitYear: number | null; exitTerm: number | null; gradeLevel: string | null; classroom: string | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -97,7 +97,7 @@ export default function FormerStudentsPage() {
             <thead>
               <tr>
                 <th>รหัส</th><th>ชื่อ-นามสกุล</th><th>เพศ</th><th>สถานะ</th>
-                <th>ชั้นที่ออก</th><th>ปีที่ออก</th><th>ประเภท</th><th>วันที่ออก</th><th></th>
+                <th>ชั้นที่ออก</th><th>ภาค/ปีที่ออก</th><th>ประเภท</th><th>วันที่ออก</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -121,7 +121,7 @@ export default function FormerStudentsPage() {
                     </span>
                   </td>
                   <td>{r.gradeLevel ? `${r.gradeLevel}${r.classroom ? `/${r.classroom}` : ''}` : '-'}</td>
-                  <td className="mono">{r.exitYear ?? '-'}</td>
+                  <td className="mono">{r.exitYear == null ? '-' : r.exitTerm ? `${r.exitTerm}/${r.exitYear}` : r.exitYear}</td>
                   <td>{r.exitType ?? '-'}</td>
                   <td>{r.exitDate ?? '-'}</td>
                   <td><Link href={`/users/students/${r.id}`} className="chip">ดู</Link></td>

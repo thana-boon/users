@@ -18,6 +18,7 @@ const schema = z.object({
   exitReason: z.string().nullable().optional(),
   exitDate: z.string().nullable().optional(),
   academicYearId: z.number().int().nullable().optional(),
+  term: z.union([z.literal(1), z.literal(2)]).nullable().optional(),
   completion: z
     .object({
       keyStage: z.enum(['kindergarten', 'primary', 'lower_secondary', 'upper_secondary']),

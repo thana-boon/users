@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
         term2Start: academicYears.term2Start,
         term2End: academicYears.term2End,
         isActive: academicYears.isActive,
+        activeTerm: academicYears.activeTerm,
         isArchived: academicYears.isArchived,
         studentCount: sql<number>`count(${enrollments.id})`,
       })
@@ -46,6 +47,7 @@ const createSchema = z.object({
   term2Start: z.string().nullable().optional(),
   term2End: z.string().nullable().optional(),
   setActive: z.boolean().default(false),
+  activeTerm: z.union([z.literal(1), z.literal(2)]).default(1),
 });
 
 export async function POST(req: NextRequest) {
@@ -72,6 +74,7 @@ export async function POST(req: NextRequest) {
         term2Start: body.term2Start ?? null,
         term2End: body.term2End ?? null,
         isActive: body.setActive,
+        activeTerm: body.activeTerm,
       })
       .returning({ id: academicYears.id });
     await recordAudit({

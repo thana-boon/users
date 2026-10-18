@@ -11,7 +11,7 @@ interface Year {
   id: number; year: number; startDate: string | null; endDate: string | null;
   term1Start: string | null; term1End: string | null;
   term2Start: string | null; term2End: string | null;
-  isActive: boolean; isArchived: boolean; studentCount: number;
+  isActive: boolean; activeTerm: number; isArchived: boolean; studentCount: number;
 }
 
 /**
@@ -51,6 +51,19 @@ export default function AcademicYearsPage() {
     finally { setBusy(false); }
   }
 
+  async function setTerm(y: Year, term: number) {
+    if (term === y.activeTerm) return;
+    setBusy(true);
+    try {
+      await api(`/api/users/academic-years/${y.id}`, { ...jsonBody({ activeTerm: term }), method: 'PATCH' });
+      toast(`ตั้งภาคเรียนปัจจุบันเป็น ${term}/${y.year} แล้ว`, 'success');
+      load();
+    } catch (e) { toast((e as Error).message, 'error'); }
+    finally { setBusy(false); }
+  }
+
+  const activeYear = rows.find((y) => y.isActive);
+
   async function toggleArchive(y: Year) {
     try {
       await api(`/api/users/academic-years/${y.id}`, { method: 'PATCH', body: JSON.stringify({ isArchived: !y.isArchived }) });
@@ -64,6 +77,32 @@ export default function AcademicYearsPage() {
         <h1 className="page-title">ปีการศึกษา</h1>
         <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}><IconPlus width={16} height={16} /> เพิ่มปีการศึกษา</button>
       </div>
+
+      {activeYear && (
+        <div className="card" style={{ padding: 16 }}>
+          <div className="row" style={{ flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div className="form-label" style={{ marginBottom: 2 }}>ภาคเรียนปัจจุบัน — ปีการศึกษา {activeYear.year}</div>
+              <div className="muted" style={{ fontSize: 13 }}>ใช้บันทึกภาคเรียนเมื่อมีการลาออก/จำหน่าย หรือเพิ่ม/นำเข้าคนใหม่</div>
+            </div>
+            <div className="spacer" />
+            <div className="reg-grades" role="group" aria-label="ภาคเรียนปัจจุบัน">
+              {[1, 2].map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className="reg-grade"
+                  aria-pressed={activeYear.activeTerm === t}
+                  onClick={() => setTerm(activeYear, t)}
+                  disabled={busy}
+                >
+                  ภาคเรียนที่ {t}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="alert alert-info" style={{ fontSize: 13 }}>
         การลบใช้ soft-delete (archive) เสมอ — ไม่ลบจริง เพื่อคง enrollment_id สำหรับระบบปลายน้ำ (เช่น ScoreBridge)
@@ -82,7 +121,7 @@ export default function AcademicYearsPage() {
                   <td style={{ fontSize: 13 }}>{fmtRange(y.term2Start, y.term2End)}</td>
                   <td className="num mono">{y.studentCount.toLocaleString('th-TH')}</td>
                   <td>
-                    {y.isActive && <span className="badge badge-success">ปัจจุบัน</span>}
+                    {y.isActive && <span className="badge badge-success">ปัจจุบัน · ภาคเรียนที่ {y.activeTerm}</span>}
                     {y.isArchived && <span className="badge badge-muted">เก็บถาวร</span>}
                   </td>
                   <td>
@@ -132,6 +171,7 @@ function YearDialog({ existing, onClose, onDone }: { existing?: Year; onClose: (
   const [t2Start, setT2Start] = useState(existing?.term2Start ?? '');
   const [t2End, setT2End] = useState(existing?.term2End ?? '');
   const [active, setActiveFlag] = useState(false);
+  const [term, setTermValue] = useState(1);
   const [busy, setBusy] = useState(false);
 
   async function submit() {
@@ -145,7 +185,7 @@ function YearDialog({ existing, onClose, onDone }: { existing?: Year; onClose: (
       if (existing) {
         await api(`/api/users/academic-years/${existing.id}`, { ...jsonBody(dates), method: 'PATCH' });
       } else {
-        await api('/api/users/academic-years', jsonBody({ year: Number(year), ...dates, setActive: active }));
+        await api('/api/users/academic-years', jsonBody({ year: Number(year), ...dates, setActive: active, activeTerm: term }));
       }
       onDone();
     } catch (e) { toast((e as Error).message, 'error'); }
@@ -190,6 +230,15 @@ function YearDialog({ existing, onClose, onDone }: { existing?: Year; onClose: (
               <input type="checkbox" checked={active} onChange={(e) => setActiveFlag(e.target.checked)} />
               <span>ตั้งเป็นปีปัจจุบันทันที</span>
             </label>
+          )}
+          {!existing && active && (
+            <div>
+              <label className="form-label">ภาคเรียนปัจจุบัน</label>
+              <select className="form-select" value={term} onChange={(e) => setTermValue(Number(e.target.value))}>
+                <option value={1}>ภาคเรียนที่ 1</option>
+                <option value={2}>ภาคเรียนที่ 2</option>
+              </select>
+            </div>
           )}
         </div>
         <div className="row-between card-pad" style={{ paddingTop: 0 }}>

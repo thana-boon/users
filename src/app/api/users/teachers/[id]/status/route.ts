@@ -7,6 +7,7 @@ import { requireAccess } from '@/lib/rbac';
 import { isPrivilegedTeacher } from '@/lib/services/grants';
 import { ok, notFound, badRequest, forbidden, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
+import { resolveExitTerm } from '@/lib/services/terms';
 
 export const runtime = 'nodejs';
 
@@ -17,6 +18,7 @@ const schema = z.object({
   exitDate: z.string().nullable().optional(),
   exitReason: z.string().nullable().optional(),
   academicYearId: z.number().int().nullable().optional(),
+  term: z.union([z.literal(1), z.literal(2)]).nullable().optional(),
 });
 
 /**
@@ -52,12 +54,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
             exitDate: body.exitDate ?? null,
             exitReason: body.exitReason ?? null,
             exitAcademicYearId: body.academicYearId ?? null,
+            exitTerm: await resolveExitTerm(body.academicYearId, body.term),
           }
         : {
             employmentStatus: 'active' as const,
             exitDate: null,
             exitReason: null,
             exitAcademicYearId: null,
+            exitTerm: null,
           };
     await db.update(teachers).set(set).where(eq(teachers.id, id));
 

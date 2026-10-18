@@ -73,6 +73,9 @@ export const academicYears = pgTable(
     term2Start: varchar('term2_start', { length: 10 }),
     term2End: varchar('term2_end', { length: 10 }),
     isActive: boolean('is_active').notNull().default(false),
+    // ภาคเรียนปัจจุบัน (1 | 2) of this year. Only the active year's value is
+    // read: it is what an exit or a newly added person gets stamped with.
+    activeTerm: integer('active_term').notNull().default(1),
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow().$onUpdate(now),
@@ -139,6 +142,13 @@ export const students = pgTable(
     // Academic year in which the student graduated/withdrew. Anchors the exit
     // history views (which cohort left in which year) without parsing exitDate.
     exitAcademicYearId: integer('exit_academic_year_id').references(() => academicYears.id),
+    // ภาคเรียน (1 | 2) of the exit year the person left in. Nullable: rows
+    // written before terms were tracked have none.
+    exitTerm: integer('exit_term'),
+    // Year + ภาคเรียน the record was first added (นำเข้า/เพิ่มใหม่), stamped
+    // from the active year at insert time. Never changed afterwards.
+    entryAcademicYearId: integer('entry_academic_year_id').references(() => academicYears.id),
+    entryTerm: integer('entry_term'),
 
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -461,6 +471,13 @@ export const teachers = pgTable(
     exitDate: varchar('exit_date', { length: 20 }), // raw Thai dd/mm/BBBB
     exitReason: text('exit_reason'),
     exitAcademicYearId: integer('exit_academic_year_id').references(() => academicYears.id),
+    // ภาคเรียน (1 | 2) of the exit year the person left in. Nullable: rows
+    // written before terms were tracked have none.
+    exitTerm: integer('exit_term'),
+    // Year + ภาคเรียน the record was first added (นำเข้า/เพิ่มใหม่), stamped
+    // from the active year at insert time. Never changed afterwards.
+    entryAcademicYearId: integer('entry_academic_year_id').references(() => academicYears.id),
+    entryTerm: integer('entry_term'),
 
     // Profile photo stored inline (base64), like students — see photo route.
     photoBase64: text('photo_base64'),
@@ -617,6 +634,13 @@ export const workers = pgTable(
     exitDate: varchar('exit_date', { length: 20 }),
     exitReason: text('exit_reason'),
     exitAcademicYearId: integer('exit_academic_year_id').references(() => academicYears.id),
+    // ภาคเรียน (1 | 2) of the exit year the person left in. Nullable: rows
+    // written before terms were tracked have none.
+    exitTerm: integer('exit_term'),
+    // Year + ภาคเรียน the record was first added (นำเข้า/เพิ่มใหม่), stamped
+    // from the active year at insert time. Never changed afterwards.
+    entryAcademicYearId: integer('entry_academic_year_id').references(() => academicYears.id),
+    entryTerm: integer('entry_term'),
 
     photoBase64: text('photo_base64'),
     photoMime: varchar('photo_mime', { length: 32 }),

@@ -12,6 +12,7 @@ export const runtime = 'nodejs';
 
 const schema = z.object({
   academicYearId: z.number().int(),
+  term: z.union([z.literal(1), z.literal(2)]).nullable().optional(),
   studentIds: z.array(z.number().int()).min(1, 'ต้องเลือกนักเรียนอย่างน้อย 1 คน'),
   exitType: z.string().nullable().optional(),
   exitReason: z.string().nullable().optional(),
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
       exitReason: body.exitReason,
       exitDate: body.exitDate,
       academicYearId: body.academicYearId,
+      term: body.term,
       recordCompletion: body.recordCompletion,
     });
 

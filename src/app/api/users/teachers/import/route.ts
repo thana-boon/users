@@ -5,6 +5,7 @@ import { teachers } from '@/db/schema';
 import { requireAccess } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
+import { entryStamp } from '@/lib/services/terms';
 import {
   TEACHER_EDUCATION_SHEET,
   TEACHER_SCOUT_SHEET,
@@ -178,6 +179,7 @@ export async function POST(req: NextRequest) {
     if (issues.length) return badRequest('พบแถวที่ผิดพลาด แก้ไขก่อนนำเข้า', { ...summary, issues });
 
     let createdCount = 0;
+    const entry = await entryStamp();
     let updatedCount = 0;
     for (const t of valid) {
       const existing = await db.query.teachers.findFirst({
@@ -202,7 +204,7 @@ export async function POST(req: NextRequest) {
         await db.update(teachers).set(withoutBlanks(base)).where(eq(teachers.id, existing.id));
         updatedCount++;
       } else {
-        await db.insert(teachers).values({ teacherCode: t.teacherCode, role: 'teacher', ...base });
+        await db.insert(teachers).values({ teacherCode: t.teacherCode, role: 'teacher', ...base, ...entry });
         createdCount++;
       }
     }

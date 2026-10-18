@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
           ...[...subjects, ...specialSubjects].map((s) => s.v!).filter(Boolean),
         ]),
       ].sort(),
-      years: years.map((y) => ({ id: y.id, year: y.year, isActive: y.isActive })),
+      years: years.map((y) => ({ id: y.id, year: y.year, isActive: y.isActive, activeTerm: y.activeTerm })),
     });
   } catch (err) {
     return handleError(err);

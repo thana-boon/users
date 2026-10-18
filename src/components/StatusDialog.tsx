@@ -9,7 +9,7 @@ import { DateField } from './DateField';
 import { todayThai } from '@/lib/thai';
 import { EXIT_TYPE_OPTIONS, EXIT_REASON_OPTIONS } from '@/lib/options';
 
-interface YearOpt { id: number; year: number; isActive: boolean }
+interface YearOpt { id: number; year: number; isActive: boolean; activeTerm: number }
 
 /**
  * จำหน่าย/ลาออก or จบการศึกษา a student. Records exit type/date/reason (fed to
@@ -35,11 +35,18 @@ export function StatusDialog({
   const [recordCompletion, setRecordCompletion] = useState(graduate && !!stage);
   const [years, setYears] = useState<YearOpt[]>([]);
   const [exitYearId, setExitYearId] = useState<number | null>(activeYearId);
+  const [exitTerm, setExitTerm] = useState(1);
   const [busy, setBusy] = useState(false);
 
   // Year list for the "ปีการศึกษาที่ออก" selector (default = the passed active year).
   useEffect(() => {
-    api<{ years: YearOpt[] }>('/api/users/meta').then((m) => setYears(m.years)).catch(() => {});
+    api<{ years: YearOpt[] }>('/api/users/meta')
+      .then((m) => {
+        setYears(m.years);
+        const active = m.years.find((y) => y.isActive);
+        if (active) setExitTerm(active.activeTerm);
+      })
+      .catch(() => {});
   }, []);
 
   async function submit() {
@@ -53,6 +60,7 @@ export function StatusDialog({
         exitDate,
         exitReason,
         academicYearId: exitYearId,
+        term: exitTerm,
         completion: recordCompletion && stage
           ? { keyStage: stage, gradeLevel: activeGrade, academicYearId: exitYearId, completionDate: exitDate }
           : null,
@@ -76,6 +84,13 @@ export function StatusDialog({
             <select className="form-select" value={exitYearId ?? ''} onChange={(e) => setExitYearId(Number(e.target.value))}>
               {years.length === 0 && activeYearId != null && <option value={activeYearId}>—</option>}
               {years.map((y) => <option key={y.id} value={y.id}>{y.year}{y.isActive ? ' (ปัจจุบัน)' : ''}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">ภาคเรียนที่ออก</label>
+            <select className="form-select" value={exitTerm} onChange={(e) => setExitTerm(Number(e.target.value))}>
+              <option value={1}>ภาคเรียนที่ 1</option>
+              <option value={2}>ภาคเรียนที่ 2</option>
             </select>
           </div>
           {graduate ? (
