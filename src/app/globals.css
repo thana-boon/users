@@ -205,6 +205,10 @@ a, button, input, select, textarea, label, summary, [role='button'] {
   transition: background var(--transition-base), transform var(--transition-fast),
     box-shadow var(--transition-base), filter var(--transition-base);
   min-height: 40px;
+  /* A button keeps its label on one line. Squeezed into a phone-width row it
+     would otherwise stack "นำ / เข้า / รูป" one word per line; the row wraps
+     the whole button instead. */
+  white-space: nowrap;
 }
 .btn:active { transform: scale(0.98); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -335,7 +339,11 @@ div:focus-within > .form-label, div:focus-within > .row-between > .form-label { 
 .badge-muted { background: var(--skdw-bg); color: var(--skdw-muted); border-color: var(--skdw-border); }
 
 /* ── Tables ── */
-.table-wrap { width: 100%; overflow-x: auto; border-radius: var(--radius-md); }
+/* position: relative makes the wrap the containing block of anything absolute
+   inside the table (a header's .sr-only label). Without it that element is
+   placed against the page instead, escapes the scroll box, and on a phone
+   stretches the whole page to the table's width. */
+.table-wrap { position: relative; width: 100%; overflow-x: auto; border-radius: var(--radius-md); }
 .table { width: 100%; border-collapse: collapse; font-size: var(--text-md); background: #fff; }
 .table th {
   background: var(--skdw-purple-pale);
@@ -473,6 +481,22 @@ a.stat:hover { transform: translateY(-2px); box-shadow: 0 8px 22px color-mix(in 
 .mono { font-family: var(--font-en); font-variant-numeric: tabular-nums; }
 .row { display: flex; align-items: center; gap: var(--space-3); }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+/* A page head's button group wraps onto a second line rather than pushing
+   past the screen edge. */
+.row-between > .row { flex-wrap: wrap; }
+/* .filter-row — a row of labelled fields (ปีการศึกษา / ชั้น / ห้อง …), each
+   with a fixed desktop width. On a phone those widths make a ragged column
+   with the option text cut off, so the fields share the line instead: two to
+   a row, each control filling its share. .filter-grow (a search box) takes a
+   line of its own. */
+@media (max-width: 640px) {
+  .filter-row > * { flex: 1 1 140px; min-width: 0 !important; }
+  /* !important: the search box carries an inline flex: 1, i.e. basis 0. */
+  .filter-row > .filter-grow, .filter-row > .btn { flex-basis: 100% !important; }
+  .filter-row > [aria-hidden] { display: none; }
+  .filter-row .form-input, .filter-row .form-select { width: 100% !important; }
+  .filter-row .row > div:first-child { flex: 1 1 auto; min-width: 0; }
+}
 .stack { display: flex; flex-direction: column; gap: var(--space-4); }
 .spacer { flex: 1; }
 .chip { display: inline-flex; padding: 4px 10px; border-radius: var(--radius-full); background: var(--skdw-purple-pale); color: var(--skdw-purple); font-size: var(--text-sm); }
@@ -802,6 +826,10 @@ button.chip:hover { background: var(--skdw-purple); color: #fff; }
   .card-pad { padding: var(--space-4); }
   .card-header { padding: var(--space-3) var(--space-4); }
   .page-title { font-size: 21px; }
+  /* Tighter cells: more of a wide table fits before it has to scroll. */
+  .table:not(.reg-table) th { padding: 8px 10px; }
+  .table:not(.reg-table) td { padding: 10px; }
+  .table .badge { white-space: nowrap; }
   .stat { padding: var(--space-4); }
   .stat-value { font-size: var(--text-xl); }
 

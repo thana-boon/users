@@ -430,7 +430,7 @@ export default function PromotionsPage() {
 
       {/* Year + grade controls */}
       <div className="card" style={{ padding: 16 }}>
-        <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="row filter-row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <label className="form-label">{mode === 'year' ? 'ปีต้นทาง' : 'ปีการศึกษา'}</label>
             <select className="form-select" style={{ width: 140 }} value={sourceYearId}
@@ -440,7 +440,7 @@ export default function PromotionsPage() {
           </div>
           {mode === 'year' && (
             <>
-              <div style={{ alignSelf: 'center', paddingBottom: 8, color: 'var(--skdw-muted)' }}>→</div>
+              <div aria-hidden style={{ alignSelf: 'center', paddingBottom: 8, color: 'var(--skdw-muted)' }}>→</div>
               <div>
                 <label className="form-label">ปีปลายทาง</label>
                 <select className="form-select" style={{ width: 140 }} value={targetYearId}

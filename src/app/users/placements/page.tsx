@@ -316,7 +316,7 @@ export default function PlacementsPage() {
 
       {/* Target year + grade */}
       <div className="card" style={{ padding: 16 }}>
-        <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="row filter-row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <label className="form-label">ปีการศึกษา</label>
             <select className="form-select" style={{ width: 150 }} value={yearId}
@@ -341,7 +341,7 @@ export default function PlacementsPage() {
           <div className="stack" style={{ gap: 14 }}>
             <div>
               <strong style={{ fontSize: 14 }}>เพิ่มนักเรียนใหม่ (มอบตัว)</strong>
-              <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 8, alignItems: 'flex-end' }}>
+              <div className="row filter-row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 8, alignItems: 'flex-end' }}>
                 <div>
                   <label className="form-label">รหัสนักเรียน</label>
                   <input className="form-input" style={{ width: 130 }} value={qa.studentCode}

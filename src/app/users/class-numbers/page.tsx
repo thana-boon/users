@@ -125,7 +125,7 @@ function ClassNumbersInner() {
       </div>
 
       <div className="card" style={{ padding: 16 }}>
-        <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="row filter-row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <label className="form-label">ปีการศึกษา</label>
             <select className="form-select" style={{ width: 140 }} value={yearId} onChange={(e) => setYearId(Number(e.target.value))}>

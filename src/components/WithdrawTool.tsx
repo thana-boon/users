@@ -283,7 +283,7 @@ export function WithdrawTool() {
       {/* Exit fields + submit */}
       {picked.length > 0 && (
         <div className="card" style={{ padding: 16 }}>
-          <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="row filter-row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div>
               <label className="form-label">ปีการศึกษาที่ออก</label>
               <select className="form-select" style={{ width: 140 }} value={exitYearId ?? ''} onChange={(e) => setExitYearId(Number(e.target.value))}>
@@ -344,7 +344,7 @@ export function WithdrawTool() {
         </div>
 
         {/* Filters: academic year + exit-date range */}
-        <div className="row" style={{ gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="row filter-row" style={{ gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <label className="form-label">ปีการศึกษา</label>
             <select

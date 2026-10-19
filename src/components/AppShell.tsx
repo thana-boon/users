@@ -317,7 +317,6 @@ export function AppShell({
           <span
             className="badge badge-gold hide-mobile"
             title={isAdmin ? 'สิทธิ์ผู้ดูแลระบบ (users:write)' : 'สิทธิ์เฉพาะส่วนที่ได้รับมอบหมาย'}
-            style={{ display: 'inline-flex', alignItems: 'center' }}
           >
             <IconShield width={13} height={13} /> {isAdmin ? 'ผู้ดูแล' : 'Moderator'}
           </span>
@@ -469,7 +468,7 @@ export function AppShell({
           min-height: 36px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
           background: rgba(255,255,255,0.12); color: #fff;
           border: 1px solid rgba(255,255,255,0.35);
-          font-family: inherit; font-size: 13px; line-height: 1.2;
+          font-family: inherit; font-size: 13px; line-height: 1.2; white-space: nowrap;
           transition: background var(--transition-fast);
         }
         .mode-btn:hover { background: rgba(255,255,255,0.24); }

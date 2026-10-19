@@ -294,7 +294,7 @@ export function LeaveTool() {
       {/* Leave fields + submit */}
       {picked.length > 0 && (
         <div className="card" style={{ padding: 16 }}>
-          <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="row filter-row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div>
               <label className="form-label">ปีการศึกษา</label>
               <select className="form-select" style={{ width: 140 }} value={yearId ?? ''} onChange={(e) => setYearId(Number(e.target.value))}>
@@ -359,7 +359,7 @@ export function LeaveTool() {
           </div>
         </div>
 
-        <div className="row" style={{ gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="row filter-row" style={{ gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <label className="form-label">แสดง</label>
             <select className="form-select" style={{ width: 190 }} value={scope} onChange={(e) => setScope(e.target.value as 'open' | 'all')}>

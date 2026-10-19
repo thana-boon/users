@@ -214,7 +214,7 @@ export function GraduationTool() {
 
       {/* Scope */}
       <div className="card" style={{ padding: 16 }}>
-        <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="row filter-row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <label className="form-label">ปีการศึกษา</label>
             <select className="form-select" style={{ width: 150 }} value={yearId}
@@ -286,7 +286,7 @@ export function GraduationTool() {
       {/* Exit fields + submit */}
       {grade && rows.length > 0 && (
         <div className="card" style={{ padding: 16 }}>
-          <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="row filter-row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div>
               <label className="form-label">ประเภท</label>
               <input className="form-input" style={{ width: 180 }} value={exitType} onChange={(e) => setExitType(e.target.value)} />

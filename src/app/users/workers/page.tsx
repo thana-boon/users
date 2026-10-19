@@ -60,8 +60,8 @@ export default function WorkersPage() {
       </div>
 
       <div className="card" style={{ padding: 16 }}>
-        <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+        <div className="row filter-row" style={{ gap: 12, flexWrap: 'wrap' }}>
+          <div className="filter-grow" style={{ position: 'relative', flex: 1, minWidth: 220 }}>
             <span style={{ position: 'absolute', left: 12, top: 10, color: 'var(--skdw-muted)' }}><IconSearch width={18} height={18} /></span>
             <input className="form-input" style={{ paddingLeft: 38 }} placeholder="ค้นหารหัส / ชื่อ / ตำแหน่ง" value={q} onChange={(e) => setQ(e.target.value)} aria-label="ค้นหาคนงาน" />
           </div>

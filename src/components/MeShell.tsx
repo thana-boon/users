@@ -134,7 +134,7 @@ export function MeShell({
           padding: 6px 12px; border-radius: 999px; cursor: pointer;
           background: rgba(255,255,255,0.12); color: #fff;
           border: 1px solid rgba(255,255,255,0.35);
-          font-family: inherit; font-size: 13px; line-height: 1.2;
+          font-family: inherit; font-size: 13px; line-height: 1.2; white-space: nowrap;
           transition: background var(--transition-fast);
         }
         .mode-btn:hover { background: rgba(255,255,255,0.24); }
