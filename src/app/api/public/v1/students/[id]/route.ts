@@ -27,6 +27,7 @@ import {
   updateStudentAggregate,
 } from '@/lib/services/students';
 import { readContactsFor, readEducationFor, readHealthFor } from '@/lib/services/student-extras';
+import { readAliasMap, roomKey } from '@/lib/services/room-aliases';
 
 export const runtime = 'nodejs';
 
@@ -101,7 +102,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return insufficientScope('students:education');
     }
 
-    const [rows, enrolled, activeYearId, years] = await Promise.all([
+    const [rows, enrolled, activeYearId, years, aliases] = await Promise.all([
       db
         .select({
           id: students.id,
@@ -155,6 +156,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         })
         .from(academicYears)
         .orderBy(asc(academicYears.year)),
+      readAliasMap(),
     ]);
 
     const row = rows[0];
@@ -164,7 +166,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // Newest first: the most recent placement is what a caller resolving a
     // stale id almost always wants, and it makes [0] a useful default.
     const history = enrolled
-      .map((e) => ({ ...e, year: yearById.get(e.yearId)?.year ?? null }))
+      .map((e) => ({
+        ...e,
+        classroomAlias:
+          e.gradeLevel && e.classroom ? (aliases.get(roomKey(e.gradeLevel, e.classroom)) ?? null) : null,
+        year: yearById.get(e.yearId)?.year ?? null,
+      }))
       .sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
 
     const current = history.find((e) => e.yearId === activeYearId) ?? null;
@@ -212,6 +219,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         // the case that makes this endpoint necessary.
         gradeLevel: current?.gradeLevel ?? null,
         classroom: current?.classroom ?? null,
+        classroomAlias: current?.classroomAlias ?? null,
         classNumber: current?.classNumber ?? null,
         photoUrl: row.hasPhoto ? `/api/public/v1/students/${row.id}/photo` : null,
         ...(withPii ? { citizenId: tryDecrypt(citizenIdEncrypted) } : {}),

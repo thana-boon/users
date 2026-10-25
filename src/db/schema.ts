@@ -689,6 +689,27 @@ export const subjectGroups = pgTable(
   }),
 );
 
+// -- room_aliases (ชื่อห้อง เช่น อ.3/1 → อ.3/เฟื่องฟ้า) -------------------
+// A display name only. `enrollments.classroom` keeps the number, so every
+// filter, sort and API that keys on (grade, classroom) answers exactly as
+// before; the alias rides along beside it. Keyed WITHOUT an academic year on
+// purpose: a room's name is the school's naming scheme, not a yearly setting,
+// so อ.3/1 stays เฟื่องฟ้า until someone renames it.
+export const roomAliases = pgTable(
+  'room_aliases',
+  {
+    id: serial('id').primaryKey(),
+    gradeLevel: varchar('grade_level', { length: 32 }).notNull(), // ชั้น เช่น อ.3
+    classroom: varchar('classroom', { length: 16 }).notNull(), // ห้อง (เลข)
+    alias: varchar('alias', { length: 64 }).notNull(), // ชื่อห้อง
+    updatedAt: timestamp('updated_at').notNull().defaultNow().$onUpdate(now),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    roomUniq: unique('room_aliases_room_uniq').on(t.gradeLevel, t.classroom),
+  }),
+);
+
 // -- special_teachers (อาจารย์พิเศษ) — non-login teaching staff ------
 // วิทยากร/อาจารย์พิเศษที่มาสอนเป็นรายวิชา. A separate table for the same reason
 // `workers` is one: they teach, but they hold NO account — no password, no
@@ -962,6 +983,7 @@ export type NewCompletion = typeof completions.$inferInsert;
 export type SpecialTeacher = typeof specialTeachers.$inferSelect;
 export type SubjectGroup = typeof subjectGroups.$inferSelect;
 export type NewSubjectGroup = typeof subjectGroups.$inferInsert;
+export type RoomAlias = typeof roomAliases.$inferSelect;
 export type StudentLeave = typeof studentLeaves.$inferSelect;
 export type NewStudentLeave = typeof studentLeaves.$inferInsert;
 export type LeaveType = (typeof LEAVE_TYPES)[number];

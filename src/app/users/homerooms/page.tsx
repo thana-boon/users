@@ -24,6 +24,7 @@ interface TeacherLite {
 interface Room {
   gradeLevel: string;
   classroom: string;
+  alias: string | null;
   studentCount: number;
   teachers: TeacherLite[];
 }
@@ -127,7 +128,10 @@ export default function HomeroomsPage() {
               <tbody>
                 {list.map((r) => (
                   <tr key={`${r.gradeLevel}|${r.classroom}`}>
-                    <td><b>{r.gradeLevel}/{r.classroom}</b></td>
+                    <td>
+                      <b>{r.gradeLevel}/{r.classroom}</b>
+                      {r.alias && <div className="muted" style={{ fontSize: 12 }}>{r.alias}</div>}
+                    </td>
                     <td className="num mono">{r.studentCount.toLocaleString('th-TH')}</td>
                     <td>
                       {r.teachers.length === 0 ? (
@@ -224,7 +228,7 @@ function AssignDialog({
   return (
     <div className="modal-scrim" role="dialog" aria-modal="true" aria-label={`กำหนดครูประจำชั้น ${room.gradeLevel}/${room.classroom}`}>
       <div className="modal" style={{ width: 'min(520px, 92vw)' }}>
-        <div className="card-header">ครูประจำชั้น {room.gradeLevel}/{room.classroom}</div>
+        <div className="card-header">ครูประจำชั้น {room.gradeLevel}/{room.classroom}{room.alias ? ` (${room.alias})` : ''}</div>
         <div className="card-pad stack" style={{ gap: 12 }}>
           <div style={{ position: 'relative' }}>
             <span style={{ position: 'absolute', left: 12, top: 10, color: 'var(--skdw-muted)' }}>

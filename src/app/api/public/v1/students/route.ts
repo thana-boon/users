@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { students, enrollments, academicYears } from '@/db/schema';
+import { students, enrollments, academicYears, roomAliases } from '@/db/schema';
 import { requireApiScope, actorHasScope, insufficientScope } from '@/lib/apiauth';
 import { ok, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
@@ -36,6 +36,9 @@ export const runtime = 'nodejs';
  *
  * Query: ?yearId= ?grade= ?classroom= ?status= ?q= ?page= ?pageSize= (max 200)
  *        ?include=health,contact,education
+ *
+ * `classroom` is the room number (what ?classroom= matches); `classroomAlias`
+ * is the room's name from ชื่อห้อง, e.g. "เฟื่องฟ้า", or null.
  */
 export async function GET(req: NextRequest) {
   const guard = await requireApiScope(req, 'students:read');
@@ -111,6 +114,7 @@ export async function GET(req: NextRequest) {
           status: students.status,
           gradeLevel: enrollments.gradeLevel,
           classroom: enrollments.classroom,
+          classroomAlias: roomAliases.alias,
           classNumber: enrollments.classNumber,
           citizenIdEncrypted: students.citizenIdEncrypted,
           // `is not null` rather than the column itself: asking Postgres for the
@@ -119,6 +123,10 @@ export async function GET(req: NextRequest) {
         })
         .from(students)
         .innerJoin(enrollments, eq(enrollments.studentId, students.id))
+        .leftJoin(
+          roomAliases,
+          and(eq(roomAliases.gradeLevel, enrollments.gradeLevel), eq(roomAliases.classroom, enrollments.classroom)),
+        )
         .where(where)
         // ชั้น by curriculum order (เตรียมอนุบาล → อ → ป → ม) — consumers page
         // through this feed and expect the same order the module shows.

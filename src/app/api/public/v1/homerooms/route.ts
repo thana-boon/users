@@ -6,6 +6,7 @@ import { requireApiScope } from '@/lib/apiauth';
 import { ok, handleError } from '@/lib/http';
 import { resolveActiveYearId } from '@/lib/services/students';
 import { compareGrades } from '@/lib/grades';
+import { readAliasMap, roomKey, roomLabel } from '@/lib/services/room-aliases';
 
 export const runtime = 'nodejs';
 
@@ -21,6 +22,10 @@ export const runtime = 'nodejs';
  * consumer can tell "no homeroom teacher yet" apart from "room doesn't exist"),
  * plus rooms that only exist as an assignment. No PII, no pagination — a school
  * has at most a few dozen rooms.
+ *
+ * `classroom` is always the room NUMBER (filter on it as before); `alias` is the
+ * room's name from ชื่อห้อง (null if none) and `displayName` is what to show —
+ * "อ.3/เฟื่องฟ้า" when named, else "อ.3/1".
  */
 export async function GET(req: NextRequest) {
   const guard = await requireApiScope(req, 'teachers:read');
@@ -47,7 +52,7 @@ export async function GET(req: NextRequest) {
       assignConds.push(eq(homeroomTeachers.classroom, classroom));
     }
 
-    const [roomRows, assignRows, yearRow] = await Promise.all([
+    const [roomRows, assignRows, yearRow, aliases] = await Promise.all([
       db
         .select({
           gradeLevel: enrollments.gradeLevel,
@@ -76,11 +81,14 @@ export async function GET(req: NextRequest) {
         .where(and(...assignConds))
         .orderBy(asc(homeroomTeachers.id)),
       db.query.academicYears.findFirst({ where: eq(academicYears.id, yearId) }),
+      readAliasMap(),
     ]);
 
     type RoomOut = {
       gradeLevel: string;
       classroom: string;
+      alias: string | null;
+      displayName: string;
       studentCount: number;
       homeroomTeachers: {
         id: number;
@@ -98,9 +106,12 @@ export async function GET(req: NextRequest) {
     const byKey = new Map<string, RoomOut>();
     for (const r of roomRows) {
       if (!r.gradeLevel || !r.classroom) continue;
+      const alias = aliases.get(roomKey(r.gradeLevel, r.classroom)) ?? null;
       byKey.set(`${r.gradeLevel}|${r.classroom}`, {
         gradeLevel: r.gradeLevel,
         classroom: r.classroom,
+        alias,
+        displayName: roomLabel(r.gradeLevel, r.classroom, alias),
         studentCount: Number(r.n),
         homeroomTeachers: [],
       });
@@ -109,7 +120,15 @@ export async function GET(req: NextRequest) {
       const key = `${a.gradeLevel}|${a.classroom}`;
       let room = byKey.get(key);
       if (!room) {
-        room = { gradeLevel: a.gradeLevel, classroom: a.classroom, studentCount: 0, homeroomTeachers: [] };
+        const alias = aliases.get(key) ?? null;
+        room = {
+          gradeLevel: a.gradeLevel,
+          classroom: a.classroom,
+          alias,
+          displayName: roomLabel(a.gradeLevel, a.classroom, alias),
+          studentCount: 0,
+          homeroomTeachers: [],
+        };
         byKey.set(key, room);
       }
       room.homeroomTeachers.push({

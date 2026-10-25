@@ -8,6 +8,7 @@ import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
 import { resolveActiveYearId } from '@/lib/services/students';
 import { compareGrades } from '@/lib/grades';
+import { readAliasMap } from '@/lib/services/room-aliases';
 
 export const runtime = 'nodejs';
 
@@ -17,6 +18,7 @@ const byRoom = (a: string, b: string) => a.localeCompare(b, 'th', { numeric: tru
 export interface HomeroomRoom {
   gradeLevel: string;
   classroom: string;
+  alias: string | null;
   studentCount: number;
   teachers: {
     id: number;
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const yearId = sp.get('yearId') ? Number(sp.get('yearId')) : await resolveActiveYearId();
 
-    const [roomRows, assignRows, teacherRows] = await Promise.all([
+    const [roomRows, assignRows, teacherRows, aliases] = await Promise.all([
       db
         .select({
           gradeLevel: enrollments.gradeLevel,
@@ -89,6 +91,7 @@ export async function GET(req: NextRequest) {
         .from(teachers)
         .where(and(eq(teachers.isArchived, false), eq(teachers.employmentStatus, 'active')))
         .orderBy(asc(teachers.teacherCode)),
+      readAliasMap(),
     ]);
 
     const byKey = new Map<string, HomeroomRoom>();
@@ -97,6 +100,7 @@ export async function GET(req: NextRequest) {
       byKey.set(`${r.gradeLevel}|${r.classroom}`, {
         gradeLevel: r.gradeLevel,
         classroom: r.classroom,
+        alias: aliases.get(`${r.gradeLevel}|${r.classroom}`) ?? null,
         studentCount: Number(r.n),
         teachers: [],
       });
@@ -106,7 +110,13 @@ export async function GET(req: NextRequest) {
       let room = byKey.get(key);
       if (!room) {
         // Assignment survives with 0 students so it can still be reviewed/cleared.
-        room = { gradeLevel: a.gradeLevel, classroom: a.classroom, studentCount: 0, teachers: [] };
+        room = {
+          gradeLevel: a.gradeLevel,
+          classroom: a.classroom,
+          alias: aliases.get(key) ?? null,
+          studentCount: 0,
+          teachers: [],
+        };
         byKey.set(key, room);
       }
       room.teachers.push({
