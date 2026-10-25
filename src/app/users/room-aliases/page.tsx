@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, jsonBody } from '@/lib/client';
 import { useToast } from '@/components/Toast';
 
@@ -9,6 +9,9 @@ import { useToast } from '@/components/Toast';
  * number stays the room's identity everywhere; the name is display only and
  * rides along in /api/public/v1/homerooms and /api/public/v1/students. Names
  * are not per year — the year picker only chooses which rooms to list.
+ *
+ * Saves itself: a pause in typing or leaving the field writes the name, so
+ * filling a whole ชั้น is type → Tab → type with no buttons in between.
  */
 
 interface Room {
@@ -20,7 +23,12 @@ interface Room {
 
 interface YearOpt { id: number; year: number; isActive: boolean }
 
+type RowStatus = { state: 'saving' } | { state: 'saved' } | { state: 'error'; message: string };
+
 const keyOf = (r: Room) => `${r.gradeLevel}|${r.classroom}`;
+/** Same normalisation the server applies, so "saved" compares like for like. */
+const clean = (v: string) => v.trim().replace(/\s+/g, ' ');
+const DEBOUNCE_MS = 800;
 
 export default function RoomAliasesPage() {
   const toast = useToast();
@@ -28,8 +36,16 @@ export default function RoomAliasesPage() {
   const [yearId, setYearId] = useState<number | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<string | null>(null);
+  const [status, setStatus] = useState<Record<string, RowStatus>>({});
   const [loading, setLoading] = useState(true);
+
+  // Per-room plumbing that must not re-render: the pending debounce timer, the
+  // last value the server has (or is being sent), and whether a request is in
+  // flight — one request per room at a time, so saves can't land out of order.
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const savedVal = useRef(new Map<string, string>());
+  const inflight = useRef(new Set<string>());
+  const latest = useRef(new Map<string, { room: Room; value: string }>());
 
   useEffect(() => {
     api<{ yearId: number; years: YearOpt[] }>('/api/users/meta')
@@ -46,6 +62,8 @@ export default function RoomAliasesPage() {
       const res = await api<{ rooms: Room[] }>(`/api/users/room-aliases?yearId=${yid}`);
       setRooms(res.rooms);
       setDrafts({});
+      setStatus({});
+      savedVal.current = new Map(res.rooms.map((r) => [keyOf(r), r.alias ?? '']));
     } catch (e) {
       toast((e as Error).message, 'error');
     } finally {
@@ -56,6 +74,52 @@ export default function RoomAliasesPage() {
   useEffect(() => {
     if (yearId != null) load(yearId);
   }, [yearId, load]);
+
+  useEffect(() => {
+    const t = timers.current;
+    return () => t.forEach(clearTimeout);
+  }, []);
+
+  const save = useCallback(async (k: string) => {
+    const next = latest.current.get(k);
+    if (!next || inflight.current.has(k)) return;
+    const value = clean(next.value);
+    if (value === savedVal.current.get(k)) return;
+
+    inflight.current.add(k);
+    setStatus((s) => ({ ...s, [k]: { state: 'saving' } }));
+    try {
+      await api('/api/users/room-aliases', jsonBody({
+        gradeLevel: next.room.gradeLevel,
+        classroom: next.room.classroom,
+        alias: value,
+      }));
+      savedVal.current.set(k, value);
+      setRooms((prev) => prev.map((x) => (keyOf(x) === k ? { ...x, alias: value || null } : x)));
+      setStatus((s) => ({ ...s, [k]: { state: 'saved' } }));
+    } catch (e) {
+      setStatus((s) => ({ ...s, [k]: { state: 'error', message: (e as Error).message } }));
+    } finally {
+      inflight.current.delete(k);
+    }
+    // Typed on while that request was out? Send the newer value now.
+    const after = latest.current.get(k);
+    if (after && clean(after.value) !== value) save(k);
+  }, []);
+
+  function change(r: Room, value: string) {
+    const k = keyOf(r);
+    setDrafts((d) => ({ ...d, [k]: value }));
+    latest.current.set(k, { room: r, value });
+    clearTimeout(timers.current.get(k));
+    timers.current.set(k, setTimeout(() => save(k), DEBOUNCE_MS));
+  }
+
+  function flush(k: string) {
+    clearTimeout(timers.current.get(k));
+    timers.current.delete(k);
+    save(k);
+  }
 
   const grades = useMemo(() => {
     const m = new Map<string, Room[]>();
@@ -69,34 +133,14 @@ export default function RoomAliasesPage() {
 
   const named = rooms.filter((r) => r.alias).length;
 
-  async function save(r: Room, value: string) {
-    const k = keyOf(r);
-    setSaving(k);
-    try {
-      await api('/api/users/room-aliases', jsonBody({
-        gradeLevel: r.gradeLevel,
-        classroom: r.classroom,
-        alias: value,
-      }));
-      const alias = value.trim().replace(/\s+/g, ' ') || null;
-      setRooms((prev) => prev.map((x) => (keyOf(x) === k ? { ...x, alias } : x)));
-      setDrafts(({ [k]: _, ...rest }) => rest);
-      toast(alias ? `ตั้งชื่อ ${r.gradeLevel}/${r.classroom} เป็น ${r.gradeLevel}/${alias} แล้ว` : `ลบชื่อห้อง ${r.gradeLevel}/${r.classroom} แล้ว`, 'success');
-    } catch (e) {
-      toast((e as Error).message, 'error');
-    } finally {
-      setSaving(null);
-    }
-  }
-
   return (
     <div className="stack" style={{ gap: 20, maxWidth: 1000 }}>
       <div className="row-between">
         <div>
           <h1 className="page-title">ชื่อห้อง</h1>
           <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-            ตั้งชื่อเรียกห้อง เช่น อ.3/1 → อ.3/เฟื่องฟ้า — เลขห้องยังคงอยู่ ชื่อใช้ได้ทุกปีการศึกษา
-            และส่งไปกับ <code className="mono">/api/public/v1/homerooms</code> และ <code className="mono">/api/public/v1/students</code>
+            ตั้งชื่อเรียกห้อง เช่น อ.3/1 → อ.3/เฟื่องฟ้า — พิมพ์แล้วบันทึกอัตโนมัติ ลบชื่อออกเพื่อกลับไปใช้เลขห้อง
+            · ชื่อใช้ได้ทุกปีการศึกษา และส่งไปกับ <code className="mono">/api/public/v1/homerooms</code> และ <code className="mono">/api/public/v1/students</code>
           </p>
         </div>
         <select
@@ -145,43 +189,48 @@ export default function RoomAliasesPage() {
                 {list.map((r) => {
                   const k = keyOf(r);
                   const value = drafts[k] ?? r.alias ?? '';
-                  const dirty = value.trim() !== (r.alias ?? '');
-                  const busy = saving === k;
-                  const shown = value.trim() || r.classroom;
+                  const st = status[k];
+                  const shown = clean(value) || r.classroom;
                   return (
                     <tr key={k}>
                       <td><b>{r.gradeLevel}/{r.classroom}</b></td>
                       <td className="num mono">{r.studentCount.toLocaleString('th-TH')}</td>
                       <td>
-                        <div className="row" style={{ gap: 6 }}>
-                          <input
-                            className="form-input"
-                            style={{ minWidth: 140, flex: 1 }}
-                            maxLength={64}
-                            placeholder="ไม่มีชื่อ — ใช้เลขห้อง"
-                            value={value}
-                            disabled={busy}
-                            onChange={(e) => setDrafts((d) => ({ ...d, [k]: e.target.value }))}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && dirty) save(r, value);
-                              if (e.key === 'Escape') setDrafts(({ [k]: _, ...rest }) => rest);
+                        <input
+                          className="form-input"
+                          style={{
+                            minWidth: 140,
+                            width: '100%',
+                            ...(st?.state === 'error' ? { borderColor: 'var(--tone-red)' } : {}),
+                          }}
+                          maxLength={64}
+                          placeholder="ไม่มีชื่อ — ใช้เลขห้อง"
+                          value={value}
+                          onChange={(e) => change(r, e.target.value)}
+                          onBlur={() => flush(k)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') flush(k);
+                          }}
+                          aria-label={`ชื่อห้อง ${r.gradeLevel}/${r.classroom}`}
+                          aria-invalid={st?.state === 'error' || undefined}
+                        />
+                        {st && (
+                          <div
+                            style={{
+                              fontSize: 12,
+                              marginTop: 4,
+                              color: st.state === 'error' ? 'var(--tone-red)' : 'var(--skdw-muted)',
                             }}
-                            aria-label={`ชื่อห้อง ${r.gradeLevel}/${r.classroom}`}
-                          />
-                          {dirty && (
-                            <button className="btn btn-primary btn-sm" onClick={() => save(r, value)} disabled={busy}>
-                              บันทึก
-                            </button>
-                          )}
-                          {!dirty && r.alias && (
-                            <button className="btn btn-ghost btn-sm" onClick={() => save(r, '')} disabled={busy}>
-                              ลบ
-                            </button>
-                          )}
-                        </div>
+                            role={st.state === 'error' ? 'alert' : 'status'}
+                          >
+                            {st.state === 'saving' && 'กำลังบันทึก…'}
+                            {st.state === 'saved' && '✓ บันทึกแล้ว'}
+                            {st.state === 'error' && st.message}
+                          </div>
+                        )}
                       </td>
                       <td>
-                        <span className={value.trim() ? 'badge badge-purple' : 'muted'}>{r.gradeLevel}/{shown}</span>
+                        <span className={clean(value) ? 'badge badge-purple' : 'muted'}>{r.gradeLevel}/{shown}</span>
                       </td>
                     </tr>
                   );
