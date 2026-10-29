@@ -16,7 +16,12 @@ export const runtime = 'nodejs';
  * Photos DO exist and ride the additive `special-teachers:photo` scope on
  * `/[id]/photo` and `/photos`; this route only reports whether one is there.
  *
- * Query: ?subjectGroup= ?q= ?page= ?pageSize= (max 200)
+ * ?status= works like /teachers: default `active`, so a resigned อาจารย์พิเศษ
+ * drops out of every consumer that just asks for "the list" (ตารางสอน's picker
+ * is exactly that). `resigned` or `all` is there for anyone who needs history,
+ * and each row carries `employmentStatus` + `exitDate` either way.
+ *
+ * Query: ?subjectGroup= ?status=active|resigned|all ?q= ?page= ?pageSize= (max 200)
  */
 export async function GET(req: NextRequest) {
   const guard = await requireApiScope(req, 'special-teachers:read');
@@ -26,11 +31,15 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const q = (sp.get('q') ?? '').trim();
     const subjectGroup = (sp.get('subjectGroup') ?? '').trim();
+    const status = (sp.get('status') ?? 'active').trim();
     const page = Math.max(1, Number(sp.get('page') ?? '1') || 1);
     const pageSize = Math.min(200, Math.max(1, Number(sp.get('pageSize') ?? '50') || 50));
 
     const conds = [eq(specialTeachers.isArchived, false)];
     if (subjectGroup) conds.push(eq(specialTeachers.subjectGroup, subjectGroup));
+    if (status !== 'all' && (status === 'active' || status === 'resigned')) {
+      conds.push(eq(specialTeachers.employmentStatus, status));
+    }
     if (q) {
       conds.push(
         or(
@@ -53,6 +62,8 @@ export async function GET(req: NextRequest) {
           lastName: specialTeachers.lastName,
           subjectGroup: specialTeachers.subjectGroup,
           phone: specialTeachers.phone,
+          employmentStatus: specialTeachers.employmentStatus,
+          exitDate: specialTeachers.exitDate,
           hasPhoto: isNotNull(specialTeachers.photoBase64),
         })
         .from(specialTeachers)

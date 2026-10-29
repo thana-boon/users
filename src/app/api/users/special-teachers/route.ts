@@ -16,7 +16,7 @@ export const runtime = 'nodejs';
  * กลุ่มสาระ they teach under + a photo is the whole record. That is also why
  * there is no /reveal twin of this route — there is nothing here to reveal.
  *
- * GET  /api/users/special-teachers  ?q= ?subjectGroup= ?page= ?pageSize=
+ * GET  /api/users/special-teachers  ?q= ?subjectGroup= ?status= ?page= ?pageSize=
  * POST /api/users/special-teachers
  */
 export async function GET(req: NextRequest) {
@@ -26,11 +26,14 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const q = (sp.get('q') ?? '').trim();
     const subjectGroup = (sp.get('subjectGroup') ?? '').trim();
+    const status = (sp.get('status') ?? '').trim();
     const page = Math.max(1, Number(sp.get('page') ?? '1') || 1);
     const pageSize = Math.min(100, Math.max(1, Number(sp.get('pageSize') ?? '25') || 25));
 
     const conds = [eq(specialTeachers.isArchived, false)];
     if (subjectGroup) conds.push(eq(specialTeachers.subjectGroup, subjectGroup));
+    if (status === 'active' || status === 'resigned')
+      conds.push(eq(specialTeachers.employmentStatus, status));
     if (q) {
       conds.push(
         or(
@@ -53,6 +56,9 @@ export async function GET(req: NextRequest) {
           lastName: specialTeachers.lastName,
           subjectGroup: specialTeachers.subjectGroup,
           phone: specialTeachers.phone,
+          employmentStatus: specialTeachers.employmentStatus,
+          exitDate: specialTeachers.exitDate,
+          exitReason: specialTeachers.exitReason,
           // A boolean, never the bytes: the list renders ~25 thumbnails and
           // each photo is base64 in the row, so shipping them inline would turn
           // one page of the roster into megabytes. The thumbnail fetches

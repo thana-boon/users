@@ -12,6 +12,7 @@ import { ImportDialog } from '@/components/ImportDialog';
 import { PhotoImportDialog } from '@/components/PhotoImportDialog';
 import { PhotoThumb, PhotoLightbox } from '@/components/PhotoThumb';
 import { PhotoCard } from '@/components/PhotoCard';
+import { EmploymentStatusDialog } from '@/components/EmploymentStatusDialog';
 import {
   IconSearch, IconPlus, IconEdit, IconTrash, IconUpload, IconDownload, IconImage,
 } from '@/components/Icons';
@@ -35,6 +36,9 @@ interface Row {
   lastName: string;
   subjectGroup: string | null;
   phone: string | null;
+  employmentStatus: 'active' | 'resigned';
+  exitDate: string | null;
+  exitReason: string | null;
   hasPhoto: boolean;
 }
 
@@ -50,11 +54,13 @@ export default function SpecialTeachersPage() {
   // Seeded from ?subjectGroup= so the counts on the กลุ่มสาระ page link straight
   // to the people in that group.
   const [subjectGroup, setSubjectGroup] = useState(search.get('subjectGroup') ?? '');
+  const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Row | 'new' | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
   const [zoom, setZoom] = useState<Row | null>(null);
+  const [resigning, setResigning] = useState<Row | null>(null);
   const pageSize = 25;
   const deb = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -64,19 +70,33 @@ export default function SpecialTeachersPage() {
       const sp = new URLSearchParams({ page: String(p), pageSize: String(pageSize) });
       if (q) sp.set('q', q);
       if (subjectGroup) sp.set('subjectGroup', subjectGroup);
+      if (status) sp.set('status', status);
       const res = await api<{ data: Row[]; total: number }>(`/api/users/special-teachers?${sp}`);
       setRows(res.data); setTotal(res.total); setPage(p);
     } catch (e) { toast((e as Error).message, 'error'); }
     finally { setLoading(false); }
-  }, [q, subjectGroup, toast]);
+  }, [q, subjectGroup, status, toast]);
 
   useEffect(() => {
     clearTimeout(deb.current);
     deb.current = setTimeout(() => load(1), 300);
     return () => clearTimeout(deb.current);
-  }, [q, subjectGroup, load]);
+  }, [q, subjectGroup, status, load]);
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
+
+  async function reinstate(r: Row) {
+    if (!(await confirm({
+      title: 'คืนสถานะยังสอนอยู่',
+      message: `ตั้ง “${r.prefix ?? ''}${r.firstName} ${r.lastName}” กลับเป็น “ยังสอนอยู่”? ข้อมูลการลาออก (วันที่/ปี/เหตุผล) จะถูกล้าง`,
+      confirmText: 'คืนสถานะ',
+    }))) return;
+    try {
+      await api(`/api/users/special-teachers/${r.id}/status`, jsonBody({ status: 'active' }));
+      toast('คืนสถานะยังสอนอยู่แล้ว', 'success');
+      load(page);
+    } catch (e) { toast((e as Error).message, 'error'); }
+  }
 
   async function archive(r: Row) {
     if (!(await confirm({
@@ -136,6 +156,11 @@ export default function SpecialTeachersPage() {
             />
           </div>
           <SubjectGroupFilter value={subjectGroup} onChange={setSubjectGroup} />
+          <select className="form-select" style={{ width: 150 }} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="สถานะ">
+            <option value="">ทุกสถานะ</option>
+            <option value="active">ยังสอนอยู่</option>
+            <option value="resigned">ลาออกแล้ว</option>
+          </select>
         </div>
       </div>
 
@@ -145,18 +170,18 @@ export default function SpecialTeachersPage() {
             <thead>
               <tr>
                 <th style={{ width: 48 }}>รูป</th>
-                <th>รหัส</th><th>ชื่อ-นามสกุล</th><th>กลุ่มสาระ</th><th>เบอร์โทร</th>
-                <th style={{ width: 140 }}></th>
+                <th>รหัส</th><th>ชื่อ-นามสกุล</th><th>กลุ่มสาระ</th><th>เบอร์โทร</th><th>สถานะ</th>
+                <th style={{ width: 220 }}></th>
               </tr>
             </thead>
             <tbody>
               {loading && rows.length === 0 && Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i}><td colSpan={6}><div className="skeleton" style={{ height: 20 }} /></td></tr>
+                <tr key={i}><td colSpan={7}><div className="skeleton" style={{ height: 20 }} /></td></tr>
               ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 40 }}>
-                    {!q && !subjectGroup
+                  <td colSpan={7} className="muted" style={{ textAlign: 'center', padding: 40 }}>
+                    {!q && !subjectGroup && !status
                       ? 'ยังไม่มีอาจารย์พิเศษในระบบ — กด “เพิ่ม” เพื่อเริ่ม'
                       : 'ไม่พบอาจารย์พิเศษที่ค้นหา'}
                   </td>
@@ -177,10 +202,23 @@ export default function SpecialTeachersPage() {
                   <td style={{ fontSize: 13 }}>{r.subjectGroup ?? '-'}</td>
                   <td className="mono" style={{ fontSize: 13 }}>{r.phone ?? '-'}</td>
                   <td>
+                    <span
+                      className={`badge ${r.employmentStatus === 'resigned' ? 'badge-muted' : 'badge-success'}`}
+                      title={r.employmentStatus === 'resigned'
+                        ? `ออกเมื่อ ${r.exitDate ?? '-'}${r.exitReason ? ` · ${r.exitReason}` : ''}`
+                        : undefined}
+                    >
+                      {r.employmentStatus === 'resigned' ? 'ลาออกแล้ว' : 'ยังสอนอยู่'}
+                    </span>
+                  </td>
+                  <td>
                     <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setEditing(r)}>
                         <IconEdit width={14} height={14} /> แก้ไข
                       </button>
+                      {r.employmentStatus === 'resigned'
+                        ? <button className="btn btn-ghost btn-sm" onClick={() => reinstate(r)}>คืนสถานะ</button>
+                        : <button className="btn btn-ghost btn-sm" onClick={() => setResigning(r)}>บันทึกลาออก</button>}
                       <button
                         className="btn btn-ghost btn-sm"
                         title="ย้ายไปถังขยะ"
@@ -229,6 +267,14 @@ export default function SpecialTeachersPage() {
           alt={`${zoom.firstName} ${zoom.lastName}`}
           caption={`${zoom.specialTeacherCode} · ${zoom.prefix ?? ''}${zoom.firstName} ${zoom.lastName}`}
           onClose={() => setZoom(null)}
+        />
+      )}
+
+      {resigning && (
+        <EmploymentStatusDialog
+          endpoint={`/api/users/special-teachers/${resigning.id}/status`}
+          onClose={() => setResigning(null)}
+          onDone={() => { setResigning(null); load(page); }}
         />
       )}
 

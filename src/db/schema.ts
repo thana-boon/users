@@ -733,6 +733,15 @@ export const specialTeachers = pgTable(
     subjectGroup: varchar('subject_group', { length: 191 }), // กลุ่มสาระที่สังกัด
     phone: varchar('phone', { length: 32 }),
 
+    // ยังสอนอยู่ / ลาออก — same lifecycle as ครู/คนงาน. Distinct from the
+    // ถังขยะ: a resigned อาจารย์พิเศษ is still a real record the office can look
+    // up, but sibling systems (ตารางสอน) must stop offering them.
+    employmentStatus: employmentStatusEnum('employment_status').notNull().default('active'),
+    exitDate: varchar('exit_date', { length: 20 }),
+    exitReason: text('exit_reason'),
+    exitAcademicYearId: integer('exit_academic_year_id').references(() => academicYears.id),
+    exitTerm: integer('exit_term'),
+
     // Profile photo stored inline (base64), exactly like ครู/คนงาน — the school
     // prints อาจารย์พิเศษ on the same boards and certificates as everyone else.
     photoBase64: text('photo_base64'),

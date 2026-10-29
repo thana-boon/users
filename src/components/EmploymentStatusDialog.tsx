@@ -11,7 +11,7 @@ import { STAFF_EXIT_REASON_OPTIONS } from '@/lib/options';
 interface YearOpt { id: number; year: number; isActive: boolean; activeTerm: number }
 
 /**
- * บันทึกการลาออก (resign) ของครู/คนงาน — ใช้ร่วมกันทั้งสองหน้า ผ่าน prop `endpoint`
+ * บันทึกการลาออก (resign) ของครู/คนงาน/อาจารย์พิเศษ — ใช้ร่วมกันทุกหน้า ผ่าน prop `endpoint`
  * (เช่น `/api/users/teachers/12/status` หรือ `/api/users/workers/5/status`).
  * บันทึก วันที่ออก + ปีการศึกษา/ภาคเรียนที่ออก (+ เหตุผล) ที่ POST status:'resigned'.
  * การคืนสถานะทำงานทำเป็นปุ่มยืนยันเดียวในหน้า detail (ไม่ผ่านไดอะล็อกนี้).

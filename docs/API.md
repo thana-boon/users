@@ -807,7 +807,7 @@ Scope `workers:read` · เลขบัตร ปชช. ต้องมี `wor
 
 Scope `special-teachers:read` (ไม่มี `:pii` — ตารางนี้ไม่ได้เก็บเลขบัตร ปชช.) · รูปใช้ `special-teachers:photo` เพิ่ม แล้วเรียกที่ข้อ 4.7/4.8
 
-**Query:** `subjectGroup`, `q`, `page`, `pageSize` (สูงสุด 200)
+**Query:** `subjectGroup`, `status` (`active` ค่าเริ่มต้น | `resigned` | `all`), `q`, `page`, `pageSize` (สูงสุด 200)
 
 ```json
 {
@@ -821,6 +821,8 @@ Scope `special-teachers:read` (ไม่มี `:pii` — ตารางนี�
       "fullName": "นายอนันต์ ศรีสุข",
       "subjectGroup": "กลุ่มสาระการเรียนรู้ศิลปะ ดนตรี และนาฏศิลป์",
       "phone": "0812345678",
+      "employmentStatus": "active",
+      "exitDate": null,
       "hasPhoto": true
     }
   ],
@@ -834,6 +836,7 @@ Scope `special-teachers:read` (ไม่มี `:pii` — ตารางนี�
 - `hasPhoto` บอกว่ามีรูปไหม — ตัวรูปต้องเรียกแยกด้วย scope `special-teachers:photo` (ข้อ 4.7/4.8)
 - `q` ค้นได้ทั้งชื่อ/สกุล/`specialTeacherCode`/กลุ่มสาระ
 - คนที่ถูกย้ายเข้าถังขยะจะไม่อยู่ในผลลัพธ์
+- **สถานะ ยังสอนอยู่ / ลาออก** ใช้กติกาเดียวกับครู: `employmentStatus` เป็น `active` หรือ `resigned` (มี `exitDate` เป็นวันที่ไทย dd/mm/พ.ศ.) และ**ค่าเริ่มต้นส่งเฉพาะ `active`** — ระบบที่ดึงรายชื่อไปให้เลือก (เช่น ตารางสอน) จะไม่เห็นคนที่ลาออกแล้วโดยไม่ต้องทำอะไรเพิ่ม ส่ง `?status=all` ถ้าต้องการประวัติด้วย
 
 ---
 
