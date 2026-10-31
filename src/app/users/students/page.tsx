@@ -22,7 +22,7 @@ interface Row {
   /** Leave type when the student is พักการเรียน right now; status stays 'studying'. */
   onLeave: string | null;
 }
-interface RosterRoom { gradeLevel: string; classroom: string | null; count: number; }
+interface RosterRoom { gradeLevel: string; classroom: string | null; count: number; male: number; female: number; }
 interface Meta {
   grades: string[]; classrooms: string[]; rooms: { gradeLevel: string; classroom: string }[];
   /** Headcount per ชั้น/ห้อง of students on the roll — rooms with nobody aren't in it. */
@@ -149,6 +149,18 @@ function Registry() {
     [meta.roster, grade],
   );
 
+  // ชาย/หญิง of whatever the filters select, summed from the roster headcounts.
+  const genderCount = useMemo(() => {
+    let male = 0, female = 0;
+    for (const r of meta.roster) {
+      if (grade && r.gradeLevel !== grade) continue;
+      if (classroom && r.classroom !== classroom) continue;
+      male += r.male ?? 0;
+      female += r.female ?? 0;
+    }
+    return { male, female };
+  }, [meta.roster, grade, classroom]);
+
   function pickGrade(g: string) {
     setGrade(g);
     setClassroom('');
@@ -246,6 +258,9 @@ function Registry() {
               <>
                 {view.q ? 'พบ ' : ''}{total.toLocaleString('th-TH')} คน
                 {grade && !classroom && !view.q && roomTiles.length > 1 && <> ใน {roomTiles.length} ห้อง</>}
+                {!view.q && (
+                  <> · ชาย {genderCount.male.toLocaleString('th-TH')} · หญิง {genderCount.female.toLocaleString('th-TH')}</>
+                )}
               </>
             )}
           </p>

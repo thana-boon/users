@@ -50,6 +50,8 @@ export async function GET(req: NextRequest) {
           gradeLevel: enrollments.gradeLevel,
           classroom: enrollments.classroom,
           count: sql<number>`count(*)::int`,
+          male: sql<number>`(count(*) filter (where ${students.gender} = 'ชาย'))::int`,
+          female: sql<number>`(count(*) filter (where ${students.gender} = 'หญิง'))::int`,
         })
         .from(enrollments)
         .innerJoin(students, eq(students.id, enrollments.studentId))
@@ -91,7 +93,7 @@ export async function GET(req: NextRequest) {
         .map((r) => ({ gradeLevel: r.gradeLevel!, classroom: r.classroom! }))
         .sort((a, b) => compareGrades(a.gradeLevel, b.gradeLevel) || byRoom(a.classroom, b.classroom)),
       roster: roster
-        .map((r) => ({ gradeLevel: r.gradeLevel!, classroom: r.classroom, count: Number(r.count) }))
+        .map((r) => ({ gradeLevel: r.gradeLevel!, classroom: r.classroom, count: Number(r.count), male: Number(r.male), female: Number(r.female) }))
         .sort((a, b) => compareGrades(a.gradeLevel, b.gradeLevel) || byRoom(a.classroom ?? '', b.classroom ?? '')),
       subjectGroups: [
         ...new Set([
