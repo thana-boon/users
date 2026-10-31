@@ -35,7 +35,7 @@ export const CAPABILITIES = [
     key: 'students.classes',
     group: 'นักเรียน',
     label: 'จัดห้องเรียน',
-    desc: 'จัดเข้าห้อง เลื่อนชั้น/ย้ายห้อง จัดเลขที่ ชื่อห้อง',
+    desc: 'จัดเข้าห้อง เลื่อนชั้น/ย้ายห้อง จัดเลขที่ ชื่อห้อง ปรับคำนำหน้าชื่อ',
   },
   {
     key: 'students.exits',
@@ -142,7 +142,7 @@ const RULES: Rule[] = [
   { re: /^\/api\/users\/students\/[^/]+\/status$/, read: [S_REG, S_EXITS] },
   { re: /^\/api\/users\/students(\/.*)?$/, read: ANY_STUDENT, write: [S_REG] },
   { re: /^\/api\/users\/enrollments$/, read: ANY_STUDENT, write: 'admin' },
-  { re: /^\/api\/users\/(placements|promotions|room-transfers|class-numbers|room-aliases)(\/.*)?$/, read: [S_CLASSES] },
+  { re: /^\/api\/users\/(placements|promotions|room-transfers|class-numbers|room-aliases|prefix-update)(\/.*)?$/, read: [S_CLASSES] },
   // The promotions board files its จบการศึกษา bucket through here.
   { re: /^\/api\/users\/graduations$/, read: [S_EXITS, S_CLASSES] },
   { re: /^\/api\/users\/(leaves|withdrawals)(\/.*)?$/, read: [S_EXITS] },
@@ -167,7 +167,7 @@ const RULES: Rule[] = [
   // -- Pages
   { re: /^\/users\/students$/, read: [S_REG] },
   { re: /^\/users\/students\/[^/]+$/, read: ANY_STUDENT },
-  { re: /^\/users\/(placements|promotions|class-numbers|room-aliases)$/, read: [S_CLASSES] },
+  { re: /^\/users\/(placements|promotions|class-numbers|room-aliases|prefix-update)$/, read: [S_CLASSES] },
   { re: /^\/users\/(graduations|leaves|withdrawals|former-students)$/, read: [S_EXITS] },
   { re: /^\/users\/(teachers|special-teachers|workers|subject-groups)(\/[^/]+)?$/, read: [T_REC] },
   { re: /^\/users\/homerooms$/, read: [T_HOME] },

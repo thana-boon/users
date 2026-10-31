@@ -28,6 +28,7 @@ export type AuditAction =
   | 'place_student'
   | 'assign_homeroom'
   | 'set_room_alias'
+  | 'update_prefix'
   | 'renumber'
   | 'withdraw'
   | 'graduate'
