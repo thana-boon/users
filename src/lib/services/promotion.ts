@@ -127,6 +127,8 @@ export async function promoteStudents(input: PromoteInput): Promise<PromoteResul
 export interface TransferItem {
   enrollmentId: number;
   targetClassroom: string | null;
+  /** New เลขที่ in the target room; null = keep the current one. */
+  classNumber?: number | null;
 }
 
 export interface TransferInput {
@@ -161,9 +163,11 @@ export async function transferRooms(input: TransferInput): Promise<{ moved: numb
       // Scope to yearId as a defence so a stale enrollmentId can't touch another year.
       await tx
         .update(enrollments)
-        .set(targetGrade
-          ? { gradeLevel: targetGrade, classroom: it.targetClassroom }
-          : { classroom: it.targetClassroom })
+        .set({
+          classroom: it.targetClassroom,
+          ...(targetGrade ? { gradeLevel: targetGrade } : {}),
+          ...(it.classNumber ? { classNumber: String(it.classNumber), seqOrder: it.classNumber } : {}),
+        })
         .where(and(eq(enrollments.id, it.enrollmentId), eq(enrollments.academicYearId, yearId)));
     }
 

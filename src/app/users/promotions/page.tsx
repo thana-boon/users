@@ -139,6 +139,7 @@ export default function PromotionsPage() {
         else a[r.enrollmentId] = NONE;
       }
       setAssign(a);
+      setNumOverride({});
       setExtraRooms([]);
       setSel(new Set());
     } catch (e) {
@@ -235,6 +236,51 @@ export default function PromotionsPage() {
     });
   }, [mode, regrade, rows, assign]);
 
+  const movedIds = useMemo(() => new Set(movedRows.map((r) => r.enrollmentId)), [movedRows]);
+
+  // Regrade: the destination grade's own students aren't on the board, but their
+  // เลขที่ decide where the movers should be appended.
+  const [destRows, setDestRows] = useState<RosterRow[]>([]);
+  useEffect(() => {
+    if (!regrade || !sourceYearId) { setDestRows([]); return; }
+    const sp = new URLSearchParams({ yearId: String(sourceYearId), grade: roomGrade });
+    api<{ data: RosterRow[] }>(`/api/users/enrollments?${sp}`)
+      .then((res) => setDestRows(res.data))
+      .catch(() => setDestRows([]));
+  }, [regrade, sourceYearId, roomGrade]);
+
+  // เลขที่ the movers get by default: appended after the last student already in
+  // the destination room (those who stay there, plus movers placed there first).
+  const defaultNums = useMemo(() => {
+    const m = new Map<number, number>();
+    if (mode !== 'room') return m;
+    const movedIds = new Set(movedRows.map((r) => r.enrollmentId));
+    const last = new Map<string, number>();
+    const bump = (key: string, n: number) => { if (n > (last.get(key) ?? 0)) last.set(key, n); };
+    if (regrade) {
+      for (const r of destRows) {
+        const n = parseInt(r.classNumber ?? '', 10);
+        if (r.classroom && n > 0) bump(roomKey(r.classroom), n);
+      }
+    } else {
+      for (const r of rows) {
+        const n = parseInt(r.classNumber ?? '', 10);
+        if (!movedIds.has(r.enrollmentId) && r.classroom && n > 0) bump(roomKey(r.classroom), n);
+      }
+    }
+    for (const r of movedRows) {
+      const key = assign[r.enrollmentId];
+      const n = (last.get(key) ?? 0) + 1;
+      last.set(key, n);
+      m.set(r.enrollmentId, n);
+    }
+    return m;
+  }, [mode, regrade, rows, destRows, movedRows, assign]);
+
+  // enrollmentId -> เลขที่ typed by hand (string, so a half-typed value is kept).
+  const [numOverride, setNumOverride] = useState<Record<number, string>>({});
+  const numberOf = (id: number) => numOverride[id] ?? String(defaultNums.get(id) ?? '');
+
   // Switching mode reloads the board; renumber defaults on for promotion, off for
   // a same-year room move (a lone move usually should not renumber whole rooms).
   const switchMode = (m: 'year' | 'room') => {
@@ -256,6 +302,8 @@ export default function PromotionsPage() {
   const moveTo = useCallback((ids: number[], colKey: string) => {
     if (!ids.length) return;
     setAssign((a) => { const n = { ...a }; for (const id of ids) n[id] = colKey; return n; });
+    // A hand-typed เลขที่ was for the previous destination; fall back to the default.
+    setNumOverride((o) => { const n = { ...o }; for (const id of ids) delete n[id]; return n; });
   }, []);
 
   const onDragStart = (id: number, e: React.DragEvent) => {
@@ -313,6 +361,7 @@ export default function PromotionsPage() {
       const items = movedRows.map((r) => ({
         enrollmentId: r.enrollmentId,
         targetClassroom: colOf(assign[r.enrollmentId])?.room ?? null,
+        classNumber: renumber ? null : (parseInt(numberOf(r.enrollmentId), 10) || null),
       }));
       const res = await api<{ moved: number }>(
         '/api/users/room-transfers',
@@ -599,10 +648,18 @@ export default function PromotionsPage() {
                         >
                           <div className="row" style={{ gap: 6, alignItems: 'baseline', justifyContent: 'space-between' }}>
                             <span className="row" style={{ gap: 6, alignItems: 'baseline', minWidth: 0 }}>
-                              <span className="mono" title="เลขที่"
-                                style={{ fontSize: 11, fontWeight: 600, color: 'var(--skdw-purple)', minWidth: 16, textAlign: 'right', flexShrink: 0 }}>
-                                {r.classNumber ?? '-'}
-                              </span>
+                              {mode === 'room' && !renumber && movedIds.has(r.enrollmentId) ? (
+                                <input className="form-input mono" title="เลขที่ใหม่ในห้องนี้ (ค่าเริ่มต้น = ต่อจากคนสุดท้าย)"
+                                  inputMode="numeric" value={numberOf(r.enrollmentId)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => setNumOverride((o) => ({ ...o, [r.enrollmentId]: e.target.value.replace(/\D/g, '') }))}
+                                  style={{ width: 40, padding: '1px 4px', fontSize: 12, textAlign: 'center', flexShrink: 0 }} />
+                              ) : (
+                                <span className="mono" title="เลขที่"
+                                  style={{ fontSize: 11, fontWeight: 600, color: 'var(--skdw-purple)', minWidth: 16, textAlign: 'right', flexShrink: 0 }}>
+                                  {r.classNumber ?? '-'}
+                                </span>
+                              )}
                               <span style={{ fontSize: 13, fontWeight: 500 }}>{fullName(r)}</span>
                             </span>
                             <span className="mono" style={{ fontSize: 11, color: 'var(--skdw-muted)' }}>{r.studentCode}</span>
@@ -668,7 +725,7 @@ export default function PromotionsPage() {
                 <input type="checkbox" checked={renumber} onChange={(e) => setRenumber(e.target.checked)} />
                 <span>
                   {regrade ? `รันเลขที่ใหม่ 1..N ทุกห้องใน ${grade} และ ${roomGrade}` : 'รันเลขที่ใหม่ 1..N ทุกห้องในชั้นนี้'}{' '}
-                  <span className="muted">(ไม่เลือก = คงเลขที่เดิม)</span>
+                  <span className="muted">(ไม่เลือก = ระบุเลขที่ใหม่ของคนที่ย้ายเองที่การ์ด — ค่าเริ่มต้นต่อจากคนสุดท้ายของห้อง)</span>
                 </span>
               </label>
               <div className="spacer" style={{ flex: 1 }} />

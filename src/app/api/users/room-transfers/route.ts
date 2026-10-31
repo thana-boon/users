@@ -21,6 +21,8 @@ const schema = z.object({
       z.object({
         enrollmentId: z.number().int(),
         targetClassroom: z.string().nullable().optional(),
+        // เลขที่ใหม่ในห้องปลายทาง; ถ้าไม่ส่ง = คงเลขที่เดิม. ถูกละเว้นเมื่อ renumber.
+        classNumber: z.number().int().positive().nullable().optional(),
       }),
     )
     .min(1, 'ต้องเลือกนักเรียนอย่างน้อย 1 คน'),
@@ -53,6 +55,7 @@ export async function POST(req: NextRequest) {
       items: body.items.map((i) => ({
         enrollmentId: i.enrollmentId,
         targetClassroom: i.targetClassroom ?? null,
+        classNumber: i.classNumber ?? null,
       })),
     });
 
