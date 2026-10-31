@@ -40,6 +40,7 @@ function ClassNumbersInner() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [follow, setFollow] = useState(true);
 
   useEffect(() => {
     api<Meta>('/api/users/meta').then((m) => {
@@ -87,7 +88,19 @@ function ClassNumbersInner() {
   }
 
   function editNumber(id: number, v: string) {
-    setRows((s) => s.map((r) => (r.enrollmentId === id ? { ...r, classNumber: v || null } : r)));
+    setRows((s) => {
+      const at = s.findIndex((r) => r.enrollmentId === id);
+      const start = Number(v);
+      // Cascade: everyone below (still studying) continues from the typed number,
+      // so typing 12 on the 11th person renumbers the rest 13, 14, 15…
+      const cascade = follow && at >= 0 && /^\d+$/.test(v) && start > 0 && s[at].status === 'studying';
+      let n = start;
+      return s.map((r, i) => {
+        if (r.enrollmentId === id) return { ...r, classNumber: v || null };
+        if (cascade && i > at && r.status === 'studying') return { ...r, classNumber: String(++n) };
+        return r;
+      });
+    });
     setDirty(true);
   }
 
@@ -153,6 +166,10 @@ function ClassNumbersInner() {
             </select>
           </div>
           <button className="btn btn-secondary" onClick={autoNumber} disabled={!ready || !rows.length}>จัดเรียง 1..N</button>
+          <label className="row" style={{ gap: 6, alignItems: 'center', fontSize: 13, cursor: 'pointer' }}>
+            <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
+            พิมพ์เลขแล้วไล่เลขคนถัดไปให้อัตโนมัติ
+          </label>
         </div>
       </div>
 
