@@ -27,6 +27,8 @@ export async function GET(req: NextRequest) {
     const base = and(
       eq(enrollments.academicYearId, yearId),
       eq(students.isArchived, false),
+      // withdrawn/graduated students keep their enrollment row but are off the roll
+      eq(students.status, 'studying'),
     );
 
     const [
