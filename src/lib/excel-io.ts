@@ -256,11 +256,20 @@ export function studentToRow(x: StudentExportRow): unknown[] {
   ];
 }
 
-export async function buildStudentExport(rows: StudentExportRow[]): Promise<Buffer> {
+/**
+ * `cols` = the STUDENT_COLUMNS positions to keep (see student-export-zones);
+ * omitted = all 157, the re-importable layout. `statusOf` appends a สถานะ
+ * column after them — past position 157, so the import never reads it.
+ */
+export async function buildStudentExport(
+  rows: StudentExportRow[],
+  opts: { cols?: number[]; statusOf?: (r: StudentExportRow) => string } = {},
+): Promise<Buffer> {
+  const pick = <T,>(cells: T[]) => (opts.cols ? opts.cols.map((i) => cells[i]) : cells);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('นักเรียน');
-  ws.addRow(STUDENT_COLUMNS);
-  for (const r of rows) ws.addRow(studentToRow(r));
+  ws.addRow([...pick(STUDENT_COLUMNS), ...(opts.statusOf ? ['สถานะ'] : [])]);
+  for (const r of rows) ws.addRow([...pick(studentToRow(r)), ...(opts.statusOf ? [opts.statusOf(r)] : [])]);
   styleHeader(ws);
   ws.views = [{ state: 'frozen', ySplit: 1 }];
   return toBuffer(wb);
@@ -468,6 +477,13 @@ async function loadWorkbook(buf: Buffer): Promise<ExcelJS.Workbook> {
 export async function readSheetRows(buf: Buffer): Promise<unknown[][]> {
   const wb = await loadWorkbook(buf);
   return sheetRows(wb.worksheets[0]);
+}
+
+/** First sheet's data rows plus its header row (the students import checks the layout). */
+export async function readSheetWithHeader(buf: Buffer): Promise<{ rows: unknown[][]; header: string[] }> {
+  const wb = await loadWorkbook(buf);
+  const ws = wb.worksheets[0];
+  return { rows: sheetRows(ws), header: headerRow(ws) };
 }
 
 /**

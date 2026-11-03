@@ -9,6 +9,7 @@ import { IconSearch, IconPlus, IconDownload, IconUpload } from '@/components/Ico
 import { ImportDialog } from '@/components/ImportDialog';
 import { NewStudentDialog } from '@/components/NewStudentDialog';
 import { PhotoImportDialog } from '@/components/PhotoImportDialog';
+import { StudentExportDialog } from '@/components/StudentExportDialog';
 import { PhotoThumb, PhotoLightbox } from '@/components/PhotoThumb';
 import { useAccess } from '@/components/Access';
 import { rememberStudentList, lastStudentId } from '@/lib/student-list-nav';
@@ -66,6 +67,7 @@ function Registry() {
   const [meta, setMeta] = useState<Meta>({ grades: [], classrooms: [], rooms: [], roster: [] });
   const [showImport, setShowImport] = useState(false);
   const [showPhotoImport, setShowPhotoImport] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [zoom, setZoom] = useState<Row | null>(null);
   const pageSize = 25;
@@ -173,13 +175,6 @@ function Registry() {
 
   const scope = grade ? (classroom ? `${grade}/${classroom}` : grade) : 'ทุกชั้น';
 
-  function exportXlsx() {
-    const sp = new URLSearchParams();
-    if (grade) sp.set('grade', grade);
-    if (classroom) sp.set('classroom', classroom);
-    window.location.href = withBase(`/api/users/students/export?${sp}`);
-  }
-
   function refresh() {
     setPage(1);
     setReloadKey((k) => k + 1);
@@ -198,7 +193,7 @@ function Registry() {
             <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(true)}><IconUpload width={16} height={16} /> นำเข้า</button>
             <button className="btn btn-ghost btn-sm" onClick={() => setShowPhotoImport(true)}><IconUpload width={16} height={16} /> นำเข้ารูป</button>
           </>}
-          {canExport && <button className="btn btn-secondary btn-sm" onClick={exportXlsx}><IconDownload width={16} height={16} /> ส่งออก {scope}</button>}
+          {canExport && <button className="btn btn-secondary btn-sm" onClick={() => setShowExport(true)}><IconDownload width={16} height={16} /> ส่งออก {scope}</button>}
           {canWrite && <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}><IconPlus width={16} height={16} /> เพิ่มนักเรียน</button>}
         </div>
       </div>
@@ -342,6 +337,9 @@ function Registry() {
           onClose={() => setShowImport(false)}
           onDone={() => { setShowImport(false); refresh(); }}
         />
+      )}
+      {showExport && (
+        <StudentExportDialog grade={grade} classroom={classroom} scope={scope} onClose={() => setShowExport(false)} />
       )}
       {showPhotoImport && (
         <PhotoImportDialog

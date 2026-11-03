@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { requireAccess } from '@/lib/rbac';
 import { ok, badRequest, handleError } from '@/lib/http';
 import { recordAudit } from '@/lib/audit';
-import { readSheetRows } from '@/lib/excel-io';
+import { readSheetWithHeader, STUDENT_COLUMNS } from '@/lib/excel-io';
 import { parseStudentRow } from '@/lib/excel-map';
 import { isValidCitizenId } from '@/lib/thai';
 import { resolveActiveYearId, upsertStudentFull } from '@/lib/services/students';
@@ -32,8 +32,14 @@ export async function POST(req: NextRequest) {
     if (!(file instanceof File)) return badRequest('กรุณาแนบไฟล์ .xlsx');
 
     const buf = Buffer.from(await file.arrayBuffer());
-    const rawRows = await readSheetRows(buf);
+    const { rows: rawRows, header } = await readSheetWithHeader(buf);
     if (rawRows.length === 0) return badRequest('ไฟล์ไม่มีข้อมูล');
+    // Rows are read by position, so a file exported with only some โซน would
+    // pour its columns into the wrong fields. Refuse it rather than corrupt.
+    if (header.length < STUDENT_COLUMNS.length)
+      return badRequest(
+        `ไฟล์มี ${header.length} คอลัมน์ ไม่ครบ ${STUDENT_COLUMNS.length} คอลัมน์ตามแม่แบบ — ไฟล์ที่ส่งออกแบบเลือกบางโซนใช้นำเข้าไม่ได้ กรุณาใช้แม่แบบหรือไฟล์ที่ส่งออกครบทุกโซน`,
+      );
 
     const issues: RowIssue[] = [];
     const parsedRows: { rowNo: number; parsed: NonNullable<ReturnType<typeof parseStudentRow>> }[] = [];
