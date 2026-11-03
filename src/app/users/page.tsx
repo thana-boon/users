@@ -32,7 +32,17 @@ interface Dashboard {
     admissionDate: string | null; gradeLevel: string | null;
   }[];
   teachersBySubject: { subjectGroup: string; count: number }[];
+  /** Highest รหัสนักเรียน ever issued, any status — null when there are no students. */
+  latestStudentCode: {
+    id: number; studentCode: string; prefix: string | null; firstName: string; lastName: string;
+    status: string; isArchived: boolean; gradeLevel: string | null; classroom: string | null;
+  } | null;
+  nextStudentCode: string | null;
 }
+
+const STATUS_LABEL: Record<string, string> = {
+  studying: 'กำลังศึกษา', withdrawn: 'จำหน่าย/ลาออก', graduated: 'จบการศึกษา',
+};
 
 function BarRow({ label, count, max, tone }: { label: string; count: number; max: number; tone: string }) {
   const pct = max ? Math.round((count / max) * 100) : 0;
@@ -205,6 +215,38 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Latest student code — checked before issuing a new one */}
+      {data.latestStudentCode && (() => {
+        const l = data.latestStudentCode;
+        const room = l.gradeLevel ? `${l.gradeLevel}${l.classroom ? `/${l.classroom}` : ''}` : null;
+        return (
+          <div className="card row-between" style={{ flexWrap: 'wrap', gap: 16 }}>
+            <div className="row" style={{ gap: 28, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div>
+                <div className="muted" style={{ fontSize: 12 }}>รหัสนักเรียนล่าสุด</div>
+                <div className="mono" style={{ fontSize: 26, fontWeight: 700 }}>{l.studentCode}</div>
+              </div>
+              <div>
+                <div className="muted" style={{ fontSize: 12 }}>เป็นของ</div>
+                <div style={{ fontWeight: 600 }}>{l.prefix ?? ''}{l.firstName} {l.lastName}</div>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {[room, l.isArchived ? 'เก็บถาวร' : STATUS_LABEL[l.status] ?? l.status].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+              {data.nextStudentCode && (
+                <div>
+                  <div className="muted" style={{ fontSize: 12 }}>รหัสถัดไป</div>
+                  <div className="mono" style={{ fontSize: 26, fontWeight: 700, color: 'var(--primary)' }}>
+                    {data.nextStudentCode}
+                  </div>
+                </div>
+              )}
+            </div>
+            <Link href={`/users/students/${l.id}`} className="chip">ดู</Link>
+          </div>
+        );
+      })()}
 
       <div className="grid-2" style={{ alignItems: 'start' }}>
         {/* By grade — stacked male/female, click a grade to see its rooms */}

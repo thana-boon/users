@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     );
 
     const [
-      totalRes, byGradeRoomGender, byGender, newest, teacherBySubject, teacherTotal, onLeave,
+      totalRes, byGradeRoomGender, byGender, newest, teacherBySubject, teacherTotal, onLeave, latestCode,
     ] = await Promise.all([
         db
           .select({ n: sql<number>`count(*)` })
@@ -84,7 +84,36 @@ export async function GET(req: NextRequest) {
         // Counted separately from totalStudents on purpose: a student on leave is
         // still enrolled, so they are inside that total, not beside it.
         countOnLeave(),
+        // Highest รหัสนักเรียน ever issued — for picking the next one. Deliberately
+        // ignores status/archive/year: a graduated student's code is still taken.
+        // created_at can't be used, the whole roll was bulk-imported at once.
+        db
+          .select({
+            id: students.id,
+            studentCode: students.studentCode,
+            prefix: students.prefix,
+            firstName: students.firstName,
+            lastName: students.lastName,
+            status: students.status,
+            isArchived: students.isArchived,
+            gradeLevel: enrollments.gradeLevel,
+            classroom: enrollments.classroom,
+          })
+          .from(students)
+          .leftJoin(
+            enrollments,
+            and(eq(enrollments.studentId, students.id), eq(enrollments.academicYearId, yearId)),
+          )
+          .where(sql`${students.studentCode} ~ '^[0-9]+$'`)
+          .orderBy(sql`${students.studentCode}::numeric desc`)
+          .limit(1),
       ]);
+
+    const latest = latestCode[0] ?? null;
+    // Same width as the latest code, so 07863 suggests 07864 rather than 7864.
+    const nextStudentCode = latest
+      ? (BigInt(latest.studentCode) + 1n).toString().padStart(latest.studentCode.length, '0')
+      : null;
 
     // Classify a raw gender string into male / female / other buckets.
     const genderBucket = (g: string | null): 'male' | 'female' | 'other' => {
@@ -146,6 +175,8 @@ export async function GET(req: NextRequest) {
       byGrade,
       byGender: byGender.map((r) => ({ gender: r.gender ?? 'ไม่ระบุ', count: Number(r.n) })),
       newestStudents: newest,
+      latestStudentCode: latest,
+      nextStudentCode,
       teachersBySubject: teacherBySubject
         .map((r) => ({ subjectGroup: r.subjectGroup || 'ไม่ระบุ', count: Number(r.n) }))
         .sort((a, b) => b.count - a.count),
